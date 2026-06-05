@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HORROR ZONE — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; overflow-x: hidden; }
+    .hub-header { position: relative; z-index: 10; text-align: center; padding: 60px 20px 0; }
+    .hub-eyeball { font-size: 4rem; display: block; margin-bottom: 14px; animation: eyeblink 5s infinite; }
+    @keyframes eyeblink { 0%,44%,56%,100%{transform:scaleY(1)} 49%,51%{transform:scaleY(0.04)} }
+    .hub-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(2rem,8vw,5.5rem); letter-spacing: 10px; color: #ff2244; text-shadow: 0 0 30px #ff0000,0 0 60px rgba(255,0,0,0.3); animation: glitch-text 5s infinite; }
+    .hub-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 7px; color: #550011; margin-top: 10px; }
+    .diff-track { display: flex; align-items: center; justify-content: center; max-width: 700px; margin: 32px auto 0; padding: 0 30px; gap: 0; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 1px; }
+    .diff-stop { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; position: relative; }
+    .diff-stop:not(:last-child)::after { content: ''; position: absolute; top: 6px; left: 50%; width: 100%; height: 1px; background: currentColor; opacity: 0.25; }
+    .diff-dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; background: transparent; }
+    .diff-label { text-align: center; line-height: 1.3; opacity: 0.7; }
+    .d1{color:#44ff88;} .d2{color:#ffcc00;} .d3{color:#ff7700;} .d4{color:#ff2244;}
+    .bg-maze { background: radial-gradient(ellipse at 50% 0%,#2a0000 0%,#000 65%); opacity: 0.5; animation: bgPulse 3s ease-in-out infinite; }
+    .bg-obs  { background: radial-gradient(ellipse at 50% 0%,#001a2a 0%,#000 65%); opacity: 0.5; animation: bgPulse 4s ease-in-out infinite 1s; }
+    .bg-house{ background: radial-gradient(ellipse at 50% 0%,#1a0a00 0%,#000 65%); opacity: 0.5; animation: bgPulse 3.5s ease-in-out infinite 0.5s; }
+    .bg-nbr  { background: radial-gradient(ellipse at 50% 0%,#0a001a 0%,#000 65%); opacity: 0.5; animation: bgPulse 2.5s ease-in-out infinite 1.5s; }
+    .horror-stats { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: rgba(0,0,0,0.9); border-top: 1px solid rgba(255,34,68,0.2); display: flex; align-items: center; justify-content: center; gap: 30px; padding: 10px 20px; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; }
+    .hs-item { color: #550011; }
+    .hs-val  { color: #ff2244; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="noise-overlay"></div>
+<div class="bg-grid"></div>
+<div class="bg-particles" id="particles"></div>
+
+<a href="index.html" class="back-home">◄ MAIN HUB</a>
+
+<header class="hub-header">
+  <span class="hub-eyeball">👁</span>
+  <div class="hub-title">HORROR ZONE</div>
+  <div class="hub-sub">◈ SELECT YOUR NIGHTMARE ◈</div>
+  <div class="diff-track">
+    <div class="diff-stop d1"><div class="diff-dot"></div><div class="diff-label">MILD<br/>HELL MAZE</div></div>
+    <div class="diff-stop d2"><div class="diff-dot"></div><div class="diff-label">MEDIUM<br/>OBS. WARD</div></div>
+    <div class="diff-stop d3"><div class="diff-dot"></div><div class="diff-label">SCARY<br/>THE HOUSE</div></div>
+    <div class="diff-stop d4"><div class="diff-dot"></div><div class="diff-label">EXTREME<br/>WRONG NBR</div></div>
+  </div>
+</header>
+
+<div class="games-grid">
+
+  <a href="horror.html" class="hgame-card">
+    <div class="card-anim-bg bg-maze"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge badge-easy">◈ MILD</div>
+    <div class="card-content">
+      <div class="card-icon-big">🌀</div>
+      <div class="card-num">GAME 01</div>
+      <div class="card-name">HELL MAZE</div>
+      <div class="card-tagline">▸ SURVIVE THE LABYRINTH ◂</div>
+      <div class="card-desc">Navigate a glowing red maze without touching the walls. Avoid moving entities. Find checkpoints. Reach the exit — if you can. Three levels of increasing madness await.</div>
+      <div class="card-tags"><span class="ctag">MAZE</span><span class="ctag">SURVIVAL</span><span class="ctag">JUMPSCARE</span><span class="ctag">3 LEVELS</span></div>
+      <div class="card-footer-row">
+        <span class="play-label">▶ ENTER MAZE</span>
+        <span class="scare-level">☠☠☆☆☆</span>
+      </div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="observation.html" class="hgame-card">
+    <div class="card-anim-bg bg-obs"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge badge-med">◈ MEDIUM</div>
+    <div class="card-content">
+      <div class="card-icon-big">📷</div>
+      <div class="card-num">GAME 02</div>
+      <div class="card-name">OBSERVATION WARD</div>
+      <div class="card-tagline">▸ FIND WHAT CHANGED ◂</div>
+      <div class="card-desc">Night duty in a dark hospital ward. Monitor CCTV cameras. Something is wrong in each room. Find every anomaly before your shift ends — or before it finds you.</div>
+      <div class="card-tags"><span class="ctag">ANOMALY</span><span class="ctag">CCTV</span><span class="ctag">OBSERVATION</span><span class="ctag">TIMED</span></div>
+      <div class="card-footer-row">
+        <span class="play-label">▶ START SHIFT</span>
+        <span class="scare-level">☠☠☠☆☆</span>
+      </div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="thehouse.html" class="hgame-card">
+    <div class="card-anim-bg bg-house"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge badge-hard">◈ SCARY</div>
+    <div class="card-content">
+      <div class="card-icon-big">🏚</div>
+      <div class="card-num">GAME 03</div>
+      <div class="card-name">THE HOUSE</div>
+      <div class="card-tagline">▸ ESCAPE BEFORE SHE HEARS YOU ◂</div>
+      <div class="card-desc">Trapped in an old dark house. Something lives here and it can hear everything. Move silently. Collect keys. Unlock the exit. Do NOT make noise. Do NOT get caught.</div>
+      <div class="card-tags"><span class="ctag">STEALTH</span><span class="ctag">ESCAPE</span><span class="ctag">NOISE</span><span class="ctag">HORROR</span></div>
+      <div class="card-footer-row">
+        <span class="play-label">▶ ENTER HOUSE</span>
+        <span class="scare-level">☠☠☠☠☆</span>
+      </div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="wrongneighbour.html" class="hgame-card">
+    <div class="card-anim-bg bg-nbr"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge badge-extreme">◈ EXTREME</div>
+    <div class="card-content">
+      <div class="card-icon-big">🚪</div>
+      <div class="card-num">GAME 04</div>
+      <div class="card-name">WRONG NEIGHBOUR</div>
+      <div class="card-tagline">▸ DON'T LET IT IN ◂</div>
+      <div class="card-desc">Someone is at the door claiming to be your neighbour. Check their ID. Match their face. Something is wrong. One mistake and you let a monster inside. Trust nothing.</div>
+      <div class="card-tags"><span class="ctag">IDENTITY</span><span class="ctag">DEDUCTION</span><span class="ctag">EXTREME</span><span class="ctag">PARANOIA</span></div>
+      <div class="card-footer-row">
+        <span class="play-label">▶ ANSWER DOOR</span>
+        <span class="scare-level">☠☠☠☠☠</span>
+      </div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+</div>
+
+<div class="horror-stats">
+  <div class="hs-item">🏆 WINS <span class="hs-val" id="sw">0</span></div>
+  <div class="hs-item">💀 LOSSES <span class="hs-val" id="sl">0</span></div>
+  <div class="hs-item">🎮 <span class="hs-val" id="sp">---</span></div>
+  <div class="hs-item" style="color:#550011;font-size:0.55rem;letter-spacing:3px;">⚠ HEADPHONES RECOMMENDED ⚠</div>
+</div>
+
+<script>
+  document.getElementById('sw').textContent = localStorage.getItem('hvWins')||'0';
+  document.getElementById('sl').textContent = localStorage.getItem('hvLosses')||'0';
+  document.getElementById('sp').textContent = localStorage.getItem('hvPlayer')||'---';
+  const c = document.getElementById('particles');
+  for(let i=0;i<50;i++){const p=document.createElement('div');p.className='particle';p.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*8}s;animation-duration:${4+Math.random()*6}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;opacity:${0.15+Math.random()*0.4}`;c.appendChild(p);}
+</script>
+</body>
+</html>

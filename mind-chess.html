@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CHESS — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #050005; font-family: 'Share Tech Mono', monospace; }
+    .hud { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(180,0,255,0.2); }
+    .hud-val { color: #bb00ff; font-size: 0.8rem; letter-spacing: 2px; }
+    .game-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.8rem; letter-spacing: 5px; color: #bb00ff; text-shadow: 0 0 20px #cc00ff; text-align: center; margin: 20px 0 8px; }
+    .diff-row { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .diff-btn { font-size: 0.6rem; letter-spacing: 2px; padding: 7px 14px; background: none; border: 1px solid rgba(180,0,255,0.3); color: #660088; cursor: pointer; transition: all .2s; }
+    .diff-btn.active { background: rgba(180,0,255,0.2); border-color: #bb00ff; color: #bb00ff; }
+    .board-wrap { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    .chess-board { display: grid; grid-template-columns: repeat(8,1fr); border: 2px solid rgba(180,0,255,0.4); box-shadow: 0 0 30px rgba(180,0,255,0.2); }
+    .sq { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 2.2rem; cursor: pointer; transition: all .1s; position: relative; }
+    .sq.light { background: rgba(40,0,80,0.6); }
+    .sq.dark  { background: rgba(10,0,30,0.8); }
+    .sq.selected { background: rgba(0,200,255,0.3) !important; box-shadow: inset 0 0 15px rgba(0,200,255,0.5); }
+    .sq.possible { background: rgba(0,255,100,0.2) !important; }
+    .sq.possible::after { content:''; position:absolute;width:16px;height:16px;border-radius:50%;background:rgba(0,255,100,0.5); }
+    .sq.last-move { background: rgba(255,228,0,0.15) !important; }
+    .sq.check { background: rgba(255,34,68,0.3) !important; animation: warnPulse 0.5s infinite; }
+    .sidebar { width: 180px; }
+    .sb-section { background: rgba(0,0,0,0.7); border: 1px solid rgba(180,0,255,0.2); padding: 12px; margin-bottom: 12px; }
+    .sb-title { font-size: 0.55rem; letter-spacing: 3px; color: #440066; margin-bottom: 8px; }
+    .captured { display: flex; flex-wrap: wrap; gap: 2px; font-size: 1rem; min-height: 28px; }
+    .move-log { max-height: 200px; overflow-y: auto; font-size: 0.6rem; color: #440066; line-height: 1.8; }
+    .move-log span.w { color: #cc88ff; }
+    .move-log span.b { color: #880099; }
+    .status { font-size: 0.75rem; letter-spacing: 2px; text-align: center; margin: 10px 0; min-height: 1.5em; color: #bb00ff; }
+    .new-btn { font-size: 0.65rem; letter-spacing: 2px; padding: 10px 20px; background: none; border: 1px solid rgba(180,0,255,0.4); color: #bb00ff; cursor: pointer; margin: 4px; }
+    .new-btn:hover { background: rgba(180,0,255,0.1); }
+    @media(max-width:600px) { .sq{width:40px;height:40px;font-size:1.5rem;} .sidebar{width:100%;max-width:340px;} }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="mind-hub.html" style="color:#bb00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(180,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">♟ CHESS</div>
+  <div class="hud-val">WINS: <span id="hudWins">0</span></div>
+</div>
+
+<div class="game-title">CHESS</div>
+<div class="diff-row">
+  <button class="diff-btn active" id="d_easy"   onclick="setDiff(1)">🟢 EASY</button>
+  <button class="diff-btn"        id="d_medium" onclick="setDiff(2)">🟡 MEDIUM</button>
+  <button class="diff-btn"        id="d_hard"   onclick="setDiff(3)">🔴 HARD</button>
+</div>
+<div class="status" id="status">WHITE'S TURN (YOU)</div>
+
+<div class="board-wrap">
+  <div class="chess-board" id="board"></div>
+  <div class="sidebar">
+    <div class="sb-section">
+      <div class="sb-title">◈ CAPTURED BY YOU ◈</div>
+      <div class="captured" id="capByWhite"></div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">◈ CAPTURED BY AI ◈</div>
+      <div class="captured" id="capByBlack"></div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">◈ MOVE LOG ◈</div>
+      <div class="move-log" id="moveLog"></div>
+    </div>
+    <button class="new-btn" onclick="newGame()">↻ NEW GAME</button>
+    <button class="new-btn" onclick="undoMove()">↩ UNDO</button>
+  </div>
+</div>
+
+<script>
+const PIECES = {
+  wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',
+  bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'
+};
+const PIECE_VALUES = { P:1, N:3, B:3, R:5, Q:9, K:0 };
+let board, selected, turn, aiDiff, gameOver, history, capW, capB, lastMove;
+const hudWins = document.getElementById('hudWins');
+hudWins.textContent = localStorage.getItem('hvWins')||'0';
+aiDiff = 1;
+
+function setDiff(d) {
+  aiDiff = d;
+  document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(['d_easy','d_medium','d_hard'][d-1]).classList.add('active');
+  newGame();
+}
+
+function newGame() {
+  board = initBoard();
+  selected = null; turn = 'w'; gameOver = false;
+  history = []; capW = []; capB = []; lastMove = null;
+  document.getElementById('capByWhite').textContent = '';
+  document.getElementById('capByBlack').textContent = '';
+  document.getElementById('moveLog').textContent = '';
+  setStatus('WHITE\'S TURN (YOU)', '#bb00ff');
+  renderBoard();
+}
+
+function initBoard() {
+  const b = Array.from({length:8},()=>Array(8).fill(null));
+  const back = ['R','N','B','Q','K','B','N','R'];
+  back.forEach((p,c)=>{ b[0][c]='b'+p; b[7][c]='w'+p; });
+  for(let c=0;c<8;c++){b[1][c]='bP'; b[6][c]='wP';}
+  return b;
+}
+
+function renderBoard() {
+  const el = document.getElementById('board');
+  el.innerHTML='';
+  const possible = selected ? getPossibleMoves(selected[0], selected[1]) : [];
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const sq=document.createElement('div');
+      const light=(r+c)%2===0;
+      sq.className=`sq ${light?'light':'dark'}`;
+      if(selected && selected[0]===r && selected[1]===c) sq.classList.add('selected');
+      if(possible.some(m=>m[0]===r&&m[1]===c)) sq.classList.add('possible');
+      if(lastMove && ((lastMove[0]===r&&lastMove[1]===c)||(lastMove[2]===r&&lastMove[3]===c))) sq.classList.add('last-move');
+      // Check highlight
+      if(board[r][c] && board[r][c]==='wK' && isInCheck('w')) sq.classList.add('check');
+      if(board[r][c] && board[r][c]==='bK' && isInCheck('b')) sq.classList.add('check');
+      const piece=board[r][c];
+      if(piece) sq.textContent=PIECES[piece]||piece;
+      sq.onclick=()=>handleClick(r,c);
+      el.appendChild(sq);
+    }
+  }
+}
+
+function handleClick(r,c) {
+  if(gameOver||turn!=='w') return;
+  const piece=board[r][c];
+  if(selected) {
+    const moves=getPossibleMoves(selected[0],selected[1]);
+    const move=moves.find(m=>m[0]===r&&m[1]===c);
+    if(move) {
+      doMove(selected[0],selected[1],r,c,'w');
+      selected=null;
+      if(!gameOver) { turn='b'; setStatus('AI THINKING...','#440066'); setTimeout(aiTurn,500); }
+      return;
+    }
+    selected=null;
+  }
+  if(piece && piece[0]==='w') selected=[r,c];
+  renderBoard();
+}
+
+function doMove(fr,fc,tr,tc,color) {
+  const cap=board[tr][tc];
+  if(cap) { (color==='w'?capW:capB).push(PIECES[cap]); updateCaptured(); }
+  history.push({ board:board.map(r=>[...r]), cap, from:[fr,fc], to:[tr,tc] });
+  board[tr][tc]=board[fr][fc];
+  board[fr][fc]=null;
+  lastMove=[fr,fc,tr,tc];
+  // Pawn promotion
+  if(board[tr][tc]==='wP'&&tr===0) board[tr][tc]='wQ';
+  if(board[tr][tc]==='bP'&&tr===7) board[tr][tc]='bQ';
+  addMoveLog(fr,fc,tr,tc,color);
+  renderBoard();
+  // Check for checkmate/stalemate
+  const opp=color==='w'?'b':'w';
+  if(isCheckmate(opp)){
+    gameOver=true;
+    if(opp==='b'){
+      setStatus('🏆 CHECKMATE! YOU WIN!','#00ff9d');
+      let wins=parseInt(localStorage.getItem('hvWins')||'0')+1;
+      localStorage.setItem('hvWins',wins); hudWins.textContent=wins;
+      let xp=parseInt(localStorage.getItem('hvXP')||'0')+100;
+      localStorage.setItem('hvXP',xp);
+    } else {
+      setStatus('💀 CHECKMATE — AI WINS!','#ff2244');
+      let l=parseInt(localStorage.getItem('hvLosses')||'0')+1; localStorage.setItem('hvLosses',l);
+    }
+  } else if(isInCheck(opp)) {
+    setStatus(opp==='b'?'♟ AI IS IN CHECK!':'⚠ YOU ARE IN CHECK!','#ffe500');
+  } else if(opp==='w') {
+    setStatus("WHITE'S TURN (YOU)",'#bb00ff');
+  }
+}
+
+function aiTurn() {
+  if(gameOver) return;
+  const move=getBestMove('b',aiDiff);
+  if(move){ doMove(...move,'b'); turn='w'; if(!gameOver) setStatus("WHITE'S TURN (YOU)",'#bb00ff'); }
+}
+
+function getBestMove(color,depth) {
+  const moves=getAllMoves(color);
+  if(!moves.length) return null;
+  if(depth===1) return moves[Math.floor(Math.random()*moves.length)];
+  let best=null,bestScore=-Infinity;
+  const sample=depth===3?moves:moves.slice(0,Math.min(20,moves.length));
+  for(const m of sample){
+    const save=board.map(r=>[...r]);
+    const cap=board[m[2]][m[3]];
+    board[m[2]][m[3]]=board[m[0]][m[1]]; board[m[0]][m[1]]=null;
+    if(board[m[2]][m[3]]==='bP'&&m[2]===7) board[m[2]][m[3]]='bQ';
+    let score=evalBoard()+(cap?PIECE_VALUES[cap[1]]||0:0);
+    if(depth>=2){
+      const resp=getAllMoves('w');
+      if(resp.length){
+        const r=resp[Math.floor(Math.random()*resp.length)];
+        score-=(board[r[2]][r[3]]?PIECE_VALUES[board[r[2]][r[3]][1]]||0:0);
+      }
+    }
+    board=save;
+    if(score>bestScore){ bestScore=score; best=m; }
+  }
+  return best||moves[0];
+}
+
+function evalBoard() {
+  let s=0;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(!p) continue;
+    const val=PIECE_VALUES[p[1]]||0;
+    s+=p[0]==='b'?val:-val;
+  }
+  return s;
+}
+
+function getAllMoves(color) {
+  const moves=[];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++)
+    if(board[r][c]&&board[r][c][0]===color)
+      getPossibleMoves(r,c).forEach(m=>moves.push([r,c,...m]));
+  return moves.sort(()=>Math.random()-0.5);
+}
+
+function getPossibleMoves(r,c) {
+  const p=board[r][c]; if(!p) return [];
+  const color=p[0],type=p[1];
+  const moves=[];
+  const add=(tr,tc)=>{
+    if(tr<0||tr>7||tc<0||tc>7) return false;
+    if(board[tr][tc]&&board[tr][tc][0]===color) return false;
+    moves.push([tr,tc]);
+    return !board[tr][tc];
+  };
+  const slide=(drs,dcs)=>{for(let dr of drs)for(let dc of dcs){let tr=r+dr,tc=c+dc;while(add(tr,tc)){tr+=dr;tc+=dc;}}};
+  if(type==='P'){
+    const dir=color==='w'?-1:1,start=color==='w'?6:1;
+    if(!board[r+dir]?.[c]) add(r+dir,c);
+    if(r===start&&!board[r+dir]?.[c]&&!board[r+dir*2]?.[c]) add(r+dir*2,c);
+    [[r+dir,c-1],[r+dir,c+1]].forEach(([tr,tc])=>{if(board[tr]?.[tc]&&board[tr][tc][0]!==color)moves.push([tr,tc]);});
+  } else if(type==='R') slide([-1,0,1,0],[0,1,0,-1].map((v,i)=>i<2?v:v));
+  if(type==='R'){const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
+  if(type==='B'){const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
+  if(type==='Q'){const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
+  if(type==='N'){[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc])=>add(r+dr,c+dc));}
+  if(type==='K'){[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>add(r+dr,c+dc));}
+  return moves;
+}
+
+function isInCheck(color) {
+  let kr=-1,kc=-1;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(board[r][c]===(color+'K')){kr=r;kc=c;}
+  const opp=color==='w'?'b':'w';
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++)
+    if(board[r][c]&&board[r][c][0]===opp)
+      if(getPossibleMoves(r,c).some(m=>m[0]===kr&&m[1]===kc)) return true;
+  return false;
+}
+
+function isCheckmate(color) {
+  return !getAllMoves(color).length;
+}
+
+function undoMove() {
+  if(!history.length||turn!=='w') return;
+  // Undo AI move
+  if(history.length>1){
+    const h=history.pop();
+    board=h.board;
+    const h2=history.pop();
+    board=h2.board;
+  } else {
+    board=history.pop().board;
+  }
+  selected=null; lastMove=null; gameOver=false;
+  turn='w'; setStatus("WHITE'S TURN (YOU)",'#bb00ff');
+  renderBoard();
+}
+
+function updateCaptured(){
+  document.getElementById('capByWhite').textContent=capW.join(' ');
+  document.getElementById('capByBlack').textContent=capB.join(' ');
+}
+
+const FILES='abcdefgh';
+function addMoveLog(fr,fc,tr,tc,color){
+  const log=document.getElementById('moveLog');
+  const s=document.createElement('span');
+  s.className=color;
+  s.textContent=`${color==='w'?'W':'B'}: ${FILES[fc]}${8-fr}→${FILES[tc]}${8-tr}  `;
+  log.appendChild(s);
+  log.scrollTop=log.scrollHeight;
+}
+
+function setStatus(m,col='#bb00ff'){const el=document.getElementById('status');el.textContent=m;el.style.color=col;}
+
+newGame();
+</script>
+</body>
+</html>

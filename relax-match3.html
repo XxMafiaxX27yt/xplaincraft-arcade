@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CANDY MATCH — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #000c08; }
+    .hud { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(0,255,157,0.2); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #00ff9d; font-size: 0.8rem; letter-spacing: 2px; }
+    .game-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.8rem; letter-spacing: 5px; color: #00ff9d; text-shadow: 0 0 20px #00ff9d; text-align: center; margin: 20px 0 4px; }
+    .score-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .score-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(0,255,157,0.3); padding: 8px 16px; text-align: center; clip-path: polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%); }
+    .score-label { font-family: 'Share Tech Mono', monospace; font-size: 0.52rem; letter-spacing: 2px; color: #004433; }
+    .score-val { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; font-weight: 900; color: #00ff9d; }
+    .moves-bar { width: min(400px,92vw); height: 6px; background: rgba(0,255,157,0.1); border: 1px solid rgba(0,255,157,0.2); margin-bottom: 14px; }
+    .moves-fill { height: 100%; background: linear-gradient(90deg,#00ff9d,#00c8ff); transition: width .3s; box-shadow: 0 0 8px #00ff9d; }
+    .board { display: grid; gap: 3px; padding: 8px; background: rgba(0,20,14,0.6); border: 1px solid rgba(0,255,157,0.2); box-shadow: 0 0 25px rgba(0,255,157,0.1); margin-bottom: 14px; }
+    .gem { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; cursor: pointer; border-radius: 8px; border: 2px solid transparent; transition: transform .15s, border-color .15s; position: relative; user-select: none; }
+    .gem:hover { transform: scale(1.1); }
+    .gem.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 14px rgba(255,255,255,0.5); }
+    .gem.matched { animation: gemPop .3s ease-out forwards; }
+    .gem.falling  { animation: gemFall .25s ease-in; }
+    @keyframes gemPop  { 0%{transform:scale(1)} 50%{transform:scale(1.4);opacity:0.5} 100%{transform:scale(0);opacity:0} }
+    @keyframes gemFall { 0%{transform:translateY(-52px);opacity:0} 100%{transform:translateY(0);opacity:1} }
+    .msg { font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; letter-spacing: 3px; color: #00ff9d; text-align: center; min-height: 1.5em; margin-bottom: 6px; animation: warnPulse 1s infinite; }
+    .overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,10,6,0.95); font-family: 'Orbitron', sans-serif; }
+    .overlay.hidden { display: none; }
+    .ov-title { font-size: clamp(1.8rem,5vw,3rem); font-weight: 900; color: #00ff9d; letter-spacing: 6px; text-shadow: 0 0 25px #00ff9d; margin-bottom: 14px; }
+    .ov-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 4px; color: #004433; margin-bottom: 24px; }
+    .ov-btn { background: linear-gradient(135deg,#004433,#00884d); border: none; color: #000; font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; padding: 14px 36px; cursor: pointer; clip-path: polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); transition: all .3s; }
+    .ov-btn:hover { box-shadow: 0 0 30px #00ff9d; }
+    .ov-stat { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; color: #004433; margin-bottom: 8px; }
+    .ov-stat span { color: #00ff9d; }
+    @media(max-width:420px) { .gem{width:40px;height:40px;font-size:1.4rem;} }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="relax-hub.html" style="color:#00ff9d;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(0,255,157,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🍬 CANDY MATCH</div>
+  <div class="hud-val">BEST: <span id="hudBest">0</span></div>
+</div>
+
+<div class="game-title">CANDY MATCH</div>
+<div class="score-row">
+  <div class="score-box"><div class="score-label">SCORE</div><div class="score-val" id="scoreVal">0</div></div>
+  <div class="score-box"><div class="score-label">LEVEL</div><div class="score-val" id="levelVal">1</div></div>
+  <div class="score-box"><div class="score-label">TARGET</div><div class="score-val" id="targetVal">500</div></div>
+  <div class="score-box"><div class="score-label">MOVES</div><div class="score-val" id="movesVal">20</div></div>
+</div>
+<div class="moves-bar"><div class="moves-fill" id="movesFill" style="width:100%;"></div></div>
+<div class="msg" id="msg"></div>
+<div class="board" id="board" style="grid-template-columns:repeat(8,1fr);"></div>
+
+<div class="overlay" id="startOv">
+  <div style="font-size:4rem;margin-bottom:14px;">🍬</div>
+  <div class="ov-title">CANDY MATCH</div>
+  <div class="ov-sub">◈ MATCH 3 OR MORE TO SCORE ◈</div>
+  <div class="ov-stat" style="margin-bottom:6px;">CLICK TWO ADJACENT GEMS TO SWAP</div>
+  <div class="ov-stat" style="margin-bottom:24px;">REACH THE TARGET SCORE TO LEVEL UP</div>
+  <button class="ov-btn" onclick="startGame()">▶ PLAY NOW</button>
+</div>
+<div class="overlay hidden" id="winOv">
+  <div style="font-size:4rem;margin-bottom:14px;" id="endIcon">🏆</div>
+  <div class="ov-title" id="endTitle">LEVEL UP!</div>
+  <div class="ov-sub" id="endSub"></div>
+  <div class="ov-stat">SCORE: <span id="endScore">0</span></div>
+  <div class="ov-stat" style="margin-bottom:20px;">BEST: <span id="endBest">0</span></div>
+  <button class="ov-btn" id="endBtn">▶ CONTINUE</button>
+  <a href="relax-hub.html" style="margin-top:14px;color:rgba(0,255,157,0.5);font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;text-decoration:none;">◄ BACK</a>
+</div>
+
+<script>
+const GEMS = ['🍎','🍊','🍋','🍇','🫐','💚','🩷','⭐'];
+const COLS = 8, ROWS = 8;
+let grid, selected, score, level, moves, target, busy, best;
+
+best = parseInt(localStorage.getItem('cm_best')||'0');
+document.getElementById('hudBest').textContent = best;
+
+function startGame() {
+  document.getElementById('startOv').classList.add('hidden');
+  document.getElementById('winOv').classList.add('hidden');
+  score = 0; level = 1; moves = 20; target = 500; selected = null; busy = false;
+  updateHUD();
+  buildGrid();
+  renderBoard();
+}
+
+function buildGrid() {
+  do {
+    grid = Array.from({length: ROWS}, () =>
+      Array.from({length: COLS}, () => GEMS[Math.floor(Math.random() * GEMS.length)])
+    );
+  } while (!hasAnyMatches());
+}
+
+function updateHUD() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('levelVal').textContent = level;
+  document.getElementById('targetVal').textContent = target;
+  document.getElementById('movesVal').textContent = moves;
+  document.getElementById('movesFill').style.width = (moves / 20 * 100) + '%';
+}
+
+function renderBoard() {
+  const b = document.getElementById('board');
+  b.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const g = document.createElement('div');
+      g.className = 'gem';
+      g.textContent = grid[r][c];
+      g.dataset.r = r; g.dataset.c = c;
+      if (selected && selected[0] == r && selected[1] == c) g.classList.add('selected');
+      g.onclick = () => handleClick(r, c);
+      b.appendChild(g);
+    }
+  }
+}
+
+function handleClick(r, c) {
+  if (busy) return;
+  if (!selected) {
+    selected = [r, c];
+    renderBoard();
+    return;
+  }
+  const [sr, sc] = selected;
+  const isAdj = (Math.abs(r - sr) + Math.abs(c - sc)) === 1;
+  if (!isAdj) {
+    selected = [r, c];
+    renderBoard();
+    return;
+  }
+  selected = null;
+  trySwap(sr, sc, r, c);
+}
+
+function trySwap(r1, c1, r2, c2) {
+  busy = true;
+  // Swap
+  [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+  const matched = findMatches();
+  if (!matched.length) {
+    // Swap back
+    [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+    setMsg('⚠ NO MATCH!');
+    busy = false;
+    renderBoard();
+    return;
+  }
+  moves--;
+  updateHUD();
+  processMatches(matched, () => {
+    if (score >= target) { levelUp(); return; }
+    if (moves <= 0) { endGame(); return; }
+    busy = false;
+    if (!hasAnyMatches()) { setMsg('NO MOVES — RESHUFFLING...'); setTimeout(() => { buildGrid(); renderBoard(); busy=false; }, 1200); }
+  });
+}
+
+function findMatches() {
+  const matched = new Set();
+  // Horizontal
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS - 2; c++) {
+      if (grid[r][c] && grid[r][c] === grid[r][c+1] && grid[r][c] === grid[r][c+2]) {
+        let k = c;
+        while (k < COLS && grid[r][k] === grid[r][c]) { matched.add(r*COLS+k); k++; }
+      }
+    }
+  }
+  // Vertical
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS - 2; r++) {
+      if (grid[r][c] && grid[r][c] === grid[r+1][c] && grid[r][c] === grid[r+2][c]) {
+        let k = r;
+        while (k < ROWS && grid[k][c] === grid[r][c]) { matched.add(k*COLS+c); k++; }
+      }
+    }
+  }
+  return [...matched].map(idx => [Math.floor(idx/COLS), idx%COLS]);
+}
+
+function hasAnyMatches() { return findMatches().length > 0; }
+
+function processMatches(matched, done) {
+  const points = matched.length * 10 * (matched.length >= 5 ? 3 : matched.length >= 4 ? 2 : 1);
+  score += points;
+  let xp = parseInt(localStorage.getItem('hvXP')||'0') + points;
+  localStorage.setItem('hvXP', xp);
+  updateHUD();
+  if (matched.length >= 5) setMsg('🌟 MEGA MATCH ×3!');
+  else if (matched.length >= 4) setMsg('⭐ SUPER MATCH ×2!');
+  else setMsg('✓ MATCH!');
+  // Animate removal
+  matched.forEach(([r,c]) => {
+    const idx = r * COLS + c;
+    const el = document.querySelectorAll('.gem')[idx];
+    if (el) el.classList.add('matched');
+  });
+  setTimeout(() => {
+    matched.forEach(([r,c]) => grid[r][c] = null);
+    gravity(() => {
+      refill(() => {
+        const newMatches = findMatches();
+        if (newMatches.length) {
+          setTimeout(() => processMatches(newMatches, done), 300);
+        } else {
+          renderBoard();
+          done();
+        }
+      });
+    });
+  }, 350);
+}
+
+function gravity(done) {
+  for (let c = 0; c < COLS; c++) {
+    const col = grid.map(r => r[c]).filter(v => v);
+    while (col.length < ROWS) col.unshift(null);
+    for (let r = 0; r < ROWS; r++) grid[r][c] = col[r];
+  }
+  renderBoard();
+  setTimeout(done, 250);
+}
+
+function refill(done) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!grid[r][c]) grid[r][c] = GEMS[Math.floor(Math.random() * GEMS.length)];
+    }
+  }
+  renderBoard();
+  setTimeout(done, 200);
+}
+
+function levelUp() {
+  busy = false;
+  if (score > best) { best = score; localStorage.setItem('cm_best', best); document.getElementById('hudBest').textContent = best; }
+  let wins = parseInt(localStorage.getItem('hvWins')||'0')+1; localStorage.setItem('hvWins', wins);
+  let xp = parseInt(localStorage.getItem('hvXP')||'0')+level*50; localStorage.setItem('hvXP', xp);
+  level++; target = level * 500 + (level-1)*200; moves = 20;
+  document.getElementById('endIcon').textContent = '🏆';
+  document.getElementById('endTitle').textContent = `LEVEL ${level-1} CLEAR!`;
+  document.getElementById('endTitle').style.color = '#00ff9d';
+  document.getElementById('endSub').textContent = `◈ TARGET REACHED ◈`;
+  document.getElementById('endScore').textContent = score;
+  document.getElementById('endBest').textContent = best;
+  document.getElementById('endBtn').textContent = `▶ LEVEL ${level}`;
+  document.getElementById('endBtn').onclick = () => {
+    document.getElementById('winOv').classList.add('hidden');
+    updateHUD(); buildGrid(); renderBoard(); busy=false;
+  };
+  document.getElementById('winOv').classList.remove('hidden');
+}
+
+function endGame() {
+  busy = false;
+  if (score > best) { best = score; localStorage.setItem('cm_best', best); document.getElementById('hudBest').textContent = best; }
+  let losses = parseInt(localStorage.getItem('hvLosses')||'0')+1; localStorage.setItem('hvLosses', losses);
+  document.getElementById('endIcon').textContent = '💔';
+  document.getElementById('endTitle').textContent = 'NO MOVES LEFT!';
+  document.getElementById('endTitle').style.color = '#ff2244';
+  document.getElementById('endSub').textContent = `◈ SCORE: ${score} | TARGET: ${target} ◈`;
+  document.getElementById('endScore').textContent = score;
+  document.getElementById('endBest').textContent = best;
+  document.getElementById('endBtn').textContent = '▶ TRY AGAIN';
+  document.getElementById('endBtn').onclick = startGame;
+  document.getElementById('winOv').classList.remove('hidden');
+}
+
+let msgTimer;
+function setMsg(m) {
+  document.getElementById('msg').textContent = m;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => document.getElementById('msg').textContent = '', 1200);
+}
+</script>
+</body>
+</html>

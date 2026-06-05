@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MYSTERY CAFÉ — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height:100vh; display:flex; flex-direction:column; align-items:center; background:#000c08; font-family:'Rajdhani',sans-serif; }
+    .hud { width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:rgba(0,0,0,0.9); border-bottom:1px solid rgba(0,255,157,0.2); font-family:'Share Tech Mono',monospace; }
+    .hud-val { color:#00ff9d; font-size:0.8rem; letter-spacing:2px; }
+    .game-wrap { width:min(700px,96vw); margin:24px auto; }
+    .game-header { text-align:center; margin-bottom:20px; }
+    .game-title { font-family:'Orbitron',sans-serif; font-weight:900; font-size:1.6rem; letter-spacing:5px; color:#00ff9d; text-shadow:0 0 15px #00ff9d; }
+    .game-sub { font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:4px; color:#004433; margin-top:4px; }
+    .story-box { background:rgba(0,15,10,0.8); border:1px solid rgba(0,255,157,0.2); padding:24px; margin-bottom:16px; min-height:200px; box-shadow:0 0 20px rgba(0,255,157,0.05); line-height:1.9; font-size:1rem; color:rgba(200,240,220,0.85); }
+    .story-box p { margin-bottom:12px; }
+    .story-box .narrator { color:rgba(200,240,220,0.6); font-style:italic; font-size:0.92rem; }
+    .story-box .dialog { color:#00ff9d; }
+    .story-box .clue { color:#ffe500; font-family:'Share Tech Mono',monospace; font-size:0.85rem; letter-spacing:1px; border-left:2px solid #ffe500; padding-left:10px; }
+    .story-box .warning { color:#ff7700; }
+    .choices { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+    .choice-btn { background:rgba(0,20,14,0.8); border:1px solid rgba(0,255,157,0.2); color:rgba(200,240,220,0.8); font-family:'Rajdhani',sans-serif; font-size:0.95rem; padding:14px 18px; cursor:pointer; text-align:left; transition:all .2s; line-height:1.5; }
+    .choice-btn:hover { border-color:#00ff9d; background:rgba(0,255,157,0.08); color:#fff; transform:translateX(4px); }
+    .choice-btn::before { content:'▸ '; color:#00ff9d; font-family:'Share Tech Mono',monospace; }
+    .notebook { background:rgba(0,10,7,0.9); border:1px solid rgba(0,255,157,0.15); padding:16px; margin-bottom:14px; }
+    .nb-title { font-family:'Share Tech Mono',monospace; font-size:0.6rem; letter-spacing:3px; color:#004433; margin-bottom:10px; }
+    .nb-item { font-family:'Share Tech Mono',monospace; font-size:0.65rem; letter-spacing:1px; color:#006644; padding:3px 0; border-bottom:1px solid rgba(0,255,157,0.05); }
+    .nb-item.new { color:#00ff9d; animation:warnPulse 2s 3; }
+    .progress-bar { height:4px; background:rgba(0,255,157,0.1); margin-bottom:14px; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,#004433,#00ff9d); transition:width .5s; box-shadow:0 0 8px #00ff9d; }
+    .suspect-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+    .suspect-card { background:rgba(0,15,10,0.7); border:1px solid rgba(0,255,157,0.15); padding:12px; text-align:center; cursor:pointer; transition:all .2s; }
+    .suspect-card:hover { border-color:#00ff9d; background:rgba(0,255,157,0.08); }
+    .suspect-card.selected { border-color:#ffe500; background:rgba(255,228,0,0.08); }
+    .suspect-icon { font-size:2rem; margin-bottom:6px; }
+    .suspect-name { font-family:'Orbitron',sans-serif; font-size:0.65rem; letter-spacing:2px; color:#00ff9d; }
+    .suspect-role { font-family:'Share Tech Mono',monospace; font-size:0.55rem; letter-spacing:1px; color:#004433; margin-top:2px; }
+    .accuse-btn { width:100%; padding:14px; background:linear-gradient(135deg,#660000,#aa0000); border:1px solid #ff2244; color:#fff; font-family:'Orbitron',sans-serif; font-size:0.85rem; font-weight:700; letter-spacing:3px; cursor:pointer; transition:all .3s; clip-path:polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); }
+    .accuse-btn:hover { box-shadow:0 0 20px #ff2244; }
+    .accuse-btn:disabled { opacity:0.3; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="relax-hub.html" style="color:#00ff9d;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(0,255,157,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🔍 MYSTERY CAFÉ</div>
+  <div class="hud-val">PLAYER: <span id="hudPlayer">---</span></div>
+</div>
+
+<div class="game-wrap">
+  <div class="game-header">
+    <div class="game-title">MYSTERY CAFÉ</div>
+    <div class="game-sub">◈ A COZY DETECTIVE STORY ◈</div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%;"></div></div>
+  <div class="story-box" id="storyBox"></div>
+  <div id="suspectArea"></div>
+  <div class="choices" id="choicesArea"></div>
+  <div class="notebook" id="notebook" style="display:none;">
+    <div class="nb-title">◈ YOUR NOTEBOOK ◈</div>
+    <div id="nbItems"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('hudPlayer').textContent = localStorage.getItem('hvPlayer')||'DETECTIVE';
+
+// ══ STORY DATA ══════════════════════════════════════════════
+const CULPRIT = 'MARCO'; // Always Marco in this story
+
+const STORY = {
+  start: {
+    progress: 5,
+    text: `<p class="narrator">The year is 1987. You're a detective called to Café Belle Epoque on a drizzly Thursday evening.</p>
+           <p>The owner, <strong>MADAME COLETTE</strong>, meets you at the door, wringing her hands.</p>
+           <p class="dialog">"Detective, thank goodness you're here! My grandmother's secret recipe — the one we've used for 60 years — it's gone! Someone stole it from my office tonight during the evening rush!"</p>
+           <p class="narrator">You step inside. The café smells of coffee and rain. Four people are still here: staff and a regular customer. One of them is the thief.</p>`,
+    choices: [
+      { text: 'Survey the café and introduce yourself', next: 'survey' },
+      { text: 'Ask Colette who was in the café tonight', next: 'colette_ask' },
+      { text: 'Examine the office where the recipe was kept', next: 'office_first' },
+    ]
+  },
+  survey: {
+    progress: 12,
+    clue: null,
+    text: `<p class="narrator">You scan the room. The café is warm and cluttered with antiques. Three suspects remain seated at separate tables, and one stands behind the counter.</p>
+           <p><strong>🧑‍🍳 MARCO</strong> — the head chef, wiping his hands on his apron, looking nervous.</p>
+           <p><strong>👩 SOPHIE</strong> — the young waitress, scrolling her phone, barely making eye contact.</p>
+           <p><strong>👴 PROFESSOR REED</strong> — a regular customer, reading a newspaper too intently.</p>
+           <p><strong>🧹 HANS</strong> — the cleaner, mopping near the back, whistling to himself.</p>
+           <p class="narrator">Where do you begin?</p>`,
+    choices: [
+      { text: 'Speak to Marco the chef', next: 'talk_marco' },
+      { text: 'Speak to Sophie the waitress', next: 'talk_sophie' },
+      { text: 'Speak to Professor Reed', next: 'talk_reed' },
+      { text: 'Speak to Hans the cleaner', next: 'talk_hans' },
+    ]
+  },
+  colette_ask: {
+    progress: 10,
+    clue: 'Colette says the office was locked all evening — only she and Marco have keys.',
+    text: `<p class="dialog">"Only four people were here when I noticed it missing — my chef Marco, the waitress Sophie, Professor Reed who comes every Thursday, and Hans my cleaner."</p>
+           <p class="dialog">"The office was locked all evening. Only Marco and I have keys to it. But <em>I</em> certainly didn't steal it!"</p>
+           <p class="narrator">She lowers her voice.</p>
+           <p class="dialog">"I did notice Marco going in and out of the back corridor twice tonight. He said he was fetching supplies. But I don't know..."</p>`,
+    choices: [
+      { text: 'Examine the office now', next: 'office_first' },
+      { text: 'Confront Marco about the keys', next: 'talk_marco' },
+      { text: 'Ask about the other suspects', next: 'survey' },
+    ]
+  },
+  office_first: {
+    progress: 22,
+    clue: 'Found coffee grounds and a distinctive boot print (large, rubber sole) in the office.',
+    text: `<p class="narrator">Madame Colette unlocks the office for you. It's small — a desk, filing cabinet, and a safe left ajar.</p>
+           <p>On the floor near the safe, you notice <span class="clue">a scattering of fresh coffee grounds</span> — odd for an office. And by the window, a faint <span class="clue">boot print: large, rubber-soled, treaded like a kitchen boot.</span></p>
+           <p>The window latch is slightly bent — it was opened from inside, then hastily shut.</p>
+           <p class="narrator">You photograph everything mentally. Kitchen boots. Someone who smells of coffee. Someone with a key.</p>`,
+    choices: [
+      { text: 'Go question Marco about this', next: 'talk_marco' },
+      { text: 'Check the other suspects first', next: 'survey' },
+      { text: 'Look out the window', next: 'window_clue' },
+    ]
+  },
+  window_clue: {
+    progress: 30,
+    clue: 'The alley outside the window leads directly to Marco\'s motorcycle parking spot.',
+    text: `<p class="narrator">You lean out. The window opens onto a narrow alley. At the far end, under a dim light, you can see a <span class="clue">motorcycle — a red Ducati.</span></p>
+           <p>You remember seeing a red helmet hanging in the kitchen when you passed through. The alley exit is only 40 steps from this window.</p>
+           <p class="narrator">Someone could have passed the recipe out the window and picked it up later. Or taken it directly through the kitchen exit.</p>`,
+    choices: [
+      { text: 'Head to the kitchen to investigate', next: 'kitchen_clue' },
+      { text: 'Go question Marco immediately', next: 'talk_marco' },
+    ]
+  },
+  kitchen_clue: {
+    progress: 40,
+    clue: 'Marco\'s workstation has a freshly torn notepad page and a pen with green ink — the recipe was written in green ink.',
+    text: `<p class="narrator">The kitchen is immaculate — too clean, almost. Marco's workstation has a notepad on it.</p>
+           <p>You pick it up. The top page is gone, but pressing the notepad at an angle to the light reveals <span class="clue">faint indentations — handwriting. You can make out: "...vanilla, 3 parts... secret ratio..."</span></p>
+           <p>A pen rests beside it. You uncap it. <span class="clue">Green ink.</span> The missing recipe was written in green ink, Colette confirmed.</p>
+           <p class="narrator">Marco watches you from the doorway. His jaw tightens.</p>
+           <p class="dialog">"That's just my own notes, detective."</p>`,
+    choices: [
+      { text: 'Press Marco right now', next: 'talk_marco_pressed' },
+      { text: 'Keep your cards hidden and question others first', next: 'talk_sophie' },
+    ]
+  },
+  talk_marco: {
+    progress: 35,
+    clue: null,
+    text: `<p class="narrator">Marco crosses his arms. He's a big man — broad shoulders, kitchen boots with thick rubber treads.</p>
+           <p class="dialog">"I've worked here twelve years. Why would I steal from Madame Colette?"</p>
+           <p>You notice his boots match the print in the office exactly. You also notice his right sleeve is dusted with <span class="clue">pale flour — unusual for an evening shift that ended an hour ago.</span></p>
+           <p class="dialog">"I was in the back corridor twice tonight, yes. To get more vanilla extract. Ask Sophie — she saw me."</p>
+           <p class="narrator">His alibi is quick. Too quick.</p>`,
+    choices: [
+      { text: 'Ask about the key to the office', next: 'marco_key' },
+      { text: 'Ask Sophie to verify his alibi', next: 'talk_sophie' },
+      { text: 'Ask where he plans to go after tonight', next: 'marco_plans' },
+    ]
+  },
+  marco_key: {
+    progress: 50,
+    clue: 'Marco\'s office key has a fresh scratch on the teeth — as if it was cut recently.',
+    text: `<p class="dialog">"Of course I have a key. Colette gave it to me for emergencies. I've had it for years."</p>
+           <p class="narrator">He holds it up. You look closely. The key has a <span class="clue">fresh scratch along the teeth — the kind you get when a locksmith cuts a duplicate.</span></p>
+           <p class="narrator">Someone made a copy. Recently.</p>`,
+    choices: [
+      { text: 'Confront him about the duplicate key', next: 'marco_confronted' },
+      { text: 'Note it and investigate others', next: 'talk_sophie' },
+    ]
+  },
+  marco_plans: {
+    progress: 45,
+    clue: 'Marco mentions he has a "big opportunity" starting next week — a new restaurant job.',
+    text: `<p class="narrator">For a split second, Marco hesitates.</p>
+           <p class="dialog">"...I have a new position starting next week. A restaurant in Lyon. Better pay."</p>
+           <p class="dialog">"But I gave proper notice. This is all above board."</p>
+           <p class="narrator">A new restaurant. They'd pay handsomely for a legendary secret recipe. <span class="clue">Motive established.</span></p>`,
+    choices: [
+      { text: 'Ask the name of the Lyon restaurant', next: 'marco_lyon' },
+      { text: 'Move on — check other suspects', next: 'talk_sophie' },
+    ]
+  },
+  marco_lyon: {
+    progress: 52,
+    clue: 'The Lyon restaurant is owned by Colette\'s former business rival, Dupont.',
+    text: `<p class="dialog">"Maison Dupont in Lyon. Very prestigious."</p>
+           <p class="narrator">You know that name. <span class="clue">Dupont — Colette's estranged business partner from 20 years ago. They split bitterly over the very recipe that was just stolen.</span></p>
+           <p class="narrator">Marco's expression flickers when he realizes you recognize it.</p>`,
+    choices: [
+      { text: 'Confront Marco now — you have enough', next: 'marco_confronted' },
+      { text: 'Question the others to be thorough', next: 'talk_sophie' },
+    ]
+  },
+  marco_confronted: {
+    progress: 70,
+    clue: null,
+    text: `<p class="narrator">You lay everything out calmly. The boot print. The key. The notepad. The Lyon restaurant. The green ink pen.</p>
+           <p class="narrator">Marco's composure cracks. He sits down heavily.</p>
+           <p class="dialog">"I...Dupont approached me three months ago. He offered me double salary — and a bonus if I brought the recipe. I copied the key last week. I thought... she'd never know."</p>
+           <p class="dialog">"The recipe is folded in my jacket. Locker three in the kitchen."</p>
+           <p class="narrator">Case nearly closed. But you should still wrap up formally.</p>`,
+    choices: [
+      { text: 'Retrieve the recipe and call the police', next: 'accusation' },
+    ]
+  },
+  talk_sophie: {
+    progress: 38,
+    clue: null,
+    text: `<p class="narrator">Sophie barely looks up from her phone, then sighs and puts it away.</p>
+           <p class="dialog">"I was out front the whole night. I don't go near the back corridor — that's chef territory."</p>
+           <p class="dialog">"Marco did go past me toward the back twice. First time normal, second time... he looked stressed. Checked his watch twice in thirty seconds."</p>
+           <p class="narrator">She shrugs. <span class="clue">She confirms Marco's movements — but notes his unusual anxiety.</span></p>`,
+    choices: [
+      { text: 'Press her further', next: 'sophie_more' },
+      { text: 'Move on to Professor Reed', next: 'talk_reed' },
+      { text: 'Go confront Marco with this', next: 'talk_marco' },
+    ]
+  },
+  sophie_more: {
+    progress: 42,
+    clue: 'Sophie saw Marco with a folded paper tucked into his apron on his second trip back.',
+    text: `<p class="dialog">"Now that you mention it... the second time he came back, something was in his front apron pocket. Folded paper, sticking out. He usually keeps his phone in there, not paper."</p>
+           <p class="narrator"><span class="clue">A folded paper. In the apron pocket.</span> Could be the recipe.</p>`,
+    choices: [
+      { text: 'Go find Marco immediately', next: 'talk_marco' },
+      { text: 'Finish questioning everyone first', next: 'talk_reed' },
+    ]
+  },
+  talk_reed: {
+    progress: 36,
+    clue: null,
+    text: `<p class="narrator">Professor Reed folds his newspaper with precise movements. He has the air of someone who notices everything.</p>
+           <p class="dialog">"I come every Thursday. Same corner table, same order. Tonight was different, though. The chef — the big one — used the back corridor twice in twenty minutes. Second time, he was moving quickly. And," he pauses, "he went to his locker. Not the supply room."</p>
+           <p class="narrator"><span class="clue">Marco went to his locker — not the supply room as he claimed.</span></p>`,
+    choices: [
+      { text: 'Ask Reed if he saw anything else', next: 'reed_more' },
+      { text: 'Go confront Marco with this', next: 'marco_confronted' },
+    ]
+  },
+  reed_more: {
+    progress: 48,
+    clue: 'Reed saw Marco make a phone call in the alley at 7:42 PM — right when Colette discovered the recipe missing.',
+    text: `<p class="dialog">"I happened to step outside for air at 7:42. The chef was in the alley, on the phone. He said — and I recall distinctly — <em>'It's done. I have it.'</em>"</p>
+           <p class="narrator"><span class="clue">"It's done. I have it." — at the exact time Colette found the recipe missing.</span></p>
+           <p class="dialog">"I didn't think much of it at the time. But now..."</p>`,
+    choices: [
+      { text: 'Thank Reed and go confront Marco', next: 'marco_confronted' },
+    ]
+  },
+  talk_hans: {
+    progress: 30,
+    clue: 'Hans says he saw the office door open briefly at 7:38 PM — and heard footsteps inside.',
+    text: `<p class="narrator">Hans stops mopping and leans on the handle. He's cheerful, direct.</p>
+           <p class="dialog">"Ja, I was near the back at 7:38. The office door — it was open a crack. Unusual, that. I heard footsteps inside. Then it clicked shut."</p>
+           <p class="dialog">"I didn't see who. But heavy footsteps, ja? Like work boots."</p>
+           <p class="narrator"><span class="clue">Office open at 7:38 PM. Heavy work boots — kitchen boots.</span></p>`,
+    choices: [
+      { text: 'Go check the office', next: 'office_first' },
+      { text: 'Ask Hans about the suspects', next: 'hans_more' },
+    ]
+  },
+  hans_more: {
+    progress: 38,
+    clue: 'Hans noticed Marco arguing quietly with someone outside before the shift started.',
+    text: `<p class="dialog">"Before service tonight, Marco was outside in the alley. Talking to someone on the phone, very quiet, very tense. Not like himself."</p>
+           <p class="dialog">"I heard him say a name — <em>Dupont</em>. That's all."</p>`,
+    choices: [
+      { text: 'Go investigate Marco now', next: 'marco_plans' },
+    ]
+  },
+  accusation: {
+    progress: 100,
+    text: `<p class="narrator">You walk calmly to Locker 3. Open it. Inside, folded carefully in a small envelope — the handwritten recipe on aged cream paper.</p>
+           <p class="narrator">You return to the main room. Marco doesn't run. He sits quietly as you call the police.</p>
+           <p class="dialog" style="color:#00ff9d;font-size:1.1rem;">"CASE CLOSED."</p>
+           <p class="narrator">Madame Colette clutches the recipe to her chest. Marco is led away.</p>
+           <p>Later, over a complimentary coffee, Colette thanks you warmly. The café fills with the smell of fresh pastry. Outside, the rain has stopped.</p>
+           <p class="narrator"><em>Some mysteries have simple answers. The hardest part is having the courage to see what's already in front of you.</em></p>`,
+    choices: [],
+    isFinal: true
+  }
+};
+
+let clues = [], storyProgress = 0, visitedScenes = new Set();
+
+function showScene(key) {
+  const scene = STORY[key];
+  if(!scene) return;
+  visitedScenes.add(key);
+  // Update progress
+  if(scene.progress > storyProgress) {
+    storyProgress = scene.progress;
+    document.getElementById('progressFill').style.width = storyProgress + '%';
+  }
+  // Add clue
+  if(scene.clue && !clues.includes(scene.clue)) {
+    clues.push(scene.clue);
+    updateNotebook(true);
+  }
+  // Render story
+  document.getElementById('storyBox').innerHTML = scene.text;
+  // Choices
+  const ca = document.getElementById('choicesArea');
+  ca.innerHTML = '';
+  if(scene.isFinal) {
+    endGame();
+    return;
+  }
+  (scene.choices||[]).forEach(ch => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = ch.text;
+    btn.onclick = () => showScene(ch.next);
+    ca.appendChild(btn);
+  });
+  // Show notebook once we have clues
+  if(clues.length > 0) {
+    document.getElementById('notebook').style.display = 'block';
+    updateNotebook(false);
+  }
+}
+
+function updateNotebook(newClue) {
+  const el = document.getElementById('nbItems');
+  el.innerHTML = '';
+  clues.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = 'nb-item' + (newClue && i === clues.length-1 ? ' new' : '');
+    d.textContent = '◈ ' + c;
+    el.appendChild(d);
+  });
+}
+
+function endGame() {
+  document.getElementById('choicesArea').innerHTML = `
+    <div style="text-align:center;margin-top:20px;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:1.3rem;font-weight:900;color:#00ff9d;letter-spacing:4px;text-shadow:0 0 20px #00ff9d;margin-bottom:12px;">🏆 MYSTERY SOLVED!</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;color:#004433;margin-bottom:16px;">CLUES COLLECTED: ${clues.length} | CULPRIT: MARCO</div>
+      <button onclick="location.reload()" style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;padding:12px 24px;background:none;border:1px solid rgba(0,255,157,0.4);color:#00ff9d;cursor:pointer;margin:4px;">↻ PLAY AGAIN</button>
+      <a href="relax-hub.html" style="display:inline-block;margin:4px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;padding:12px 24px;border:1px solid rgba(0,255,157,0.2);color:rgba(0,255,157,0.5);text-decoration:none;">◄ BACK TO HUB</a>
+    </div>`;
+  let wins = parseInt(localStorage.getItem('hvWins')||'0')+1; localStorage.setItem('hvWins', wins);
+  let xp = parseInt(localStorage.getItem('hvXP')||'0') + clues.length * 20 + 100; localStorage.setItem('hvXP', xp);
+}
+
+// Start
+showScene('start');
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+/* ════════════════════════════════════════════════════════════
+   XPLAINCRAFT'S ARCADE — MASTER STYLESHEET
+   Neon Cyberpunk × Retro Arcade × Dark Gaming Aesthetic
+   ════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&family=Press+Start+2P&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --red:       #ff2244;
+  --red-dim:   #880022;
+  --red-deep:  #330010;
+  --cyan:      #00fff7;
+  --green:     #00ff9d;
+  --yellow:    #ffe500;
+  --purple:    #cc00ff;
+  --blue:      #00c8ff;
+  --orange:    #ff7700;
+  --dark:      #020008;
+  --darker:    #000003;
+  --text:      #ccccdd;
+  --font-pixel:'Press Start 2P', monospace;
+  --font-hud:  'Share Tech Mono', monospace;
+  --font-head: 'Orbitron', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--darker);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: var(--red); }
+::selection { background: var(--red); color: #000; }
+
+/* ── SCANLINES & OVERLAYS ────────────────────────────────── */
+.scanlines {
+  position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+}
+.noise-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 998; opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+  animation: noiseShift 0.5s steps(2) infinite;
+}
+@keyframes noiseShift { 0%{background-position:0 0} 100%{background-position:100px 50px} }
+
+/* ── ANIMATED GRID ───────────────────────────────────────── */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,34,68,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,34,68,0.05) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridScroll 20s linear infinite;
+}
+@keyframes gridScroll { 0%{background-position:0 0} 100%{background-position:60px 60px} }
+
+/* ── PARTICLES ───────────────────────────────────────────── */
+.bg-particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.particle {
+  position: absolute; border-radius: 50%;
+  background: var(--red); box-shadow: 0 0 6px var(--red);
+  animation: floatUp linear infinite;
+}
+@keyframes floatUp {
+  0%   { transform: translateY(0) scale(1); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.5; }
+  100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
+}
+
+/* ── GLITCH ANIMATION ────────────────────────────────────── */
+@keyframes glitch-text {
+  0%,90%,100% { text-shadow: 0 0 20px var(--red), 0 0 40px rgba(255,34,68,0.3); transform: translate(0); }
+  91% { text-shadow: -3px 0 #00fff7, 3px 0 var(--red); transform: translate(-2px,0); }
+  93% { text-shadow: 3px 0 #cc00ff, -3px 0 var(--red); transform: translate(2px,0); }
+  95% { text-shadow: 0 0 20px var(--red); transform: translate(0); }
+  97% { text-shadow: -2px 0 #00fff7; transform: translate(-1px,1px); }
+}
+@keyframes warnPulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
+@keyframes bgPulse { 0%,100%{opacity:0.3} 50%{opacity:0.5} }
+
+/* ── CARD CORNERS ────────────────────────────────────────── */
+.card-corner { position: absolute; width: 12px; height: 12px; border-color: var(--red); border-style: solid; }
+.card-corner.tl { top: 6px; left: 6px; border-width: 1px 0 0 1px; }
+.card-corner.tr { top: 6px; right: 24px; border-width: 1px 1px 0 0; }
+.card-corner.bl { bottom: 24px; left: 6px; border-width: 0 0 1px 1px; }
+.card-corner.br { bottom: 6px; right: 6px; border-width: 0 1px 1px 0; }
+
+/* ── BACK BUTTON ─────────────────────────────────────────── */
+.back-home {
+  position: fixed; top: 20px; left: 20px; z-index: 50;
+  background: none; border: 1px solid rgba(255,34,68,0.4);
+  color: var(--red); font-family: var(--font-hud); font-size: 0.7rem;
+  letter-spacing: 2px; padding: 8px 16px; cursor: pointer;
+  transition: all .3s; text-decoration: none; display: inline-block;
+}
+.back-home:hover { background: var(--red); color: #000; }
+
+/* ── GAME CARD (shared across hubs) ─────────────────────── */
+.hgame-card {
+  position: relative; overflow: hidden; cursor: pointer;
+  min-height: 400px; display: flex; flex-direction: column;
+  border: 1px solid rgba(255,34,68,0.18); background: #040000;
+  clip-path: polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));
+  transition: transform .4s cubic-bezier(0.23,1,0.32,1), box-shadow .4s, border-color .4s;
+  text-decoration: none;
+}
+.hgame-card:hover {
+  transform: translateY(-8px) scale(1.015);
+  box-shadow: 0 24px 60px rgba(255,0,0,0.25), 0 0 40px rgba(255,0,0,0.1);
+  border-color: rgba(255,34,68,0.65);
+}
+.card-anim-bg { position: absolute; inset: 0; pointer-events: none; transition: opacity .4s; }
+.hgame-card:hover .card-anim-bg { opacity: 1 !important; }
+.card-content { position: relative; z-index: 3; padding: 26px; display: flex; flex-direction: column; height: 100%; }
+.card-icon-big { font-size: 3rem; margin-bottom: 10px; line-height: 1; }
+.card-num { font-family: var(--font-hud); font-size: 0.55rem; color: rgba(255,34,68,0.3); letter-spacing: 4px; margin-bottom: 4px; }
+.card-name { font-family: var(--font-head); font-size: 1.4rem; font-weight: 900; color: var(--red); letter-spacing: 4px; line-height: 1; margin-bottom: 3px; }
+.card-tagline { font-family: var(--font-hud); font-size: 0.6rem; letter-spacing: 4px; color: #550011; margin-bottom: 14px; }
+.card-desc { font-family: var(--font-body); font-size: 0.88rem; font-weight: 300; color: rgba(200,170,180,0.7); line-height: 1.65; flex: 1; }
+.card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 10px; }
+.ctag { font-family: var(--font-hud); font-size: 0.52rem; letter-spacing: 1px; border: 1px solid rgba(255,34,68,0.25); color: #880022; padding: 3px 8px; }
+.card-footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 12px; border-top: 1px solid rgba(255,34,68,0.1); }
+.play-label { font-family: var(--font-hud); font-size: 0.7rem; letter-spacing: 3px; color: var(--red); transition: letter-spacing .3s; }
+.hgame-card:hover .play-label { letter-spacing: 5px; }
+.scare-level { font-size: 0.65rem; opacity: 0.45; }
+.blood-drip { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #ff0000, transparent); opacity: 0; transition: opacity .3s; }
+.hgame-card:hover .blood-drip { opacity: 1; animation: dripAnim 2s linear infinite; }
+@keyframes dripAnim { 0%{background-position:0 0} 100%{background-position:200px 0} }
+
+/* Diff badges */
+.diff-badge { position: absolute; top: 14px; right: 14px; font-family: var(--font-hud); font-size: 0.55rem; letter-spacing: 2px; padding: 4px 10px; border: 1px solid currentColor; z-index: 4; }
+.badge-easy   { color: #44ff88; border-color: rgba(68,255,136,0.4); }
+.badge-med    { color: var(--yellow); border-color: rgba(255,228,0,0.4); }
+.badge-hard   { color: var(--orange); border-color: rgba(255,119,0,0.4); }
+.badge-extreme{ color: var(--red); border-color: rgba(255,34,68,0.4); animation: warnPulse 1.5s infinite; }
+
+/* ── GAMES GRID (hub pages) ──────────────────────────────── */
+.games-grid {
+  position: relative; z-index: 10;
+  display: grid; grid-template-columns: repeat(auto-fit,minmax(270px,1fr));
+  gap: 22px; padding: 36px 36px 80px; max-width: 1280px; margin: 0 auto;
+}
+
+/* ── MODAL ───────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.9); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal-box {
+  position: relative; background: #050000;
+  border: 1px solid rgba(255,34,68,0.5);
+  padding: 40px; max-width: 500px; width: 90%;
+  box-shadow: 0 0 60px rgba(255,34,68,0.3);
+  clip-path: polygon(0 0,calc(100% - 24px) 0,100% 24px,100% 100%,24px 100%,0 calc(100% - 24px));
+  animation: modalIn .3s ease-out;
+}
+@keyframes modalIn { 0%{transform:scale(0.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+.modal-close { position: absolute; top: 16px; right: 20px; color: var(--red-dim); cursor: pointer; font-size: 1.2rem; transition: color .2s; }
+.modal-close:hover { color: var(--red); }
+.modal-title { font-family: var(--font-head); font-size: 1.3rem; font-weight: 700; color: var(--red); letter-spacing: 4px; margin-bottom: 20px; }
+.modal-body { font-family: var(--font-body); color: rgba(200,180,190,0.7); font-size: 0.9rem; line-height: 1.8; }
+.modal-body p { margin-bottom: 12px; }
+.modal-coming { font-family: var(--font-hud); color: rgba(255,34,68,0.4); letter-spacing: 4px; font-size: 0.8rem; margin-top: 20px; text-align: center; animation: warnPulse 2s infinite; }
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .games-grid { padding: 20px 16px 80px; }
+}

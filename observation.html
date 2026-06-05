@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OBSERVATION WARD — HELLVERSE</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+#camNav {
+  z-index: 999 !important;
+  pointer-events: all !important;
+}
+#camNav button {
+  pointer-events: all !important;
+  position: relative;
+  z-index: 999;
+}
+#hud {
+  z-index: 999 !important;
+  pointer-events: all !important;
+}
+#botbar {
+  z-index: 999 !important;
+  pointer-events: all !important;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'Share Tech Mono',monospace;cursor:crosshair;}
+#gameCanvas{display:block;width:100vw;height:100vh;}
+/* HUD */
+#hud{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(0,0,0,0.92);border-bottom:1px solid rgba(0,160,0,0.25);pointer-events:none;}
+.hud-logo{font-family:'Orbitron',sans-serif;font-size:0.8rem;font-weight:900;color:#00aa00;letter-spacing:4px;text-shadow:0 0 10px #00ff00;}
+.hud-mid{display:flex;gap:16px;align-items:center;}
+.hud-tag{font-size:0.6rem;letter-spacing:2px;color:#004400;}
+.hud-v{color:#00cc00;font-size:0.85rem;}
+.hud-timer{font-size:1rem;color:#00ff00;letter-spacing:3px;font-weight:bold;}
+.hud-timer.urgent{color:#ff2244;animation:ub .5s infinite;}
+@keyframes ub{0%,100%{opacity:1}50%{opacity:0.2}}
+#exit-btn{background:none;border:1px solid rgba(0,160,0,0.4);color:#00aa00;font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;padding:5px 12px;cursor:pointer;pointer-events:all;}
+#exit-btn:hover{background:#001a00;}
+.rec{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff0000;margin-right:5px;animation:rb 1s infinite;}
+@keyframes rb{0%,100%{opacity:1}50%{opacity:0}}
+/* CAMERA NAV */
+#camNav{position:fixed;top:50%;left:0;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:6px;padding:0 8px;}
+#camNav button{background:rgba(0,0,0,0.8);border:1px solid rgba(0,120,0,0.3);color:#005500;font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:1px;padding:5px 8px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+#camNav button:hover,#camNav button.active{border-color:#00cc00;color:#00ff00;background:#001a00;}
+/* BOTTOM BAR */
+#botbar{position:fixed;bottom:0;left:0;right:0;z-index:20;height:52px;background:rgba(0,0,0,0.92);border-top:1px solid rgba(0,120,0,0.2);display:flex;align-items:center;gap:12px;padding:0 16px;}
+#miss-wrap{display:flex;gap:6px;align-items:center;}
+.miss-dot{width:10px;height:10px;border-radius:50%;border:1px solid #004400;background:transparent;transition:background .3s;}
+.miss-dot.used{background:#ff2244;border-color:#ff2244;}
+#found-log{flex:1;font-size:0.55rem;letter-spacing:1px;color:#003300;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#report-btn{background:rgba(0,60,0,0.5);border:1px solid #00aa00;color:#00ff00;font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;padding:8px 18px;cursor:pointer;}
+#report-btn:hover{background:#002200;}
+/* SCREENS */
+.screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;background:rgba(0,0,0,0.97);}
+.screen.off{display:none;}
+.s-icon{font-size:4rem;margin-bottom:14px;}
+.s-title{font-size:clamp(1.5rem,5vw,3rem);font-weight:900;letter-spacing:6px;margin-bottom:12px;}
+.s-msg{font-family:'Share Tech Mono',monospace;font-size:0.72rem;letter-spacing:2px;line-height:2.2;text-align:center;margin-bottom:24px;}
+.s-btn{background:none;border:2px solid currentColor;font-family:'Orbitron',sans-serif;font-size:0.75rem;letter-spacing:3px;padding:12px 30px;cursor:pointer;transition:all .3s;margin:5px;}
+.s-btn:hover{opacity:0.65;}
+.green{color:#00cc55;}.red{color:#ff2244;}
+.diff-row{display:flex;gap:10px;margin-bottom:20px;}
+.diff-btn{background:none;border:1px solid rgba(0,150,0,0.4);color:#005500;font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;padding:7px 16px;cursor:pointer;transition:all .3s;}
+.diff-btn.active,.diff-btn:hover{border-color:#00cc00;color:#00ff00;background:rgba(0,60,0,0.3);}
+/* ANOMALY HIGHLIGHT */
+#anomHint{position:fixed;top:55px;left:50%;transform:translateX(-50%);z-index:25;font-size:0.65rem;letter-spacing:2px;padding:6px 18px;background:rgba(0,0,0,0.85);border:1px solid rgba(255,100,0,0.4);color:#ff8800;opacity:0;transition:opacity .3s;pointer-events:none;}
+/* JUMPSCARE */
+#js{position:fixed;inset:0;z-index:100;background:#000;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .04s;}
+#js.show{opacity:1;}
+#js-e{font-size:min(40vw,40vh);line-height:1;}
+#js-t{font-family:'Orbitron',sans-serif;font-size:clamp(1rem,4vw,2rem);color:#ff0000;letter-spacing:6px;margin-top:16px;text-shadow:0 0 30px #ff0000;}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-logo"><span class="rec"></span>OBSERVATION WARD</div>
+  <div class="hud-mid">
+    <div class="hud-tag">SHIFT <span class="hud-v" id="hShift">1</span></div>
+    <div class="hud-tag">FOUND <span class="hud-v" id="hFound">0</span>/<span class="hud-v" id="hTotal">0</span></div>
+    <div class="hud-tag">CAM <span class="hud-v" id="hCam">01</span></div>
+    <div class="hud-tag">PLAYER <span class="hud-v" id="hPlayer">---</span></div>
+  </div>
+  <div class="hud-timer" id="hTimer">05:00</div>
+  <button id="exit-btn" onclick="goHub()">◄ EXIT</button>
+</div>
+
+<!-- CAMERA NAV -->
+<div id="camNav">
+  <button class="active" onclick="switchCam(0)">CAM 01<br/>LOBBY</button>
+  <button onclick="switchCam(1)">CAM 02<br/>WARD A</button>
+  <button onclick="switchCam(2)">CAM 03<br/>CORRIDOR</button>
+  <button onclick="switchCam(3)">CAM 04<br/>BASEMENT</button>
+  <button onclick="switchCam(4)">CAM 05<br/>STAIRWELL</button>
+  <button onclick="switchCam(5)">CAM 06<br/>ROOF</button>
+</div>
+
+<!-- ANOMALY HINT -->
+<div id="anomHint" id="anomHint"></div>
+
+<!-- BOTTOM BAR -->
+<div id="botbar">
+  <div style="font-size:0.55rem;color:#004400;letter-spacing:2px;">MISSES:</div>
+  <div id="miss-wrap">
+    <div class="miss-dot" id="md0"></div>
+    <div class="miss-dot" id="md1"></div>
+    <div class="miss-dot" id="md2"></div>
+  </div>
+  <div id="found-log">— MONITORING ALL SECTORS —</div>
+  <div style="font-size:0.55rem;color:#003300;letter-spacing:1px;" id="anomCount">ANOMALIES: 0 / 0</div>
+  <button id="report-btn" onclick="submitReport()">SUBMIT REPORT</button>
+</div>
+
+<!-- JUMPSCARE -->
+<div id="js">
+  <div id="js-e"></div>
+  <div id="js-t"></div>
+</div>
+
+<!-- START SCREEN -->
+<div class="screen" id="scr-start">
+  <div class="s-icon">📷</div>
+  <div class="s-title green">OBSERVATION WARD</div>
+  <div class="s-msg" style="color:#004400;">
+    YOU ARE ON NIGHT SHIFT<br/>
+    MONITOR 6 CAMERAS ACROSS THE BUILDING<br/>
+    ANOMALIES WILL APPEAR — FIND THEM ALL<br/><br/>
+    CLICK DIRECTLY ON ANYTHING WRONG<br/>
+    WRONG CLICK = MISS<br/>
+    3 MISSES = GAME OVER<br/><br/>
+    ⚠ DETAILS MATTER — LOOK CAREFULLY ⚠
+  </div>
+  <div class="diff-row">
+    <button class="diff-btn active" id="d0" onclick="setDiff(0)">EASY</button>
+    <button class="diff-btn" id="d1" onclick="setDiff(1)">MEDIUM</button>
+    <button class="diff-btn" id="d2" onclick="setDiff(2)">HARD</button>
+  </div>
+  <button class="s-btn green" onclick="startGame()" style="border-color:#00cc55;">▶ BEGIN SHIFT</button>
+  <a href="horror-hub.html" style="color:#003300;font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;margin-top:14px;text-decoration:none;">◄ BACK</a>
+</div>
+
+<!-- FAIL SCREEN -->
+<div class="screen off" id="scr-fail">
+  <div class="s-icon">🔴</div>
+  <div class="s-title red">SHIFT FAILED</div>
+  <div class="s-msg" style="color:#550011;" id="failMsg">TOO MANY MISSES<br/>THE ANOMALY WENT UNREPORTED</div>
+  <button class="s-btn red" onclick="restartShift()" style="border-color:#ff2244;">⟳ RETRY</button>
+  <button class="s-btn" onclick="goHub()" style="color:#330011;border-color:#330011;">⌂ EXIT</button>
+</div>
+
+<!-- WIN SCREEN -->
+<div class="screen off" id="scr-win">
+  <div class="s-icon">✅</div>
+  <div class="s-title green">SHIFT COMPLETE</div>
+  <div class="s-msg" style="color:#003311;" id="winMsg">ALL ANOMALIES REPORTED</div>
+  <button class="s-btn green" onclick="nextShift()" style="border-color:#00cc55;">▶ NEXT SHIFT</button>
+  <button class="s-btn" onclick="goHub()" style="color:#003300;border-color:#003300;">⌂ EXIT</button>
+</div>
+
+<!-- AUDIO -->
+<audio id="snd-ambient" loop><source src="assets/ambient.mp3"></audio>
+<audio id="snd-scream"><source src="assets/scream.mp3"></audio>
+<audio id="snd-scream2"><source src="assets/sream2.mp3"></audio>
+<audio id="snd-scream3"><source src="assets/scream 3.mp3"></audio>
+<audio id="snd-static"><source src="assets/static.mp3"></audio>
+<audio id="snd-beep"><source src="assets/beep.mp3"></audio>
+<audio id="snd-heartbeat" loop><source src="assets/heartbeat.mp3"></audio>
+<audio id="snd-whisper"><source src="assets/whisper.mp3"></audio>
+
+<script>
+'use strict';
+const cv=document.getElementById('gameCanvas');
+const ctx=cv.getContext('2d');
+let W,H;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+
+// ── DIFFICULTY ────────────────────────────────
+let DIFF=0;
+const DCFG=[
+  {shiftTime:300,anomalyDelay:[8,18],maxActive:1,subtlety:0.9,missLimit:3},
+  {shiftTime:240,anomalyDelay:[5,12],maxActive:2,subtlety:0.6,missLimit:3},
+  {shiftTime:180,anomalyDelay:[3,8], maxActive:3,subtlety:0.3,missLimit:3},
+];
+function setDiff(d){DIFF=d;['d0','d1','d2'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===d));}
+
+// ── STATE ─────────────────────────────────────
+let gameRunning=false,currentCam=0,currentShift=1;
+let shiftTimeLeft=300,shiftInterval=null;
+let foundCount=0,totalAnomalies=0;
+let misses=0,maxMisses=3;
+let anomalies=[]; // {camIdx,x(0-1),y(0-1),w,h,found,label,type,spawnAt}
+let frame=0,animId=null;
+let jsCooldown=false;
+let camSwitchStatic=0;
+
+// ── 6 ROOMS — detailed drawing functions ──────
+// Each room has base furniture + anomaly zones
+const CAM_NAMES=['LOBBY','WARD A','CORRIDOR','BASEMENT','STAIRWELL','ROOF'];
+
+// ── ANOMALY DEFINITIONS ───────────────────────
+// Defined per shift, with cam and normalized coords
+const SHIFT_DATA=[
+  // SHIFT 1
+  [
+    {cam:0,x:.62,y:.15,w:.14,h:.5, label:'FIGURE IN LOBBY CORNER',   type:'figure'},
+    {cam:1,x:.18,y:.42,w:.18,h:.12,label:'BED 2 IS FLOATING',        type:'float'},
+    {cam:2,x:.7, y:.08,w:.12,h:.35,label:'FACE PRESSED ON WINDOW',   type:'face'},
+    {cam:3,x:.38,y:.55,w:.22,h:.1, label:'WRITING APPEARED ON WALL', type:'text'},
+    {cam:4,x:.5, y:.3, w:.1, h:.4, label:'FIGURE ON STAIRCASE',      type:'figure'},
+    {cam:5,x:.2, y:.2, w:.15,h:.25,label:'PERSON STANDING ON ROOF',  type:'figure'},
+  ],
+  // SHIFT 2
+  [
+    {cam:0,x:.08,y:.3, w:.14,h:.35,label:'CRAWLING ON CEILING',      type:'ceiling'},
+    {cam:1,x:.55,y:.08,w:.2, h:.18,label:'CLOCK VANISHED',           type:'missing'},
+    {cam:2,x:.28,y:.5, w:.18,h:.18,label:'EXTRA DOOR APPEARED',      type:'extra'},
+    {cam:3,x:.48,y:.25,w:.12,h:.38,label:'TALL ENTITY IN CORNER',    type:'figure'},
+    {cam:0,x:.72,y:.58,w:.12,h:.14,label:'BLOOD SMEAR ON WALL',      type:'blood'},
+    {cam:4,x:.3, y:.5, w:.15,h:.25,label:'SHADOW WITH NO SOURCE',    type:'shadow'},
+    {cam:5,x:.6, y:.35,w:.18,h:.2, label:'HOLE IN ROOF',             type:'missing'},
+  ],
+  // SHIFT 3
+  [
+    {cam:0,x:.2, y:.15,w:.18,h:.38,label:'MIRROR SHOWS WRONG REFL',  type:'mirror'},
+    {cam:1,x:.48,y:.38,w:.14,h:.22,label:'PATIENT 3 MISSING',        type:'missing'},
+    {cam:2,x:.62,y:.55,w:.22,h:.18,label:'DOOR OPENING BY ITSELF',   type:'door'},
+    {cam:3,x:.12,y:.45,w:.14,h:.3, label:'SHADOW MOVING WRONG WAY',  type:'shadow'},
+    {cam:1,x:.78,y:.12,w:.12,h:.18,label:'NURSE HAS TWO HEADS',      type:'extra'},
+    {cam:3,x:.42,y:.18,w:.2, h:.12,label:'INVERTED CROSS ON CEILING',type:'text'},
+    {cam:4,x:.65,y:.2, w:.1, h:.45,label:'ENTITY CLIMBING WALL',     type:'ceiling'},
+    {cam:5,x:.35,y:.4, w:.2, h:.2, label:'CIRCLE OF BODIES ON ROOF', type:'figure'},
+  ],
+];
+
+// ── DRAW ROOMS ────────────────────────────────
+function drawRoom(camIdx,anom){
+  const fns=[drawLobby,drawWardA,drawCorridor,drawBasement,drawStairwell,drawRoof];
+  (fns[camIdx]||drawLobby)(anom);
+}
+
+function roomBase(wallC,floorC,ceilC){
+  // Ceiling
+  ctx.fillStyle=ceilC;ctx.fillRect(0,0,W,H*0.08);
+  // Back wall
+  ctx.fillStyle=wallC;ctx.fillRect(0,H*0.08,W,H*0.6);
+  // Floor
+  ctx.fillStyle=floorC;ctx.fillRect(0,H*0.68,W,H*0.32);
+  // Floor tiles
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=W/12){ctx.beginPath();ctx.moveTo(x,H*0.68);ctx.lineTo(x+W*0.1,H);ctx.stroke();}
+  for(let y=H*0.68;y<H;y+=H*0.08){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function ceilingLight(x,y,flicker){
+  const grd=ctx.createRadialGradient(x,y,5,x,y,W*0.45);
+  grd.addColorStop(0,`rgba(200,230,200,${0.25*flicker})`);
+  grd.addColorStop(1,'transparent');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=`rgba(180,220,180,${0.3*flicker})`;
+  ctx.fillRect(x-W*0.08,y-4,W*0.16,6);
+}
+
+function drawLobby(anom){
+  roomBase('#1a2a1a','#1f1f1f','#111811');
+  const fl=0.75+Math.sin(frame*0.05)*0.15+Math.sin(frame*0.13)*0.07;
+  ceilingLight(W*0.3,H*0.09,fl);ceilingLight(W*0.7,H*0.09,fl*0.9);
+  // Sofas
+  for(let i=0;i<3;i++){
+    const sx=W*(0.08+i*0.28),sy=H*0.52;
+    ctx.fillStyle='#1a2a1a';ctx.fillRect(sx,sy,W*0.22,H*0.16);
+    ctx.fillStyle='rgba(0,60,0,0.5)';ctx.fillRect(sx,sy,W*0.22,H*0.05);
+    ctx.strokeStyle='rgba(0,80,0,0.3)';ctx.lineWidth=0.5;ctx.strokeRect(sx,sy,W*0.22,H*0.16);
+  }
+  // Coffee table
+  ctx.fillStyle='#111a11';ctx.fillRect(W*0.3,H*0.6,W*0.4,H*0.07);
+  ctx.strokeStyle='rgba(0,60,0,0.4)';ctx.strokeRect(W*0.3,H*0.6,W*0.4,H*0.07);
+  // Paintings on wall
+  for(let i=0;i<3;i++){
+    ctx.fillStyle='#0d180d';ctx.fillRect(W*(0.1+i*0.28),H*0.14,W*0.18,H*0.25);
+    ctx.strokeStyle='rgba(0,80,0,0.5)';ctx.lineWidth=1;ctx.strokeRect(W*(0.1+i*0.28),H*0.14,W*0.18,H*0.25);
+  }
+  // Reception desk
+  ctx.fillStyle='#152015';ctx.fillRect(W*0.05,H*0.42,W*0.2,H*0.12);
+  // Plant
+  ctx.fillStyle='#0a1a0a';ctx.fillRect(W*0.9,H*0.45,W*0.06,H*0.25);
+  ctx.fillStyle='#0f280f';ctx.beginPath();ctx.arc(W*0.93,H*0.42,W*0.035,0,Math.PI*2);ctx.fill();
+  // Door back right
+  ctx.fillStyle='#0a150a';ctx.fillRect(W*0.75,H*0.2,W*0.1,H*0.32);
+  ctx.strokeStyle='rgba(0,80,0,0.4)';ctx.strokeRect(W*0.75,H*0.2,W*0.1,H*0.32);
+  // ANOMALY OVERLAYS
+  drawAnomalies(anom,0);
+}
+
+function drawWardA(anom){
+  roomBase('#1a1818','#1a1a1a','#111010');
+  const fl=0.65+Math.sin(frame*0.06)*0.2;
+  ceilingLight(W*0.5,H*0.09,fl);
+  // 4 beds
+  for(let i=0;i<4;i++){
+    const bx=W*(0.04+i*0.24),by=H*0.48;
+    ctx.fillStyle='#1a1515';ctx.fillRect(bx,by,W*0.2,H*0.2);
+    ctx.fillStyle='rgba(50,30,30,0.5)';ctx.fillRect(bx,by,W*0.2,H*0.05);
+    ctx.strokeStyle='rgba(60,30,30,0.4)';ctx.lineWidth=0.5;ctx.strokeRect(bx,by,W*0.2,H*0.2);
+    // Patient lump
+    ctx.fillStyle='rgba(30,20,20,0.8)';ctx.fillRect(bx+W*0.04,by+H*0.05,W*0.12,H*0.08);
+  }
+  // IV stands
+  for(let i=0;i<3;i++){
+    ctx.strokeStyle='rgba(40,30,30,0.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(W*(0.22+i*0.24),H*0.35);ctx.lineTo(W*(0.22+i*0.24),H*0.68);ctx.stroke();
+    ctx.fillStyle='rgba(40,30,30,0.6)';ctx.beginPath();ctx.arc(W*(0.22+i*0.24),H*0.35,W*0.008,0,Math.PI*2);ctx.fill();
+  }
+  // Window
+  ctx.strokeStyle='rgba(40,30,30,0.4)';ctx.lineWidth=1.5;ctx.strokeRect(W*0.35,H*0.1,W*0.3,H*0.28);
+  ctx.beginPath();ctx.moveTo(W*0.5,H*0.1);ctx.lineTo(W*0.5,H*0.38);
+  ctx.moveTo(W*0.35,H*0.24);ctx.lineTo(W*0.65,H*0.24);ctx.strokeStyle='rgba(40,30,30,0.3)';ctx.stroke();
+  // Clock on wall
+  ctx.strokeStyle='rgba(40,30,30,0.5)';ctx.beginPath();ctx.arc(W*0.85,H*0.18,W*0.025,0,Math.PI*2);ctx.stroke();
+  drawAnomalies(anom,1);
+}
+
+function drawCorridor(anom){
+  roomBase('#161616','#181818','#0f0f0f');
+  const fl=0.55+Math.sin(frame*0.08)*0.25;
+  // Long corridor perspective
+  for(let d=8;d>=1;d--){
+    const prog=d/8;
+    const cx=W/2,cy=H*0.5;
+    const vw=W*(0.05+prog*0.45),vh=H*(0.02+prog*0.35);
+    ctx.strokeStyle=`rgba(0,60,0,${0.1+prog*0.15})`;ctx.lineWidth=0.5;
+    ctx.strokeRect(cx-vw,cy-vh,vw*2,vh*2);
+  }
+  ceilingLight(W*0.5,H*0.09,fl);
+  // Doors on sides
+  for(let i=0;i<3;i++){
+    ctx.fillStyle='#0d120d';
+    ctx.fillRect(W*(0.02+i*0.16),H*0.25,W*0.1,H*0.38);
+    ctx.fillRect(W*(0.72+i*0.1),H*0.25,W*0.08,H*0.38);
+    ctx.strokeStyle='rgba(0,60,0,0.3)';ctx.lineWidth=0.5;
+    ctx.strokeRect(W*(0.02+i*0.16),H*0.25,W*0.1,H*0.38);
+  }
+  // Window end of corridor
+  ctx.fillStyle='#050a05';ctx.fillRect(W*0.42,H*0.15,W*0.16,H*0.3);
+  ctx.strokeStyle='rgba(0,80,0,0.4)';ctx.strokeRect(W*0.42,H*0.15,W*0.16,H*0.3);
+  // Gurney
+  ctx.fillStyle='#0d150d';ctx.fillRect(W*0.65,H*0.5,W*0.15,H*0.12);
+  // Fire extinguisher
+  ctx.fillStyle='#1a0000';ctx.fillRect(W*0.05,H*0.4,W*0.025,H*0.12);
+  drawAnomalies(anom,2);
+}
+
+function drawBasement(anom){
+  roomBase('#0a0a12','#0c0c15','#070710');
+  // Dark blue/purple tint
+  ctx.fillStyle='rgba(0,0,30,0.4)';ctx.fillRect(0,0,W,H);
+  const fl=0.35+Math.sin(frame*0.1)*0.25;
+  // Single hanging bulb
+  ctx.strokeStyle=`rgba(150,150,100,${fl*0.6})`;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(W*0.5,0);ctx.lineTo(W*0.5,H*0.2);ctx.stroke();
+  ctx.fillStyle=`rgba(200,200,100,${fl*0.7})`;ctx.beginPath();ctx.arc(W*0.5,H*0.22,W*0.012,0,Math.PI*2);ctx.fill();
+  const blg=ctx.createRadialGradient(W*0.5,H*0.22,5,W*0.5,H*0.22,W*0.3);
+  blg.addColorStop(0,`rgba(150,150,80,${fl*0.15})`);blg.addColorStop(1,'transparent');
+  ctx.fillStyle=blg;ctx.fillRect(0,0,W,H);
+  // Pipes
+  ctx.strokeStyle='rgba(0,0,40,0.6)';ctx.lineWidth=8;
+  ctx.beginPath();ctx.moveTo(0,H*0.3);ctx.lineTo(W,H*0.3);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W*0.2,0);ctx.lineTo(W*0.2,H*0.65);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W*0.8,0);ctx.lineTo(W*0.8,H*0.65);ctx.stroke();
+  // Barrels
+  for(let i=0;i<3;i++){ctx.fillStyle='#0a0a18';ctx.fillRect(W*(0.05+i*0.1),H*0.5,W*0.07,H*0.18);}
+  // Old chair
+  ctx.fillStyle='#0a0818';ctx.fillRect(W*0.6,H*0.48,W*0.08,H*0.12);
+  // Chain hanging
+  ctx.strokeStyle='rgba(20,20,40,0.5)';ctx.lineWidth=2;
+  for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(W*0.7,H*(0.1+i*0.08),5,0,Math.PI*2);ctx.stroke();}
+  drawAnomalies(anom,3);
+}
+
+function drawStairwell(anom){
+  roomBase('#131313','#141414','#0e0e0e');
+  // Stairs
+  for(let s=0;s<8;s++){
+    const sy=H*(0.35+s*0.04),sx=W*(0.15+s*0.03);
+    ctx.fillStyle=`hsl(0,0%,${6+s}%)`;ctx.fillRect(sx,sy,W*(0.65-s*0.03),H*0.04);
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.5;ctx.strokeRect(sx,sy,W*(0.65-s*0.03),H*0.04);
+  }
+  // Railing
+  ctx.strokeStyle='rgba(30,30,30,0.7)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(W*0.15,H*0.35);ctx.lineTo(W*0.7,H*0.67);ctx.stroke();
+  for(let s=0;s<8;s++){
+    ctx.beginPath();ctx.moveTo(W*(0.17+s*0.07),H*(0.38+s*0.04));ctx.lineTo(W*(0.17+s*0.07),H*(0.52+s*0.03));ctx.stroke();
+  }
+  // Door top of stairs
+  ctx.fillStyle='#0d0d0d';ctx.fillRect(W*0.1,H*0.1,W*0.12,H*0.3);
+  ctx.strokeStyle='rgba(30,30,30,0.4)';ctx.strokeRect(W*0.1,H*0.1,W*0.12,H*0.3);
+  // Emergency light
+  ctx.fillStyle='rgba(80,0,0,0.6)';ctx.beginPath();ctx.arc(W*0.9,H*0.2,W*0.015,0,Math.PI*2);ctx.fill();
+  const fl=0.5+Math.sin(frame*0.12)*0.3;
+  ctx.fillStyle=`rgba(80,0,0,${fl*0.1})`;ctx.fillRect(0,0,W,H);
+  drawAnomalies(anom,4);
+}
+
+function drawRoof(anom){
+  // Exterior night sky
+  ctx.fillStyle='#010105';ctx.fillRect(0,0,W,H);
+  // Stars
+  for(let i=0;i<80;i++){
+    const sx=(Math.sin(i*234.5)*0.5+0.5)*W;
+    const sy=(Math.sin(i*567.8)*0.5+0.5)*H*0.6;
+    const sa=0.2+Math.sin(frame*0.03+i)*0.3;
+    ctx.fillStyle=`rgba(200,200,255,${sa})`;ctx.fillRect(sx,sy,1,1);
+  }
+  // Roof surface
+  ctx.fillStyle='#0a0a0a';ctx.fillRect(0,H*0.6,W,H*0.4);
+  ctx.fillStyle='rgba(20,20,20,0.5)';
+  for(let x=0;x<W;x+=W*0.08){ctx.fillRect(x,H*0.6,W*0.04,H*0.02);}
+  // AC units
+  for(let i=0;i<3;i++){ctx.fillStyle='#0d0d0d';ctx.fillRect(W*(0.1+i*0.3),H*0.55,W*0.18,H*0.12);ctx.strokeStyle='rgba(30,30,30,0.5)';ctx.strokeRect(W*(0.1+i*0.3),H*0.55,W*0.18,H*0.12);}
+  // Water tower
+  ctx.fillStyle='#080808';ctx.fillRect(W*0.75,H*0.3,W*0.15,H*0.32);
+  ctx.strokeStyle='rgba(20,20,20,0.5)';ctx.strokeRect(W*0.75,H*0.3,W*0.15,H*0.32);
+  // Moon
+  ctx.fillStyle='rgba(200,200,160,0.15)';ctx.beginPath();ctx.arc(W*0.85,H*0.15,W*0.04,0,Math.PI*2);ctx.fill();
+  drawAnomalies(anom,5);
+}
+
+// ── ANOMALY RENDERING ─────────────────────────
+function drawAnomalies(activeCam,camIdx){
+  const myAnom=anomalies.filter(a=>a.camIdx===camIdx&&a.active&&!a.found);
+  for(const an of myAnom){
+    const ax=an.x*W,ay=an.y*H,aw=an.w*W,ah=an.h*H;
+    const age=frame-an.spawnAt;
+    const fadeIn=Math.min(1,age/60);
+    const pulse=Math.sin(frame*0.06)*0.5+0.5;
+
+    switch(an.type){
+      case 'figure':{
+        // Silhouette figure
+        ctx.fillStyle=`rgba(0,0,0,${0.85*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw/2,ay+ah*0.18,aw*0.22,ah*0.18,0,0,Math.PI*2);ctx.fill();
+        ctx.fillRect(ax+aw*0.25,ay+ah*0.33,aw*0.5,ah*0.67);
+        // Glowing red eyes
+        const ey=0.5+Math.sin(frame*0.08)*0.4;
+        ctx.fillStyle=`rgba(255,0,0,${ey*fadeIn})`;
+        ctx.beginPath();ctx.arc(ax+aw*0.38,ay+ah*0.18,2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ax+aw*0.62,ay+ah*0.18,2,0,Math.PI*2);ctx.fill();
+        break;}
+      case 'float':{
+        // Floating object — bed/item lifted
+        ctx.fillStyle=`rgba(20,15,15,${0.9*fadeIn})`;
+        ctx.fillRect(ax,ay,aw,ah*0.35);
+        // Shadow below (no shadow when floating)
+        ctx.fillStyle=`rgba(0,0,0,${0.3*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw/2,ay+ah*0.55,aw*0.4,ah*0.06,0,0,Math.PI*2);ctx.fill();
+        break;}
+      case 'face':{
+        // Face on glass
+        ctx.fillStyle=`rgba(200,180,160,${0.55*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw/2,ay+ah*0.4,aw*0.35,ah*0.45,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle=`rgba(20,10,10,${0.8*fadeIn})`;
+        ctx.beginPath();ctx.arc(ax+aw*0.35,ay+ah*0.35,aw*0.07,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ax+aw*0.65,ay+ah*0.35,aw*0.07,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ax+aw/2,ay+ah*0.6,aw*0.15,0,Math.PI);ctx.fillStyle=`rgba(20,10,10,${0.6*fadeIn})`;ctx.fill();
+        // Hand print smear
+        ctx.fillStyle=`rgba(200,180,160,${0.3*fadeIn})`;
+        ctx.fillRect(ax+aw*0.1,ay+ah*0.7,aw*0.25,ah*0.15);
+        break;}
+      case 'text':{
+        // Writing on wall
+        ctx.fillStyle=`rgba(150,0,0,${0.8*fadeIn})`;
+        ctx.font=`bold ${Math.floor(ah*0.35)}px monospace`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('HELP ME',ax+aw/2,ay+ah/2);
+        ctx.font=`${Math.floor(ah*0.2)}px monospace`;
+        ctx.fillText('IT IS INSIDE',ax+aw/2,ay+ah*0.75);
+        ctx.textAlign='left';ctx.textBaseline='alphabetic';
+        break;}
+      case 'ceiling':{
+        // Thing on ceiling
+        ctx.fillStyle=`rgba(0,0,0,${0.9*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw/2,ay+ah*0.12,aw*0.28,ah*0.12,0,0,Math.PI*2);ctx.fill();
+        // Arms spread
+        ctx.lineWidth=6;ctx.strokeStyle=`rgba(0,0,0,${0.8*fadeIn})`;
+        ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax+aw/2,ay+ah*0.2);ctx.lineTo(ax+aw,ay);ctx.stroke();
+        ctx.fillRect(ax+aw*0.38,ay+ah*0.22,aw*0.24,ah*0.6);
+        break;}
+      case 'missing':{
+        // Object removed — just empty space with outline
+        ctx.strokeStyle=`rgba(255,100,0,${0.6*fadeIn*pulse})`;
+        ctx.lineWidth=2;ctx.setLineDash([5,5]);
+        ctx.strokeRect(ax,ay,aw,ah);ctx.setLineDash([]);
+        ctx.fillStyle=`rgba(255,100,0,${0.08*fadeIn})`;ctx.fillRect(ax,ay,aw,ah);
+        break;}
+      case 'blood':{
+        ctx.fillStyle=`rgba(120,0,0,${0.7*fadeIn})`;
+        for(let i=0;i<6;i++){
+          ctx.beginPath();ctx.arc(ax+Math.random()*aw,ay+Math.random()*ah,2+Math.random()*6,0,Math.PI*2);ctx.fill();
+        }
+        ctx.fillRect(ax,ay+ah*0.3,aw,ah*0.15);
+        break;}
+      case 'shadow':{
+        // Moving shadow
+        const sx=Math.sin(frame*0.04)*aw*0.2;
+        const grad=ctx.createLinearGradient(ax+sx,ay,ax+aw+sx,ay+ah);
+        grad.addColorStop(0,'transparent');
+        grad.addColorStop(0.4,`rgba(0,0,0,${0.6*fadeIn})`);
+        grad.addColorStop(1,'transparent');
+        ctx.fillStyle=grad;ctx.fillRect(ax+sx,ay,aw,ah);
+        break;}
+      case 'extra':{
+        // Something extra that shouldn't be there
+        ctx.fillStyle=`rgba(200,180,160,${0.7*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw/2,ay+ah*0.25,aw*0.3,ah*0.25,0,0,Math.PI*2);ctx.fill();
+        // Second head
+        ctx.beginPath();ctx.ellipse(ax+aw*0.75,ay+ah*0.12,aw*0.18,ah*0.15,0.3,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle=`rgba(20,10,10,${0.9*fadeIn})`;
+        ctx.beginPath();ctx.arc(ax+aw*0.42,ay+ah*0.22,3,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ax+aw*0.58,ay+ah*0.22,3,0,Math.PI*2);ctx.fill();
+        break;}
+      case 'door':{
+        // Door opening
+        const angle=Math.min(Math.PI/3,(frame-an.spawnAt)*0.01);
+        ctx.save();ctx.translate(ax,ay+ah/2);ctx.rotate(-angle);
+        ctx.fillStyle=`rgba(20,15,10,${0.9*fadeIn})`;ctx.fillRect(0,-ah/2,aw,ah);
+        ctx.strokeStyle='rgba(40,25,15,0.5)';ctx.strokeRect(0,-ah/2,aw,ah);
+        ctx.restore();
+        break;}
+      case 'mirror':{
+        ctx.fillStyle=`rgba(200,180,160,${0.5*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(ax+aw*0.3,ay+ah*0.35,aw*0.22,ah*0.32,0,0,Math.PI*2);ctx.fill();
+        // Mirror version rotated
+        ctx.save();ctx.translate(ax+aw*0.7,ay+ah*0.35);ctx.rotate(Math.PI*0.15);
+        ctx.fillStyle=`rgba(200,180,160,${0.5*fadeIn})`;
+        ctx.beginPath();ctx.ellipse(0,0,aw*0.22,ah*0.32,0,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+        break;}
+    }
+  }
+}
+
+// ── CCTV OVERLAY ──────────────────────────────
+function drawCCTV(){
+  // Scanlines
+  for(let y=0;y<H;y+=3){ctx.fillStyle='rgba(0,15,0,0.12)';ctx.fillRect(0,y,W,1);}
+  // Grain
+  for(let i=0;i<60;i++){ctx.fillStyle=`rgba(0,${Math.floor(Math.random()*60)},0,0.04)`;ctx.fillRect(Math.random()*W,Math.random()*H,Math.random()*3,1);}
+  // Vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,W*0.7);
+  vg.addColorStop(0,'transparent');vg.addColorStop(1,'rgba(0,0,0,0.75)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  // Green tint
+  ctx.fillStyle='rgba(0,20,0,0.08)';ctx.fillRect(0,0,W,H);
+  // Static on cam switch
+  if(camSwitchStatic>0){
+    ctx.fillStyle=`rgba(0,200,0,${camSwitchStatic*0.3})`;
+    for(let i=0;i<200;i++){ctx.fillRect(Math.random()*W,Math.random()*H,Math.random()*W*0.1,1);}
+    camSwitchStatic-=0.08;
+  }
+  // Camera label overlay
+  const d=new Date();
+  const ts=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,H-28,W,28);
+  ctx.fillStyle='rgba(0,150,0,0.8)';ctx.font='11px Share Tech Mono';
+  ctx.fillText(`CAM 0${currentCam+1} — ${CAM_NAMES[currentCam]}    ${ts}    SHIFT ${currentShift}`,10,H-10);
+}
+
+// ── GAME LOOP ─────────────────────────────────
+function gameLoop(){
+  if(!gameRunning){animId=requestAnimationFrame(gameLoop);return;}
+  frame++;
+  drawRoom(currentCam, anomalies.filter(a=>a.camIdx===currentCam));
+  drawCCTV();
+  // Spawn anomalies based on time
+  spawnAnomalies();
+  animId=requestAnimationFrame(gameLoop);
+}
+
+// ── ANOMALY SPAWNING ──────────────────────────
+let anomalyQueue=[];
+function spawnAnomalies(){
+  const cfg=DCFG[DIFF];
+  const active=anomalies.filter(a=>a.active&&!a.found).length;
+  if(active>=cfg.maxActive) return;
+  if(anomalyQueue.length===0) return;
+  // Check if next one should spawn
+  const next=anomalyQueue[0];
+  if(frame>=next.spawnFrame){
+    anomalyQueue.shift();
+    next.spawnAt=frame;
+    next.active=true;
+    anomalies.push(next);
+    // Alert sound
+    if(next.camIdx!==currentCam) snd('snd-static',0.3);
+    else snd('snd-beep',0.5);
+    // Camera nav alert
+    document.querySelectorAll('#camNav button')[next.camIdx].style.color='#ff8800';
+    document.querySelectorAll('#camNav button')[next.camIdx].style.borderColor='rgba(255,100,0,0.6)';
+  }
+}
+
+// ── CLICK DETECTION ───────────────────────────
+cv.addEventListener('click',e=>{
+  if(e.target !== cv) return;
+  if(!gameRunning) return;
+  const rect=cv.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/rect.width;
+  const my=(e.clientY-rect.top)/rect.height;
+  const myCam=anomalies.filter(a=>a.camIdx===currentCam&&a.active&&!a.found);
+  let hit=false;
+  for(const an of myCam){
+    if(mx>=an.x&&mx<=an.x+an.w&&my>=an.y&&my<=an.y+an.h){
+      an.found=true;hit=true;
+      foundCount++;
+      snd('snd-beep',0.8);
+      updateFoundUI();
+      showHint(`✔ ANOMALY REPORTED: ${an.label}`,'#00ff00');
+      document.getElementById('found-log').textContent=`LAST: ${an.label}`;
+      // Clear camera alert
+      document.querySelectorAll('#camNav button')[an.camIdx].style.color='';
+      document.querySelectorAll('#camNav button')[an.camIdx].style.borderColor='';
+      break;
+    }
+  }
+  if(!hit){
+    // Wrong click
+    misses++;
+    snd('snd-static',0.5);
+    document.getElementById('md'+(misses-1))?.classList.add('used');
+    showHint('✗ NOTHING THERE — FOCUS','#ff4400');
+    if(misses>=maxMisses) shiftFail();
+  }
+});
+
+function updateFoundUI(){
+  document.getElementById('hFound').textContent=foundCount;
+  document.getElementById('anomCount').textContent=`ANOMALIES: ${foundCount} / ${totalAnomalies}`;
+}
+
+let hintTimer=null;
+function showHint(msg,col='#ff8800'){
+  const el=document.getElementById('anomHint');
+  el.textContent=msg;el.style.borderColor=col+'66';el.style.color=col;
+  el.style.opacity='1';clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>el.style.opacity='0',2500);
+}
+
+// ── CAMERA SWITCH ─────────────────────────────
+function switchCam(idx){
+  if(!gameRunning) return;
+  currentCam=idx;
+  camSwitchStatic=1;
+  snd('snd-static',0.2);
+  document.querySelectorAll('#camNav button').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  document.getElementById('hCam').textContent=String(idx+1).padStart(2,'0');
+}
+
+// ── SHIFT TIMER ───────────────────────────────
+function startShiftTimer(){
+  clearInterval(shiftInterval);
+  shiftTimeLeft=DCFG[DIFF].shiftTime;
+  shiftInterval=setInterval(()=>{
+    shiftTimeLeft--;
+    const m=Math.floor(shiftTimeLeft/60),s=shiftTimeLeft%60;
+    const el=document.getElementById('hTimer');
+    el.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    el.classList.toggle('urgent',shiftTimeLeft<=30);
+    if(shiftTimeLeft<=20)try{document.getElementById('snd-heartbeat').play().catch(()=>{});}catch(e){}
+    if(Math.random()<0.006)snd('snd-whisper',0.2);
+    if(!jsCooldown&&Math.random()<0.003)doJumpscare();
+    if(shiftTimeLeft<=0){clearInterval(shiftInterval);shiftFail();}
+  },1000);
+}
+
+// ── JUMPSCARE ─────────────────────────────────
+const JS_MSGS=['IT KNOWS YOU WATCH','LOOK AWAY','YOU SHOULD NOT BE HERE','IT SAW YOU','TURN AROUND'];
+function doJumpscare(){
+  jsCooldown=true;
+  const el=document.getElementById('js');
+  const ghosts=['👁','👻','💀','😱','☠'];
+  document.getElementById('js-e').textContent=ghosts[Math.floor(Math.random()*ghosts.length)];
+  document.getElementById('js-t').textContent=JS_MSGS[Math.floor(Math.random()*JS_MSGS.length)];
+  el.classList.add('show');
+  ['snd-scream','snd-scream2','snd-scream3'].forEach(id=>{});
+  snd(['snd-scream','snd-scream2','snd-scream3'][Math.floor(Math.random()*3)],1);
+  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>jsCooldown=false,15000);},800);
+}
+
+// ── SUBMIT REPORT ─────────────────────────────
+function submitReport(){
+  if(!gameRunning) return;
+  if(foundCount>=totalAnomalies) shiftWin();
+  else showHint(`⚠ ${totalAnomalies-foundCount} ANOMAL${totalAnomalies-foundCount===1?'Y':'IES'} STILL ACTIVE`,'#ff8800');
+}
+
+function shiftWin(){
+  gameRunning=false;clearInterval(shiftInterval);
+  try{document.getElementById('snd-heartbeat').pause();}catch(e){}
+  const w=parseInt(localStorage.getItem('hvWins')||'0')+1;localStorage.setItem('hvWins',w);
+  document.getElementById('winMsg').innerHTML=`ALL ${totalAnomalies} ANOMALIES REPORTED<br/>SHIFT ${currentShift} COMPLETE — WELL DONE`;
+  document.getElementById('scr-win').classList.remove('off');
+}
+
+function shiftFail(){
+  if(!gameRunning) return;
+  gameRunning=false;clearInterval(shiftInterval);
+  try{document.getElementById('snd-heartbeat').pause();}catch(e){}
+  doJumpscare();
+  const l=parseInt(localStorage.getItem('hvLosses')||'0')+1;localStorage.setItem('hvLosses',l);
+  setTimeout(()=>document.getElementById('scr-fail').classList.remove('off'),1400);
+}
+
+// ── GAME FLOW ─────────────────────────────────
+function buildAnomalyQueue(){
+  const idx=Math.min(currentShift-1,SHIFT_DATA.length-1);
+  const raw=SHIFT_DATA[idx];
+  const cfg=DCFG[DIFF];
+  anomalyQueue=raw.map((a,i)=>{
+    const delay=cfg.anomalyDelay[0]+Math.random()*(cfg.anomalyDelay[1]-cfg.anomalyDelay[0]);
+    return {...a,spawnFrame:Math.floor(60*(10+i*delay+(Math.random()-0.5)*4)),active:false,found:false,spawnAt:0};
+  }).sort((a,b)=>a.spawnFrame-b.spawnFrame);
+  totalAnomalies=raw.length;
+  foundCount=0;
+  document.getElementById('hTotal').textContent=totalAnomalies;
+}
+
+function startGame(){
+  document.getElementById('scr-start').classList.add('off');
+  document.getElementById('hPlayer').textContent=localStorage.getItem('hvPlayer')||'GUARD';
+  document.getElementById('hShift').textContent=currentShift;
+  anomalies=[];misses=0;
+  for(let i=0;i<3;i++)document.getElementById('md'+i)?.classList.remove('used');
+  document.querySelectorAll('#camNav button').forEach((b,i)=>{b.style.color='';b.style.borderColor='';b.classList.toggle('active',i===0);});
+  currentCam=0;frame=0;jsCooldown=false;
+  buildAnomalyQueue();
+  updateFoundUI();
+  gameRunning=true;
+  try{document.getElementById('snd-ambient').volume=0.2;document.getElementById('snd-ambient').play().catch(()=>{});}catch(e){}
+  startShiftTimer();
+  cancelAnimationFrame(animId);animId=requestAnimationFrame(gameLoop);
+}
+
+function nextShift(){
+  document.getElementById('scr-win').classList.add('off');
+  currentShift=currentShift%SHIFT_DATA.length+1;
+  startGame();
+}
+function restartShift(){document.getElementById('scr-fail').classList.add('off');startGame();}
+function goHub(){window.location.href='horror-hub.html';}
+</script>
+</body>
+</html>

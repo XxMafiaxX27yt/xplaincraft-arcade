@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>2048 — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #050005; user-select: none; }
+    .hud { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(180,0,255,0.2); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #bb00ff; font-size: 0.8rem; letter-spacing: 2px; }
+    .game-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 2.5rem; letter-spacing: 6px; color: #bb00ff; text-shadow: 0 0 25px #cc00ff; text-align: center; margin: 20px 0 4px; }
+    .score-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 16px; }
+    .score-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(180,0,255,0.3); padding: 10px 20px; text-align: center; clip-path: polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%); }
+    .score-label { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 3px; color: #440066; }
+    .score-val { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; font-weight: 900; color: #bb00ff; }
+    .board-wrap { position: relative; }
+    .board { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; padding: 10px; background: rgba(30,0,60,0.5); border: 1px solid rgba(180,0,255,0.3); box-shadow: 0 0 30px rgba(180,0,255,0.2); }
+    .cell { width: 82px; height: 82px; background: rgba(20,0,40,0.8); border: 1px solid rgba(180,0,255,0.1); display: flex; align-items: center; justify-content: center; }
+    .tile { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.5rem; transition: all .1s; animation: tileAppear .15s ease-out; }
+    @keyframes tileAppear { 0%{transform:scale(0)} 100%{transform:scale(1)} }
+    .tile.merged { animation: tileMerge .2s ease-out; }
+    @keyframes tileMerge { 0%{transform:scale(1)} 50%{transform:scale(1.25)} 100%{transform:scale(1)} }
+    .msg { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 3px; color: #bb00ff; text-align: center; margin: 12px 0; min-height: 1.5em; }
+    .ctrl-row { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; justify-content: center; }
+    .ctrl-btn { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; padding: 10px 18px; background: none; border: 1px solid rgba(180,0,255,0.4); color: #bb00ff; cursor: pointer; transition: all .2s; }
+    .ctrl-btn:hover { background: rgba(180,0,255,0.1); }
+    .hint { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 2px; color: #330044; text-align: center; margin-bottom: 20px; }
+    @media(max-width:420px) { .tile,.cell{width:64px;height:64px;} .tile{font-size:1.1rem;} }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="mind-hub.html" style="color:#bb00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(180,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🔢 2048</div>
+  <div class="hud-val">XP: <span id="hudXP">0</span></div>
+</div>
+
+<div class="game-title">2048</div>
+<div class="score-row">
+  <div class="score-box"><div class="score-label">SCORE</div><div class="score-val" id="scoreVal">0</div></div>
+  <div class="score-box"><div class="score-label">BEST</div><div class="score-val" id="bestVal">0</div></div>
+</div>
+<div class="msg" id="msg"></div>
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+</div>
+<div class="ctrl-row">
+  <button class="ctrl-btn" onclick="newGame()">↻ NEW GAME</button>
+  <button class="ctrl-btn" onclick="undo()">↩ UNDO</button>
+</div>
+<div class="hint">USE ARROW KEYS · WASD · OR SWIPE TO MERGE TILES</div>
+
+<script>
+const COLORS = {
+  0:    { bg:'rgba(20,0,40,0.5)',  fg:'transparent', shadow:'' },
+  2:    { bg:'#1a0033',  fg:'#cc88ff', shadow:'#cc00ff' },
+  4:    { bg:'#220044',  fg:'#dd99ff', shadow:'#cc00ff' },
+  8:    { bg:'#440088',  fg:'#ffffff', shadow:'#bb00ff' },
+  16:   { bg:'#550099',  fg:'#ffffff', shadow:'#dd00ff' },
+  32:   { bg:'#006644',  fg:'#ffffff', shadow:'#00ff9d' },
+  64:   { bg:'#007755',  fg:'#ffffff', shadow:'#00ff9d' },
+  128:  { bg:'#005588',  fg:'#ffffff', shadow:'#00c8ff' },
+  256:  { bg:'#0077aa',  fg:'#ffffff', shadow:'#00c8ff' },
+  512:  { bg:'#cc7700',  fg:'#ffffff', shadow:'#ffe500' },
+  1024: { bg:'#cc4400',  fg:'#ffffff', shadow:'#ff7700' },
+  2048: { bg:'#ff2244',  fg:'#ffffff', shadow:'#ff0000' },
+};
+
+let grid, score, best, prevGrid, prevScore, won;
+const N = 4;
+best = parseInt(localStorage.getItem('2048_best')||'0');
+document.getElementById('bestVal').textContent = best;
+document.getElementById('hudXP').textContent = localStorage.getItem('hvXP')||'0';
+
+function newGame() {
+  grid = Array.from({length:N},()=>Array(N).fill(0));
+  score = 0; won = false; prevGrid = null; prevScore = 0;
+  addRandom(); addRandom();
+  render(); setMsg('');
+}
+
+function addRandom() {
+  const empty = [];
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) if (!grid[r][c]) empty.push([r,c]);
+  if (!empty.length) return;
+  const [r,c] = empty[Math.floor(Math.random()*empty.length)];
+  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function render() {
+  const b = document.getElementById('board');
+  b.innerHTML = '';
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    if (grid[r][c]) {
+      const t = document.createElement('div');
+      t.className = 'tile';
+      t.textContent = grid[r][c];
+      const col = COLORS[Math.min(grid[r][c], 2048)] || COLORS[2048];
+      t.style.cssText = `background:${col.bg};color:${col.fg};box-shadow:0 0 15px ${col.shadow};border:1px solid ${col.shadow};font-size:${grid[r][c]>=1024?'1rem':'1.5rem'};width:80px;height:80px;`;
+      cell.appendChild(t);
+    }
+    b.appendChild(cell);
+  }
+  document.getElementById('scoreVal').textContent = score;
+  if (score > best) { best = score; localStorage.setItem('2048_best', best); document.getElementById('bestVal').textContent = best; }
+}
+
+function slide(row) {
+  const filtered = row.filter(v=>v);
+  const merged = [];
+  let mergedScore = 0;
+  let i = 0;
+  while (i < filtered.length) {
+    if (i+1 < filtered.length && filtered[i] === filtered[i+1]) {
+      merged.push(filtered[i]*2);
+      mergedScore += filtered[i]*2;
+      i += 2;
+    } else { merged.push(filtered[i]); i++; }
+  }
+  while (merged.length < N) merged.push(0);
+  return { row: merged, score: mergedScore };
+}
+
+function move(dir) {
+  prevGrid = grid.map(r=>[...r]); prevScore = score;
+  let changed = false;
+  if (dir === 'left' || dir === 'right') {
+    for (let r=0;r<N;r++) {
+      const original = [...grid[r]];
+      const row = dir === 'right' ? original.reverse() : original;
+      const {row:newRow, score:s} = slide(row);
+      const result = dir === 'right' ? newRow.reverse() : newRow;
+      score += s;
+      grid[r] = result;
+      if (JSON.stringify(result) !== JSON.stringify(original)) changed = true;
+    }
+  } else {
+    for (let c=0;c<N;c++) {
+      const col = grid.map(r=>r[c]);
+      const original = [...col];
+      const row = dir === 'down' ? original.reverse() : original;
+      const {row:newRow, score:s} = slide(row);
+      const result = dir === 'down' ? newRow.reverse() : newRow;
+      score += s;
+      result.forEach((v,r) => grid[r][c] = v);
+      if (JSON.stringify(result) !== JSON.stringify(original)) changed = true;
+    }
+  }
+  if (changed) {
+    addRandom();
+    render();
+    // Check win
+    if (!won && grid.some(r=>r.includes(2048))) {
+      won = true; setMsg('🏆 YOU REACHED 2048!');
+      let wins = parseInt(localStorage.getItem('hvWins')||'0')+1;
+      localStorage.setItem('hvWins', wins);
+      let xp = parseInt(localStorage.getItem('hvXP')||'0')+500;
+      localStorage.setItem('hvXP', xp);
+      document.getElementById('hudXP').textContent = xp;
+    }
+    // Check game over
+    if (!canMove()) { setMsg('✗ NO MORE MOVES! GAME OVER'); let l=parseInt(localStorage.getItem('hvLosses')||'0')+1; localStorage.setItem('hvLosses',l); }
+  }
+}
+
+function canMove() {
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    if (!grid[r][c]) return true;
+    if (r+1<N && grid[r][c]===grid[r+1][c]) return true;
+    if (c+1<N && grid[r][c]===grid[r][c+1]) return true;
+  }
+  return false;
+}
+
+function undo() {
+  if (!prevGrid) return;
+  grid = prevGrid; score = prevScore; render(); setMsg('↩ UNDONE');
+  prevGrid = null;
+}
+
+let msgTimer;
+function setMsg(m) { document.getElementById('msg').textContent = m; clearTimeout(msgTimer); if(m && !m.includes('2048') && !m.includes('OVER')) msgTimer = setTimeout(()=>document.getElementById('msg').textContent='',2000); }
+
+document.addEventListener('keydown', e => {
+  const map = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down', KeyA:'left', KeyD:'right', KeyW:'up', KeyS:'down' };
+  if (map[e.code]) { e.preventDefault(); move(map[e.code]); }
+});
+
+// Swipe
+let touchX, touchY;
+document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchX;
+  const dy = e.changedTouches[0].clientY - touchY;
+  if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+  else move(dy > 0 ? 'down' : 'up');
+});
+
+newGame();
+</script>
+</body>
+</html>

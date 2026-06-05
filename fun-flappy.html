@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FLAPPY BIRD — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #gameWrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: linear-gradient(180deg,rgba(0,0,0,0.9)0%,transparent 100%); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #00c8ff; font-size: 0.85rem; letter-spacing: 2px; }
+    .hud-score { font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 900; color: #00c8ff; text-shadow: 0 0 20px #00c8ff; position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 20; }
+    .overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,10,0.92); font-family: 'Orbitron', sans-serif; }
+    .overlay.hidden { display: none; }
+    .ov-icon { font-size: 5rem; margin-bottom: 16px; animation: bounce 1s infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-15px)} }
+    .ov-title { font-size: clamp(2rem,6vw,4rem); font-weight: 900; color: #00c8ff; letter-spacing: 6px; text-shadow: 0 0 30px #00c8ff; margin-bottom: 8px; }
+    .ov-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 5px; color: #004466; margin-bottom: 30px; }
+    .ov-btn { background: linear-gradient(135deg, #004488, #0088cc); border: none; color: #fff; font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; padding: 16px 44px; cursor: pointer; clip-path: polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); transition: all .3s; }
+    .ov-btn:hover { box-shadow: 0 0 30px #00c8ff; transform: scale(1.05); }
+    .ov-stat { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; color: #004466; margin-bottom: 8px; }
+    .ov-stat span { color: #00c8ff; }
+    .pipe-gap-label { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; color: rgba(0,200,255,0.3); z-index: 20; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="fun-hub.html" style="color:#00c8ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(0,200,255,0.4);padding:6px 14px;text-decoration:none;transition:all .3s;">◄ BACK</a>
+  <div class="hud-val">🐦 FLAPPY BIRD</div>
+  <div class="hud-val">BEST: <span id="hudBest">0</span></div>
+</div>
+<div class="hud-score" id="scoreDisp">0</div>
+
+<div id="gameWrap"><canvas id="c"></canvas></div>
+<div class="pipe-gap-label">SPACE / TAP TO FLAP</div>
+
+<!-- START -->
+<div class="overlay" id="startOv">
+  <div class="ov-icon">🐦</div>
+  <div class="ov-title">FLAPPY BIRD</div>
+  <div class="ov-sub">▸ TAP TO SURVIVE ◂</div>
+  <div class="ov-stat">BEST SCORE: <span id="startBest">0</span></div>
+  <div class="ov-stat" style="margin-bottom:24px;color:rgba(0,200,255,0.4);">SPACE · CLICK · TAP TO FLAP</div>
+  <button class="ov-btn" onclick="startGame()">▶ START FLAPPING</button>
+</div>
+
+<!-- GAME OVER -->
+<div class="overlay hidden" id="overOv">
+  <div class="ov-icon">💥</div>
+  <div class="ov-title">GAME OVER</div>
+  <div class="ov-sub">▸ YOU CRASHED ◂</div>
+  <div class="ov-stat">SCORE: <span id="ovScore">0</span></div>
+  <div class="ov-stat" style="margin-bottom:24px;">BEST: <span id="ovBest">0</span></div>
+  <button class="ov-btn" onclick="startGame()">▶ TRY AGAIN</button>
+  <a href="fun-hub.html" style="margin-top:16px;color:rgba(0,200,255,0.5);font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;text-decoration:none;">◄ BACK TO HUB</a>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, bird, pipes, score, gameRunning, gameOver, animFrame, spawnTimer, speed;
+
+function resize() {
+  W = canvas.width  = Math.min(480, window.innerWidth);
+  H = canvas.height = Math.min(640, window.innerHeight - 80);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const best = parseInt(localStorage.getItem('fb_best')||'0');
+document.getElementById('hudBest').textContent = best;
+document.getElementById('startBest').textContent = best;
+
+function startGame() {
+  document.getElementById('startOv').classList.add('hidden');
+  document.getElementById('overOv').classList.add('hidden');
+  score = 0; speed = 2.5; spawnTimer = 0; gameRunning = true; gameOver = false;
+  bird = { x: W * 0.25, y: H * 0.5, vy: 0, r: 14 };
+  pipes = [];
+  document.getElementById('scoreDisp').textContent = '0';
+  cancelAnimationFrame(animFrame);
+  loop();
+}
+
+function flap() {
+  if (!gameRunning) return;
+  bird.vy = -6.5;
+}
+
+document.addEventListener('keydown', e => { if(e.code === 'Space') { e.preventDefault(); flap(); } });
+canvas.addEventListener('click', flap);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, {passive:false});
+
+function loop() {
+  update();
+  draw();
+  if (!gameOver) animFrame = requestAnimationFrame(loop);
+}
+
+const GRAVITY = 0.32, GAP = 160, PIPE_W = 52;
+
+function update() {
+  bird.vy += GRAVITY;
+  bird.y  += bird.vy;
+  speed += 0.0008;
+  spawnTimer++;
+  if (spawnTimer > 90) {
+    spawnTimer = 0;
+    const top = Math.random() * (H * 0.5) + 60;
+    pipes.push({ x: W, top, scored: false });
+  }
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    pipes[i].x -= speed;
+    if (pipes[i].x + PIPE_W < 0) { pipes.splice(i, 1); continue; }
+    if (!pipes[i].scored && pipes[i].x + PIPE_W < bird.x) {
+      pipes[i].scored = true; score++;
+      document.getElementById('scoreDisp').textContent = score;
+    }
+    // Collision
+    const p = pipes[i];
+    if (bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W) {
+      if (bird.y - bird.r < p.top || bird.y + bird.r > p.top + GAP) { endGame(); return; }
+    }
+  }
+  if (bird.y + bird.r > H || bird.y - bird.r < 0) { endGame(); return; }
+}
+
+function draw() {
+  // Sky gradient
+  const sky = ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#000812');
+  sky.addColorStop(1,'#001a33');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,W,H);
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  for (let i = 0; i < 40; i++) {
+    ctx.fillRect((i*37+13)%W, (i*53+7)%H, 1, 1);
+  }
+
+  // Ground
+  ctx.fillStyle = '#001122';
+  ctx.fillRect(0, H-30, W, 30);
+  ctx.strokeStyle = '#00c8ff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0, H-30, W, 30);
+
+  // Pipes
+  pipes.forEach(p => {
+    const grad1 = ctx.createLinearGradient(p.x,0,p.x+PIPE_W,0);
+    grad1.addColorStop(0,'#003355'); grad1.addColorStop(0.5,'#005588'); grad1.addColorStop(1,'#003355');
+    ctx.fillStyle = grad1;
+    ctx.fillRect(p.x, 0, PIPE_W, p.top);
+    ctx.fillRect(p.x, p.top + GAP, PIPE_W, H - p.top - GAP);
+    // Pipe caps
+    ctx.fillStyle = '#00c8ff';
+    ctx.fillRect(p.x - 4, p.top - 16, PIPE_W + 8, 16);
+    ctx.fillRect(p.x - 4, p.top + GAP, PIPE_W + 8, 16);
+    // Glow
+    ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(p.x, 0, PIPE_W, p.top);
+    ctx.strokeRect(p.x, p.top + GAP, PIPE_W, H - p.top - GAP);
+  });
+
+  // Bird
+  const bx = bird.x, by = bird.y, r = bird.r;
+  const angle = Math.min(Math.max(bird.vy * 0.08, -0.5), 0.8);
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(angle);
+  // Glow
+  ctx.shadowColor = '#00c8ff'; ctx.shadowBlur = 20;
+  // Body
+  ctx.fillStyle = '#00c8ff';
+  ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+  // Wing
+  ctx.fillStyle = '#0088cc';
+  ctx.beginPath(); ctx.ellipse(-2, 4, r * 0.6, r * 0.4, 0.3, 0, Math.PI * 2); ctx.fill();
+  // Eye
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(r*0.3, -r*0.15, r*0.35, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#003366';
+  ctx.beginPath(); ctx.arc(r*0.42, -r*0.1, r*0.18, 0, Math.PI*2); ctx.fill();
+  // Beak
+  ctx.fillStyle = '#ff9900';
+  ctx.beginPath(); ctx.moveTo(r*0.65, -r*0.05); ctx.lineTo(r+4, 0); ctx.lineTo(r*0.65, r*0.2); ctx.fill();
+  ctx.restore();
+}
+
+function endGame() {
+  gameOver = true; gameRunning = false;
+  const prev = parseInt(localStorage.getItem('fb_best')||'0');
+  let isNew = false;
+  if (score > prev) {
+    localStorage.setItem('fb_best', score);
+    document.getElementById('hudBest').textContent = score;
+    isNew = true;
+    let wins = parseInt(localStorage.getItem('hvWins')||'0') + 1;
+    localStorage.setItem('hvWins', wins);
+    let xp = parseInt(localStorage.getItem('hvXP')||'0') + score * 2;
+    localStorage.setItem('hvXP', xp);
+  } else {
+    let losses = parseInt(localStorage.getItem('hvLosses')||'0') + 1;
+    localStorage.setItem('hvLosses', losses);
+  }
+  document.getElementById('ovScore').textContent = score;
+  document.getElementById('ovBest').textContent = Math.max(score, prev);
+  document.getElementById('overOv').classList.remove('hidden');
+}
+
+// Initial draw
+resize();
+draw();
+</script>
+</body>
+</html>

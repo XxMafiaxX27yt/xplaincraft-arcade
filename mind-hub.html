@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MIND GAMES — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; overflow-x: hidden; }
+    .hub-header { position: relative; z-index: 10; text-align: center; padding: 60px 20px 0; }
+    .hub-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(2rem,8vw,5rem); letter-spacing: 8px; color: #bb00ff; text-shadow: 0 0 30px #cc00ff,0 0 60px rgba(200,0,255,0.3); }
+    .hub-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 7px; color: #440066; margin-top: 10px; }
+    .hgame-card { border-color: rgba(180,0,255,0.18) !important; }
+    .hgame-card:hover { box-shadow: 0 24px 60px rgba(180,0,255,0.2) !important; border-color: rgba(180,0,255,0.6) !important; }
+    .card-name { color: #bb00ff !important; }
+    .card-tagline { color: #440066 !important; }
+    .ctag { border-color: rgba(180,0,255,0.25) !important; color: #660088 !important; }
+    .play-label { color: #bb00ff !important; }
+    .cc { border-color: #bb00ff !important; }
+    .diff-badge { color: #bb00ff !important; border-color: rgba(180,0,255,0.4) !important; }
+    .particle { background: #bb00ff !important; box-shadow: 0 0 6px #bb00ff !important; }
+    .stats-bottom { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: rgba(0,0,0,0.9); border-top: 1px solid rgba(180,0,255,0.2); display: flex; align-items: center; justify-content: center; gap: 30px; padding: 10px 20px; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div><div class="noise-overlay"></div>
+<div class="bg-grid" style="background-image:linear-gradient(rgba(180,0,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(180,0,255,0.05) 1px,transparent 1px);background-size:60px 60px;"></div>
+<div class="bg-particles" id="particles"></div>
+<a href="index.html" class="back-home" style="border-color:rgba(180,0,255,0.4);color:#bb00ff;">◄ MAIN HUB</a>
+
+<header class="hub-header">
+  <div style="font-size:3.5rem;margin-bottom:12px;">🧠</div>
+  <div class="hub-title">MIND GAMES</div>
+  <div class="hub-sub">◈ TRAIN YOUR BRAIN ◈</div>
+</header>
+
+<div class="games-grid">
+
+  <a href="mind-wordle.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#1a0033 0%,#000 65%);opacity:0.5;animation:bgPulse 3s ease-in-out infinite;"></div>
+    <div class="blood-drip" style="background:linear-gradient(90deg,transparent,#bb00ff,transparent)!important;"></div>
+    <div class="diff-badge">◈ WORD</div>
+    <div class="card-content">
+      <div class="card-icon-big">📝</div>
+      <div class="card-num">GAME 01</div>
+      <div class="card-name">WORDLE</div>
+      <div class="card-tagline">▸ GUESS THE 5-LETTER WORD ◂</div>
+      <div class="card-desc">6 attempts to guess a hidden 5-letter word. Green = right letter right place. Yellow = right letter wrong place. No mercy — no hints.</div>
+      <div class="card-tags"><span class="ctag">WORD</span><span class="ctag">DEDUCTION</span><span class="ctag">DAILY</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY WORDLE</span><span class="scare-level">🧠🧠☆☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="mind-chess.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#0d0033 0%,#000 65%);opacity:0.5;animation:bgPulse 4s ease-in-out infinite 1s;"></div>
+    <div class="blood-drip" style="background:linear-gradient(90deg,transparent,#bb00ff,transparent)!important;"></div>
+    <div class="diff-badge">◈ STRATEGY</div>
+    <div class="card-content">
+      <div class="card-icon-big">♟️</div>
+      <div class="card-num">GAME 02</div>
+      <div class="card-name">CHESS</div>
+      <div class="card-tagline">▸ OUTSMART THE AI ◂</div>
+      <div class="card-desc">Full chess against an AI opponent with 3 difficulty levels. Neon-styled board with glowing pieces. Can you checkmate the machine?</div>
+      <div class="card-tags"><span class="ctag">CHESS</span><span class="ctag">VS AI</span><span class="ctag">STRATEGY</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY CHESS</span><span class="scare-level">🧠🧠🧠🧠🧠</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="mind-tictac.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#1a0044 0%,#000 65%);opacity:0.5;animation:bgPulse 3.5s ease-in-out infinite 0.5s;"></div>
+    <div class="blood-drip" style="background:linear-gradient(90deg,transparent,#bb00ff,transparent)!important;"></div>
+    <div class="diff-badge">◈ QUICK</div>
+    <div class="card-content">
+      <div class="card-icon-big">❌</div>
+      <div class="card-num">GAME 03</div>
+      <div class="card-name">TIC TAC TOE</div>
+      <div class="card-tagline">▸ 3 IN A ROW WINS ◂</div>
+      <div class="card-desc">Classic X vs O on a glowing neon grid. Play vs AI or a friend. The AI has three difficulty modes from pushover to unbeatable. First to 5 wins the match.</div>
+      <div class="card-tags"><span class="ctag">CLASSIC</span><span class="ctag">2P/AI</span><span class="ctag">MATCH</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY TTT</span><span class="scare-level">🧠☆☆☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="mind-2048.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#0a0022 0%,#000 65%);opacity:0.5;animation:bgPulse 4s ease-in-out infinite 1.5s;"></div>
+    <div class="blood-drip" style="background:linear-gradient(90deg,transparent,#bb00ff,transparent)!important;"></div>
+    <div class="diff-badge">◈ PUZZLE</div>
+    <div class="card-content">
+      <div class="card-icon-big">🔢</div>
+      <div class="card-num">GAME 04</div>
+      <div class="card-name">2048</div>
+      <div class="card-tagline">▸ MERGE YOUR WAY TO 2048 ◂</div>
+      <div class="card-desc">Slide tiles to combine matching numbers. Reach 2048 before the board fills up. Deceptively addictive — one of the most satisfying puzzle games ever made.</div>
+      <div class="card-tags"><span class="ctag">MERGE</span><span class="ctag">PUZZLE</span><span class="ctag">ADDICTIVE</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY 2048</span><span class="scare-level">🧠🧠🧠☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="mind-atlas.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#1a0033 0%,#000 65%);opacity:0.5;animation:bgPulse 2.5s ease-in-out infinite 2s;"></div>
+    <div class="blood-drip" style="background:linear-gradient(90deg,transparent,#bb00ff,transparent)!important;"></div>
+    <div class="diff-badge">◈ ATLAS</div>
+    <div class="card-content">
+      <div class="card-icon-big">🌍</div>
+      <div class="card-num">GAME 05</div>
+      <div class="card-name">ATLAS</div>
+      <div class="card-tagline">▸ CHAIN CITY NAMES ◂</div>
+      <div class="card-desc">Name a city. The next name must start with the last letter of yours. No repeats. Play vs AI or solo. How long can you keep the chain alive?</div>
+      <div class="card-tags"><span class="ctag">ATLAS</span><span class="ctag">GEOGRAPHY</span><span class="ctag">CHAIN</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY ATLAS</span><span class="scare-level">🧠🧠🧠🧠☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+</div>
+
+<div class="stats-bottom">
+  <span style="color:#440066;">🏆 WINS <span style="color:#bb00ff;" id="sw">0</span></span>
+  <span style="color:#440066;">⚡ XP <span style="color:#ffe500;" id="sxp">0</span></span>
+  <span style="color:#440066;">🎮 <span style="color:#bb00ff;" id="sp">---</span></span>
+</div>
+<script>
+  document.getElementById('sw').textContent = localStorage.getItem('hvWins')||'0';
+  document.getElementById('sxp').textContent = localStorage.getItem('hvXP')||'0';
+  document.getElementById('sp').textContent = localStorage.getItem('hvPlayer')||'---';
+  const c = document.getElementById('particles');
+  for(let i=0;i<50;i++){const p=document.createElement('div');p.className='particle';p.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*8}s;animation-duration:${4+Math.random()*6}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;opacity:${0.15+Math.random()*0.4}`;c.appendChild(p);}
+</script>
+</body>
+</html>

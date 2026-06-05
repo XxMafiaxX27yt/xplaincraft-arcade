@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>THE HOUSE — HELLVERSE</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'Share Tech Mono',monospace;}
+#c{display:block;width:100vw;height:100vh;cursor:none;}
+/* HUD */
+#hud{position:fixed;top:0;left:0;right:0;z-index:10;pointer-events:none;padding:10px 16px;display:flex;justify-content:space-between;align-items:flex-start;background:linear-gradient(180deg,rgba(0,0,0,0.85)0%,transparent 100%);}
+.hud-block{display:flex;flex-direction:column;gap:3px;}
+.hud-label{font-size:0.55rem;letter-spacing:3px;color:#442200;}
+.hud-val{font-size:0.9rem;letter-spacing:2px;color:#cc5500;}
+/* NOISE BAR */
+#noisebar-wrap{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;}
+#noisebar{width:180px;height:7px;background:#110500;border:1px solid rgba(180,80,0,0.3);overflow:hidden;}
+#noisefill{height:100%;width:0%;background:linear-gradient(90deg,#00aa33,#ffaa00,#ff2200);transition:width 0.08s;}
+.nb-label{font-size:0.5rem;letter-spacing:3px;color:#442200;}
+/* CROSSHAIR */
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;pointer-events:none;color:rgba(200,100,0,0.6);font-size:1.2rem;text-shadow:0 0 8px rgba(255,80,0,0.4);}
+/* INVENTORY */
+#inv{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:10px;pointer-events:none;}
+.inv-slot{width:44px;height:44px;border:1px solid rgba(180,80,0,0.3);background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;font-size:1.3rem;opacity:0.35;transition:opacity .3s;}
+.inv-slot.has-item{opacity:1;border-color:rgba(255,120,0,0.7);box-shadow:0 0 10px rgba(255,80,0,0.3);}
+/* CONTROLS HINT */
+#controls{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;font-size:0.55rem;letter-spacing:2px;color:rgba(100,50,0,0.7);white-space:nowrap;}
+/* INTERACT PROMPT */
+#prompt{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:10;font-size:0.7rem;letter-spacing:3px;color:#ff6600;opacity:0;transition:opacity .3s;pointer-events:none;text-shadow:0 0 10px rgba(255,80,0,0.5);}
+/* MINIMAP */
+#minimap{position:fixed;top:10px;right:10px;z-index:10;border:1px solid rgba(180,80,0,0.3);background:rgba(0,0,0,0.7);}
+/* SCREENS */
+.screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.97);font-family:'Orbitron',sans-serif;}
+.screen.off{display:none;}
+.s-icon{font-size:4rem;margin-bottom:16px;}
+.s-title{font-size:clamp(1.5rem,5vw,3rem);font-weight:900;letter-spacing:6px;margin-bottom:14px;}
+.s-msg{font-family:'Share Tech Mono',monospace;font-size:0.75rem;letter-spacing:2px;line-height:2.2;text-align:center;margin-bottom:28px;}
+.s-btn{background:none;border:2px solid currentColor;font-family:'Orbitron',sans-serif;font-size:0.8rem;letter-spacing:3px;padding:13px 34px;cursor:pointer;transition:all .3s;margin:5px;}
+.s-btn:hover{opacity:0.65;}
+.orange{color:#cc5500;}.red{color:#ff2244;}.green{color:#00cc55;}
+/* DIFFICULTY */
+.diff-row{display:flex;gap:12px;margin-bottom:22px;}
+.diff-btn{background:none;border:1px solid rgba(180,80,0,0.4);color:#884400;font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;padding:8px 18px;cursor:pointer;transition:all .3s;}
+.diff-btn:hover,.diff-btn.active{background:rgba(180,80,0,0.2);border-color:#cc5500;color:#ff6600;}
+/* JUMPSCARE */
+#js{position:fixed;inset:0;z-index:100;background:#000;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .04s;}
+#js.show{opacity:1;}
+#js-img{max-width:min(75vw,75vh);max-height:min(75vw,75vh);object-fit:contain;display:none;}
+#js-emoji{font-size:min(45vw,45vh);line-height:1;display:block;}
+#js-txt{font-family:'Orbitron',sans-serif;font-size:clamp(1rem,4vw,2.5rem);color:#ff0000;letter-spacing:8px;margin-top:16px;text-shadow:0 0 30px #ff0000;}
+/* CAUGHT FLASH */
+#flash{position:fixed;inset:0;z-index:40;pointer-events:none;opacity:0;background:rgba(180,0,0,0.55);transition:opacity .1s;}
+/* MESSAGE POPUP */
+#msg{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:20;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;padding:8px 20px;background:rgba(0,0,0,0.85);border:1px solid rgba(180,80,0,0.4);color:#ff8800;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+/* SCANLINES */
+#scanlines{position:fixed;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06)2px,rgba(0,0,0,0.06)4px);}
+/* VIGNETTE */
+#vig{position:fixed;inset:0;pointer-events:none;z-index:8;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,0.88)100%);}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vig"></div>
+<div id="scanlines"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-block">
+    <span class="hud-label">KEYS</span>
+    <span class="hud-val" id="h-keys">0 / 3</span>
+  </div>
+  <div class="hud-block" style="align-items:center;">
+    <span class="hud-label" style="font-family:'Orbitron',sans-serif;font-size:0.7rem;letter-spacing:4px;color:#882200;">🏚 THE HOUSE</span>
+  </div>
+  <div class="hud-block" style="align-items:flex-end;">
+    <span class="hud-label">SANITY</span>
+    <span class="hud-val" id="h-sanity">100%</span>
+  </div>
+</div>
+
+<div id="noisebar-wrap">
+  <span class="nb-label">⚠ NOISE LEVEL ⚠</span>
+  <div id="noisebar"><div id="noisefill"></div></div>
+</div>
+
+<div id="crosshair">+</div>
+
+<div id="inv">
+  <div class="inv-slot" id="slot0" title="Key 1">🗝</div>
+  <div class="inv-slot" id="slot1" title="Key 2">🗝</div>
+  <div class="inv-slot" id="slot2" title="Key 3">🗝</div>
+  <div class="inv-slot" id="slot3" title="Item">📦</div>
+</div>
+
+<div id="prompt">[ E ] INTERACT</div>
+<div id="msg"></div>
+<canvas id="minimap" width="100" height="100"></canvas>
+<div id="controls">W/S — MOVE &nbsp;|&nbsp; A/D — TURN &nbsp;|&nbsp; E — INTERACT &nbsp;|&nbsp; SHIFT — CROUCH &nbsp;|&nbsp; ESC — MENU</div>
+
+<!-- JUMPSCARE -->
+<div id="js">
+  <img id="js-img" src="" alt=""/>
+  <span id="js-emoji"></span>
+  <div id="js-txt"></div>
+</div>
+<div id="flash"></div>
+
+<!-- START SCREEN -->
+<div class="screen" id="scr-start">
+  <div class="s-icon">🏚</div>
+  <div class="s-title orange">THE HOUSE</div>
+  <div class="s-msg" style="color:#663300;">
+    YOU ARE TRAPPED<br/>
+    SOMETHING ANCIENT LIVES HERE<br/>
+    IT HUNTS BY SOUND<br/><br/>
+    FIND 3 KEYS — UNLOCK THE EXIT<br/>
+    CROUCH TO MOVE SILENTLY<br/>
+    LOOK AROUND — SECRETS ARE HIDDEN<br/><br/>
+    ⚠ HEADPHONES ON ⚠
+  </div>
+  <div class="diff-row">
+    <button class="diff-btn active" id="d-easy" onclick="setDiff(0)">EASY</button>
+    <button class="diff-btn" id="d-med" onclick="setDiff(1)">MEDIUM</button>
+    <button class="diff-btn" id="d-hard" onclick="setDiff(2)">HARD</button>
+  </div>
+  <button class="s-btn orange" onclick="startGame()">▶ ENTER THE HOUSE</button>
+  <a href="horror-hub.html" style="color:#442200;font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;margin-top:16px;text-decoration:none;">◄ BACK</a>
+</div>
+
+<!-- CAUGHT SCREEN -->
+<div class="screen off" id="scr-caught">
+  <div class="s-icon">👁</div>
+  <div class="s-title red">IT FOUND YOU</div>
+  <div class="s-msg" style="color:#660011;" id="caught-msg">YOU MADE TOO MUCH NOISE<br/>IT WAS LISTENING</div>
+  <button class="s-btn red" onclick="respawn()">⟳ TRY AGAIN</button>
+  <button class="s-btn" onclick="goHub()" style="color:#442200;border-color:#442200;">⌂ EXIT</button>
+</div>
+
+<!-- WIN SCREEN -->
+<div class="screen off" id="scr-win">
+  <div class="s-icon">🚪</div>
+  <div class="s-title green">ESCAPED</div>
+  <div class="s-msg" style="color:#003311;">"You ran into the cold night air.<br/>But the house... it followed you home."</div>
+  <button class="s-btn green" onclick="goHub()">⌂ BACK TO HUB</button>
+</div>
+
+<!-- AUDIO -->
+<audio id="snd-ambient" loop><source src="assets/ambient.mp3"></audio>
+<audio id="snd-scream"><source src="assets/scream.mp3"></audio>
+<audio id="snd-scream2"><source src="assets/sream2.mp3"></audio>
+<audio id="snd-scream3"><source src="assets/scream 3.mp3"></audio>
+<audio id="snd-step"><source src="assets/footstep.mp3"></audio>
+<audio id="snd-key"><source src="assets/keypick.mp3"></audio>
+<audio id="snd-caught"><source src="assets/caught.mp3"></audio>
+<audio id="snd-unlock"><source src="assets/doorunlock.mp3"></audio>
+<audio id="snd-growl"><source src="assets/growl.mp3"></audio>
+<audio id="snd-heartbeat" loop><source src="assets/heartbeat.mp3"></audio>
+<audio id="snd-creak"><source src="assets/creak.mp3"></audio>
+<audio id="snd-door"><source src="assets/door.mp3"></audio>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════
+//  THE HOUSE — RAYCASTING FPP ENGINE
+//  Max quality HTML5 canvas raycaster
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const mm = document.getElementById('minimap');
+const mctx = mm.getContext('2d');
+
+// ── DIFFICULTY ────────────────────────────────
+let DIFF = 0; // 0=easy 1=med 2=hard
+const DIFF_CFG = [
+  {entitySpeed:0.012, entitySense:4,  noiseDecay:1.2, chaseMult:1.0, sanityRate:0.03},
+  {entitySpeed:0.02,  entitySense:6,  noiseDecay:0.9, chaseMult:1.4, sanityRate:0.06},
+  {entitySpeed:0.03,  entitySense:9,  noiseDecay:0.6, chaseMult:2.0, sanityRate:0.12},
+];
+function setDiff(d){
+  DIFF=d;
+  ['d-easy','d-med','d-hard'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===d));
+}
+
+// ── SOUNDS ────────────────────────────────────
+const GHOST_IMGS=['assets/ghost1.png','assets/ghost2.png','assets/ghost3.png'];
+function snd(id,vol=0.6){try{const a=document.getElementById(id);if(!a)return;a.volume=vol;a.currentTime=0;a.play().catch(()=>{});}catch(e){}}
+function scream(){snd(['snd-scream','snd-scream2','snd-scream3'][Math.floor(Math.random()*3)],1);}
+
+// ── MAP ───────────────────────────────────────
+// 0=floor 1=wall 2=door(locked) 3=door(open) 4=key 5=exit 6=note 7=window 8=switch
+const MAPS = [
+// MAP 0 — Ground floor
+[
+ [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+ [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1],
+ [1,0,1,1,0,0,1,0,1,1,1,0,1,0,1,1,0,1,0,1],
+ [1,0,1,4,0,0,0,0,0,0,1,0,0,0,0,1,0,1,0,1],
+ [1,0,1,1,1,1,0,1,1,0,1,1,1,0,0,1,0,1,0,1],
+ [1,0,0,0,0,0,0,1,0,0,0,0,1,0,1,1,0,0,0,1],
+ [1,1,1,0,1,0,1,1,1,0,1,0,1,0,1,0,0,1,0,1],
+ [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,1,1,0,1],
+ [1,0,1,0,1,1,1,0,1,1,1,1,1,0,1,0,0,0,0,1],
+ [1,0,1,4,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,1],
+ [1,0,1,1,1,1,0,1,1,1,1,0,1,0,1,0,1,0,0,1],
+ [1,0,0,0,0,0,0,0,6,0,0,0,0,0,1,0,0,0,0,1],
+ [1,1,0,1,1,0,1,1,0,1,0,1,1,0,1,1,1,0,1,1],
+ [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,1],
+ [1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,0,1,1,0,1],
+ [1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1],
+ [1,1,1,0,1,1,1,0,1,1,1,0,1,0,0,0,1,1,0,1],
+ [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
+ [1,0,1,1,1,0,1,1,0,1,0,1,1,0,1,0,1,1,5,1],
+ [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+]];
+
+let MAP = [];
+let ROWS, COLS;
+
+// ── PLAYER ────────────────────────────────────
+const P = {
+  x:1.5, y:1.5,
+  angle:0,
+  speed:0,
+  turnSpeed:0,
+  crouch:false,
+  keys:0,
+  sanity:100,
+  noise:0,
+  stepTimer:0,
+};
+
+// ── ENTITY (THE CREATURE) ─────────────────────
+const E = {
+  x:18.5, y:18.5,
+  angle:0,
+  chasing:false,
+  visible:false,
+  alertTimer:0,
+  growlTimer:0,
+};
+
+// ── ITEMS IN WORLD ────────────────────────────
+let worldItems = []; // {type,x,y,active}
+let doorStates = {}; // "r,c" -> open/closed
+
+// ── STATE ─────────────────────────────────────
+let gameRunning = false;
+let keys = {};
+let mouseX = 0, lastMouseX = 0;
+let animId = null;
+let frame = 0;
+let jsCooldown = false;
+let noteText = '';
+let showNote = false;
+let noteTimer = 0;
+let stepCooldown = 0;
+let creakTimer = 0;
+
+// ── RAYCASTER SETTINGS ────────────────────────
+const FOV = Math.PI / 3; // 60 degrees
+const NUM_RAYS = 320;
+const MAX_DEPTH = 20;
+const HALF_H = () => canvas.height / 2;
+
+// ── WALL TEXTURES (procedural) ─────────────────
+function wallColor(dist, side, col, wallType){
+  const bright = Math.max(0.08, 1 - dist / MAX_DEPTH);
+  const sideDim = side === 1 ? 0.6 : 1.0;
+  let r,g,b;
+  if(wallType === 1){      // normal wall — dark wood
+    r = Math.floor(60*bright*sideDim);
+    g = Math.floor(35*bright*sideDim);
+    b = Math.floor(20*bright*sideDim);
+  } else if(wallType === 2){ // locked door — dark red
+    r = Math.floor(80*bright*sideDim);
+    g = Math.floor(15*bright*sideDim);
+    b = Math.floor(10*bright*sideDim);
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
+// ── FLOOR/CEILING ─────────────────────────────
+function drawFloorCeiling(){
+  const H = canvas.height, W = canvas.width;
+  // Ceiling
+  const cg = ctx.createLinearGradient(0,0,0,H/2);
+  cg.addColorStop(0,'#020100');
+  cg.addColorStop(1,'#0d0600');
+  ctx.fillStyle = cg; ctx.fillRect(0,0,W,H/2);
+  // Floor
+  const fg = ctx.createLinearGradient(0,H/2,0,H);
+  fg.addColorStop(0,'#130800');
+  fg.addColorStop(1,'#060300');
+  ctx.fillStyle = fg; ctx.fillRect(0,H/2,W,H/2);
+}
+
+// ── RAYCASTING ────────────────────────────────
+let zBuffer = [];
+function castRays(){
+  const W = canvas.width, H = canvas.height;
+  zBuffer = [];
+  for(let i=0;i<NUM_RAYS;i++){
+    const rayAngle = P.angle - FOV/2 + (i/NUM_RAYS)*FOV;
+    const cos = Math.cos(rayAngle), sin = Math.sin(rayAngle);
+    let dist = 0, hit = false, side = 0, wallType = 1;
+    // DDA
+    let mapX = Math.floor(P.x), mapY = Math.floor(P.y);
+    const deltaX = Math.abs(1/cos), deltaY = Math.abs(1/sin);
+    let stepX, stepY, sideDistX, sideDistY;
+    if(cos<0){stepX=-1;sideDistX=(P.x-mapX)*deltaX;}
+    else{stepX=1;sideDistX=(mapX+1-P.x)*deltaX;}
+    if(sin<0){stepY=-1;sideDistY=(P.y-mapY)*deltaY;}
+    else{stepY=1;sideDistY=(mapY+1-P.y)*deltaY;}
+    for(let depth=0;depth<MAX_DEPTH*10;depth++){
+      if(sideDistX<sideDistY){sideDistX+=deltaX;mapX+=stepX;side=0;}
+      else{sideDistY+=deltaY;mapY+=stepY;side=1;}
+      if(mapY<0||mapY>=ROWS||mapX<0||mapX>=COLS) break;
+      const cell = MAP[mapY][mapX];
+      if(cell===1||(cell===2&&!doorStates[`${mapY},${mapX}`])){
+        hit=true; wallType=cell; break;
+      }
+    }
+    dist = side===0 ? sideDistX-deltaX : sideDistY-deltaY;
+    const perpDist = dist * Math.cos(rayAngle - P.angle); // fix fisheye
+    zBuffer.push(perpDist);
+    if(!hit) continue;
+    const lineH = Math.floor(H / Math.max(0.01,perpDist));
+    const drawStart = Math.max(0, Math.floor(H/2 - lineH/2));
+    const drawEnd = Math.min(H-1, Math.floor(H/2 + lineH/2));
+    // Torch flicker
+    const flicker = 0.82 + Math.sin(frame*0.07)*0.1 + Math.sin(frame*0.17+i)*0.05;
+    const baseColor = wallColor(perpDist*flicker, side, i, wallType);
+    const x = Math.floor(i*(W/NUM_RAYS));
+    const w = Math.ceil(W/NUM_RAYS)+1;
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(x, drawStart, w, drawEnd-drawStart);
+    // Texture lines (vertical striping for wood look)
+    if(perpDist < 6){
+      const alpha = Math.max(0,(6-perpDist)/6)*0.08;
+      const stripeW = Math.max(1, Math.floor(lineH/8));
+      ctx.fillStyle=`rgba(0,0,0,${alpha})`;
+      for(let s=drawStart;s<drawEnd;s+=stripeW*2) ctx.fillRect(x,s,w,stripeW);
+    }
+  }
+}
+
+// ── SPRITE RENDERING (entity, items) ──────────
+function renderSprite(spriteX, spriteY, emoji, size=1.0, tint=null){
+  const H = canvas.height, W = canvas.width;
+  const dx = spriteX - P.x, dy = spriteY - P.y;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if(dist < 0.3) return;
+  // Transform to camera space
+  const invDet = 1/(Math.cos(P.angle)*(-Math.sin(P.angle)) - (-Math.sin(P.angle))*Math.cos(P.angle));
+  // Simple angle check
+  let spriteAngle = Math.atan2(dy, dx) - P.angle;
+  while(spriteAngle > Math.PI) spriteAngle -= 2*Math.PI;
+  while(spriteAngle < -Math.PI) spriteAngle += 2*Math.PI;
+  if(Math.abs(spriteAngle) > FOV*0.65) return;
+  const screenX = Math.floor((0.5 + spriteAngle/(FOV))*W);
+  const spriteH = Math.floor(H/dist * size);
+  const spriteTop = Math.floor(H/2 - spriteH/2);
+  const spriteLeft = screenX - spriteH/2;
+  // Check z-buffer
+  const zIdx = Math.floor(screenX/(W/NUM_RAYS));
+  if(zIdx>=0&&zIdx<zBuffer.length&&zBuffer[zIdx]<dist) return;
+  // Draw emoji sprite
+  const fontSize = Math.max(8, Math.floor(spriteH*0.8));
+  ctx.font = `${fontSize}px serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(tint){ctx.globalAlpha=0.85;}
+  ctx.fillText(emoji, screenX, H/2 + (P.crouch?spriteH*0.1:0));
+  ctx.globalAlpha=1;
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+// ── ENTITY AI ─────────────────────────────────
+function updateEntity(){
+  const cfg = DIFF_CFG[DIFF];
+  const dx = P.x-E.x, dy = P.y-E.y;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  E.visible = dist < 18;
+
+  // Detect player
+  if(P.noise > 40 || dist < cfg.entitySense){
+    E.chasing = true;
+    E.alertTimer = 180 + DIFF*60;
+  }
+  if(E.alertTimer > 0) E.alertTimer--;
+  else E.chasing = false;
+
+  // Move
+  const speed = cfg.entitySpeed * (E.chasing ? cfg.chaseMult : 0.4);
+  if(E.chasing || dist > 3){
+    const targetAngle = Math.atan2(dy,dx);
+    let da = targetAngle - E.angle;
+    while(da>Math.PI) da-=2*Math.PI;
+    while(da<-Math.PI) da+=2*Math.PI;
+    E.angle += da*0.08;
+    const nx = E.x + Math.cos(E.angle)*speed;
+    const ny = E.y + Math.sin(E.angle)*speed;
+    if(canMove(nx,E.y)) E.x=nx;
+    if(canMove(E.x,ny)) E.y=ny;
+  }
+
+  // Growl
+  E.growlTimer--;
+  if(E.growlTimer<=0){
+    E.growlTimer = 200 + Math.floor(Math.random()*300) - DIFF*60;
+    if(dist<12) snd('snd-growl', Math.min(1, (12-dist)/12));
+  }
+
+  // Catch
+  if(dist < 0.6) caught();
+
+  // Jumpscare at mid dist
+  if(!jsCooldown && dist < 3 && Math.random()<0.002) doJumpscare(false);
+}
+
+// ── MOVEMENT ──────────────────────────────────
+function canMove(nx,ny){
+  const margin = 0.25;
+  const checks=[
+    [nx+margin,ny+margin],[nx-margin,ny+margin],
+    [nx+margin,ny-margin],[nx-margin,ny-margin],
+  ];
+  for(const [cx,cy] of checks){
+    const mx=Math.floor(cx),my=Math.floor(cy);
+    if(my<0||my>=ROWS||mx<0||mx>=COLS) return false;
+    const cell=MAP[my][mx];
+    if(cell===1) return false;
+    if(cell===2&&!doorStates[`${my},${mx}`]) return false;
+  }
+  return true;
+}
+
+function updatePlayer(){
+  const cfg = DIFF_CFG[DIFF];
+  const isCrouching = keys['ShiftLeft']||keys['ShiftRight']||keys['Shift'];
+  P.crouch = isCrouching;
+  const moveSpd = isCrouching ? 0.025 : 0.055;
+  const turnSpd = 0.034;
+  let moved = false;
+
+  if(keys['KeyW']||keys['ArrowUp']){
+    const nx=P.x+Math.cos(P.angle)*moveSpd;
+    const ny=P.y+Math.sin(P.angle)*moveSpd;
+    if(canMove(nx,P.y)){P.x=nx;moved=true;}
+    if(canMove(P.x,ny)){P.y=ny;moved=true;}
+  }
+  if(keys['KeyS']||keys['ArrowDown']){
+    const nx=P.x-Math.cos(P.angle)*moveSpd*0.6;
+    const ny=P.y-Math.sin(P.angle)*moveSpd*0.6;
+    if(canMove(nx,P.y)){P.x=nx;moved=true;}
+    if(canMove(P.x,ny)){P.y=ny;moved=true;}
+  }
+  if(keys['KeyA']||keys['ArrowLeft']) P.angle-=turnSpd;
+  if(keys['KeyD']||keys['ArrowRight']) P.angle+=turnSpd;
+
+  // Mouse look
+  const mdx = mouseX - lastMouseX;
+  P.angle += mdx * 0.003;
+  lastMouseX = mouseX;
+
+  // Noise
+  if(moved){
+    const noiseAdd = isCrouching ? 0.4 : 2.2;
+    P.noise = Math.min(100, P.noise + noiseAdd);
+    stepCooldown--;
+    if(stepCooldown<=0 && !isCrouching){
+      snd('snd-step', 0.25);
+      stepCooldown = 22;
+    }
+  } else {
+    P.noise = Math.max(0, P.noise - cfg.noiseDecay);
+  }
+
+  // Creak randomly
+  creakTimer--;
+  if(creakTimer<=0){
+    creakTimer = 300+Math.floor(Math.random()*400);
+    snd('snd-creak',0.15);
+  }
+
+  // Sanity decay near entity
+  const edist=Math.sqrt((P.x-E.x)**2+(P.y-E.y)**2);
+  if(edist<6) P.sanity=Math.max(0,P.sanity-cfg.sanityRate*(6-edist)/6);
+  document.getElementById('h-sanity').textContent=Math.ceil(P.sanity)+'%';
+  document.getElementById('h-sanity').style.color=P.sanity<30?'#ff2244':P.sanity<60?'#ff8800':'#cc5500';
+
+  // Noise UI
+  document.getElementById('noisefill').style.width=P.noise+'%';
+  if(P.noise>75){
+    document.getElementById('h-keys').style.color='#ff2244';
+    // Heartbeat
+    try{const hb=document.getElementById('snd-heartbeat');if(!hb.playing)hb.play().catch(()=>{});}catch(e){}
+  } else {
+    document.getElementById('h-keys').style.color='#cc5500';
+    try{document.getElementById('snd-heartbeat').pause();}catch(e){}
+  }
+
+  // Interact
+  checkInteract();
+  // Item pickup
+  checkItems();
+}
+
+// ── INTERACT WITH DOORS / ITEMS ───────────────
+let interactCooldown = 0;
+function checkInteract(){
+  const ix = Math.floor(P.x + Math.cos(P.angle)*1.0);
+  const iy = Math.floor(P.y + Math.sin(P.angle)*1.0);
+  if(iy<0||iy>=ROWS||ix<0||ix>=COLS) return;
+  const cell = MAP[iy][ix];
+  const isInteractable = cell===2||cell===3||cell===6||cell===5;
+  document.getElementById('prompt').style.opacity = isInteractable ? '1':'0';
+  if(keys['KeyE'] && interactCooldown<=0 && isInteractable){
+    interactCooldown = 30;
+    if(cell===2){
+      // Locked door
+      showMsg('⚠ LOCKED — FIND THE KEY');
+      snd('snd-creak',0.4);
+    } else if(cell===6){
+      // Note
+      const notes=[
+        '"She only sleeps when it is silent."',
+        '"Three keys. Three locks. One way out."',
+        '"I heard it last night. Scratching at the walls."',
+        '"DO NOT MAKE NOISE. DO NOT RUN."',
+        '"It was my neighbour once. Not anymore."',
+      ];
+      showMsg(notes[Math.floor(Math.random()*notes.length)], 4000);
+      snd('snd-creak',0.2);
+    } else if(cell===5){
+      if(P.keys>=3){
+        snd('snd-unlock',0.8);
+        winGame();
+      } else {
+        showMsg(`⚠ NEED ${3-P.keys} MORE KEY${P.keys!==2?'S':''}`);
+      }
+    }
+  }
+  if(interactCooldown>0) interactCooldown--;
+}
+
+function checkItems(){
+  for(const it of worldItems){
+    if(!it.active) continue;
+    const dx=P.x-it.x, dy=P.y-it.y;
+    if(Math.sqrt(dx*dx+dy*dy)<0.6){
+      if(it.type===4){ // key
+        it.active=false;
+        P.keys++;
+        document.getElementById('h-keys').textContent=P.keys+' / 3';
+        document.getElementById('slot'+(P.keys-1)).classList.add('has-item');
+        snd('snd-key',0.8);
+        showMsg(`🗝 KEY ${P.keys} COLLECTED — ${3-P.keys} MORE NEEDED`);
+        // Save tracking
+        const w=parseInt(localStorage.getItem('hvWins')||'0');
+        if(P.keys>=3){
+          // Check exit proximity handled in interact
+        }
+      }
+    }
+  }
+}
+
+// ── HUD UPDATE ────────────────────────────────
+function updateHUD(){
+  document.getElementById('h-keys').textContent=P.keys+' / 3';
+}
+
+// ── MINIMAP ───────────────────────────────────
+function drawMinimap(){
+  const S=5, W=COLS*S, H_mm=ROWS*S;
+  mm.width=W; mm.height=H_mm;
+  mctx.fillStyle='rgba(0,0,0,0.8)';mctx.fillRect(0,0,W,H_mm);
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const cell=MAP[r][c];
+    if(cell===1) mctx.fillStyle='#331100';
+    else if(cell===2) mctx.fillStyle='#660000';
+    else if(cell===5) mctx.fillStyle='#003300';
+    else mctx.fillStyle='#050200';
+    mctx.fillRect(c*S,r*S,S,S);
+  }
+  // Items
+  for(const it of worldItems){
+    if(!it.active) continue;
+    mctx.fillStyle='#ffaa00';
+    mctx.fillRect(it.x*S-1,it.y*S-1,3,3);
+  }
+  // Entity
+  mctx.fillStyle=E.chasing?'#ff0000':'#880000';
+  mctx.beginPath();mctx.arc(E.x*S,E.y*S,3,0,Math.PI*2);mctx.fill();
+  // Player
+  mctx.fillStyle='#00ff9d';
+  mctx.beginPath();mctx.arc(P.x*S,P.y*S,3,0,Math.PI*2);mctx.fill();
+  // Player direction
+  mctx.strokeStyle='#00ff9d'; mctx.lineWidth=1;
+  mctx.beginPath();mctx.moveTo(P.x*S,P.y*S);
+  mctx.lineTo(P.x*S+Math.cos(P.angle)*8,P.y*S+Math.sin(P.angle)*8);mctx.stroke();
+}
+
+// ── ATMOSPHERE OVERLAY ────────────────────────
+function drawAtmosphere(){
+  const W=canvas.width,H=canvas.height;
+  // Torch glow (centered)
+  const flick=0.6+Math.sin(frame*0.04)*0.2+Math.sin(frame*0.11)*0.1;
+  const grd=ctx.createRadialGradient(W/2,H/2,W*0.08,W/2,H/2,W*0.55);
+  grd.addColorStop(0,`rgba(255,100,20,${0.1*flick})`);
+  grd.addColorStop(0.5,`rgba(180,60,0,${0.04*flick})`);
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,W,H);
+  // Vignette
+  const vig2=ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,W*0.75);
+  vig2.addColorStop(0,'transparent');
+  vig2.addColorStop(1,'rgba(0,0,0,0.82)');
+  ctx.fillStyle=vig2; ctx.fillRect(0,0,W,H);
+  // Sanity distortion
+  if(P.sanity<50){
+    const sr=(50-P.sanity)/50;
+    ctx.fillStyle=`rgba(80,0,0,${sr*0.15})`;ctx.fillRect(0,0,W,H);
+    // Edge bleed
+    if(Math.random()<sr*0.3){
+      ctx.fillStyle=`rgba(255,0,0,${sr*0.05})`;
+      ctx.fillRect(0,0,Math.random()*W,H);
+    }
+  }
+}
+
+// ── GAME LOOP ─────────────────────────────────
+function gameLoop(){
+  if(!gameRunning){animId=requestAnimationFrame(gameLoop);return;}
+  frame++;
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+
+  drawFloorCeiling();
+  castRays();
+
+  // Render world items as sprites
+  for(const it of worldItems){
+    if(!it.active) continue;
+    const emoji = it.type===4?'🗝':it.type===6?'📜':'📦';
+    renderSprite(it.x,it.y,emoji,0.6);
+  }
+
+  // Render entity
+  if(E.visible){
+    const emojis=['👁','👻','💀'];
+    const ef=Math.floor(frame/15)%emojis.length;
+    renderSprite(E.x,E.y,E.chasing?'👁':'💀',1.2);
+  }
+
+  drawAtmosphere();
+
+  updatePlayer();
+  updateEntity();
+  drawMinimap();
+
+  animId=requestAnimationFrame(gameLoop);
+}
+
+// ── JUMPSCARE ─────────────────────────────────
+const JS_MSGS=['IT IS BEHIND YOU','RUN','YOU CANNOT HIDE','GET OUT','LEAVE NOW'];
+function doJumpscare(fatal=false){
+  if(jsCooldown&&!fatal)return;
+  jsCooldown=true;
+  scream();
+  const el=document.getElementById('js');
+  const gi=document.getElementById('js-img');
+  const ge=document.getElementById('js-emoji');
+  const gt=document.getElementById('js-txt');
+  gt.textContent=JS_MSGS[Math.floor(Math.random()*JS_MSGS.length)];
+  if(Math.random()<0.55 && GHOST_IMGS.length){
+    gi.src=GHOST_IMGS[Math.floor(Math.random()*GHOST_IMGS.length)];
+    gi.style.display='block';ge.style.display='none';
+  } else {
+    gi.style.display='none';ge.style.display='block';
+    ge.textContent=['👁','💀','😱','👻','☠'][Math.floor(Math.random()*5)];
+  }
+  el.classList.add('show');
+  const fl=document.getElementById('flash');
+  fl.style.opacity='1';setTimeout(()=>fl.style.opacity='0',200);
+  setTimeout(()=>{
+    el.classList.remove('show');
+    if(!fatal)setTimeout(()=>jsCooldown=false,18000);
+  },fatal?700:1000);
+}
+
+// ── MESSAGES ──────────────────────────────────
+let msgTimer=null;
+function showMsg(text,duration=2200){
+  const el=document.getElementById('msg');
+  el.textContent=text;el.style.opacity='1';
+  clearTimeout(msgTimer);
+  msgTimer=setTimeout(()=>el.style.opacity='0',duration);
+}
+
+// ── CAUGHT / WIN ──────────────────────────────
+function caught(){
+  if(!gameRunning) return;
+  gameRunning=false;
+  doJumpscare(true);
+  snd('snd-caught',1);
+  const l=parseInt(localStorage.getItem('hvLosses')||'0')+1;
+  localStorage.setItem('hvLosses',l);
+  setTimeout(()=>document.getElementById('scr-caught').classList.remove('off'),1200);
+}
+function winGame(){
+  gameRunning=false;
+  snd('snd-unlock',1);
+  const w=parseInt(localStorage.getItem('hvWins')||'0')+1;
+  localStorage.setItem('hvWins',w);
+  setTimeout(()=>document.getElementById('scr-win').classList.remove('off'),600);
+}
+
+// ── INIT / START ──────────────────────────────
+function initLevel(){
+  MAP=MAPS[0].map(r=>[...r]);
+  ROWS=MAP.length; COLS=MAP[0].length;
+  P.x=1.5;P.y=1.5;P.angle=0;P.keys=0;P.noise=0;P.sanity=100;
+  E.x=18.5;E.y=18.5;E.chasing=false;E.alertTimer=0;E.growlTimer=100;
+  doorStates={};
+  worldItems=[];
+  // Scan map for items
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const cell=MAP[r][c];
+    if(cell===4) worldItems.push({type:4,x:c+0.5,y:r+0.5,active:true});
+    if(cell===6) worldItems.push({type:6,x:c+0.5,y:r+0.5,active:true});
+  }
+  // Reset HUD
+  for(let i=0;i<4;i++) document.getElementById('slot'+i)?.classList.remove('has-item');
+  document.getElementById('h-keys').textContent='0 / 3';
+  document.getElementById('h-sanity').textContent='100%';
+  document.getElementById('noisefill').style.width='0%';
+}
+
+function startGame(){
+  document.getElementById('scr-start').classList.add('off');
+  initLevel();
+  canvas.requestPointerLock=canvas.requestPointerLock||canvas.mozRequestPointerLock;
+  canvas.requestPointerLock();
+  gameRunning=true;
+  try{document.getElementById('snd-ambient').volume=0.3;document.getElementById('snd-ambient').play().catch(()=>{});}catch(e){}
+  cancelAnimationFrame(animId);
+  animId=requestAnimationFrame(gameLoop);
+}
+
+function respawn(){
+  document.getElementById('scr-caught').classList.add('off');
+  initLevel();
+  gameRunning=true;
+}
+
+function goHub(){ window.location.href='horror-hub.html'; }
+
+// ── INPUT ─────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(e.code==='Escape'&&gameRunning){
+    gameRunning=false;
+    document.exitPointerLock&&document.exitPointerLock();
+    document.getElementById('scr-start').classList.remove('off');
+  }
+  if(e.code==='KeyE') keys['KeyE']=true;
+});
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
+document.addEventListener('mousemove',e=>{
+  if(document.pointerLockElement===canvas){
+    P.angle+=e.movementX*0.003;
+  }
+});
+canvas.addEventListener('click',()=>{
+  if(!gameRunning) return;
+  canvas.requestPointerLock&&canvas.requestPointerLock();
+});
+
+window.addEventListener('resize',()=>{
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+});
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+</script>
+</body>
+</html>

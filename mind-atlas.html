@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ATLAS — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #050005; }
+    .hud { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(180,0,255,0.2); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #bb00ff; font-size: 0.8rem; letter-spacing: 2px; }
+    .game-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 2rem; letter-spacing: 5px; color: #bb00ff; text-shadow: 0 0 20px #cc00ff; text-align: center; margin: 24px 0 6px; }
+    .game-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 4px; color: #440066; text-align: center; margin-bottom: 20px; }
+    .chain-display { width: min(560px,92vw); max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.7); border: 1px solid rgba(180,0,255,0.2); padding: 14px; margin-bottom: 14px; }
+    .chain-item { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; padding: 4px 0; border-bottom: 1px solid rgba(180,0,255,0.05); display: flex; align-items: center; gap: 10px; }
+    .chain-item.player { color: #00c8ff; }
+    .chain-item.ai     { color: #ff2244; }
+    .chain-who  { font-size: 0.6rem; letter-spacing: 1px; opacity: 0.6; width: 40px; flex-shrink: 0; }
+    .chain-city { flex: 1; }
+    .chain-letter { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.8rem; color: #bb00ff; }
+    .status-box { width: min(560px,92vw); background: rgba(20,0,40,0.6); border: 1px solid rgba(180,0,255,0.25); padding: 16px 20px; margin-bottom: 16px; }
+    .status-letter { font-family: 'Orbitron', sans-serif; font-size: 1.5rem; font-weight: 900; color: #bb00ff; text-shadow: 0 0 15px #cc00ff; }
+    .status-label { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 3px; color: #440066; }
+    .input-row { display: flex; gap: 10px; width: min(560px,92vw); margin-bottom: 14px; }
+    .city-input { flex: 1; background: rgba(0,0,0,0.9); border: 1px solid rgba(180,0,255,0.4); color: #cc88ff; font-family: 'Share Tech Mono', monospace; font-size: 1rem; letter-spacing: 2px; padding: 14px 16px; outline: none; text-transform: uppercase; }
+    .city-input:focus { border-color: #bb00ff; box-shadow: 0 0 15px rgba(180,0,255,0.2); }
+    .submit-btn { background: none; border: 1px solid #bb00ff; color: #bb00ff; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; padding: 0 20px; cursor: pointer; transition: all .2s; }
+    .submit-btn:hover { background: rgba(180,0,255,0.15); }
+    .msg { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; min-height: 1.5em; margin-bottom: 12px; text-align: center; }
+    .score-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 16px; }
+    .score-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(180,0,255,0.2); padding: 8px 16px; text-align: center; }
+    .score-label { font-family: 'Share Tech Mono', monospace; font-size: 0.52rem; letter-spacing: 2px; color: #440066; }
+    .score-val { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; font-weight: 900; color: #bb00ff; }
+    .timer-bar { width: min(560px,92vw); height: 4px; background: rgba(180,0,255,0.1); margin-bottom: 14px; }
+    .timer-fill { height: 100%; background: linear-gradient(90deg,#bb00ff,#00c8ff); transition: width 0.1s linear; }
+    .history-wrap { width: min(560px,92vw); margin-bottom: 14px; }
+    .hint-text { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 2px; color: #330044; text-align: center; margin-bottom: 6px; }
+    .new-btn { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; padding: 10px 20px; background: none; border: 1px solid rgba(180,0,255,0.3); color: #bb00ff; cursor: pointer; transition: all .2s; }
+    .new-btn:hover { background: rgba(180,0,255,0.1); }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="mind-hub.html" style="color:#bb00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(180,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🌍 ATLAS</div>
+  <div class="hud-val">STREAK: <span id="hudStreak">0</span></div>
+</div>
+
+<div class="game-title">ATLAS</div>
+<div class="game-sub">◈ CHAIN CITY NAMES — START WITH LAST LETTER ◈</div>
+
+<div class="score-row">
+  <div class="score-box"><div class="score-label">CHAIN LENGTH</div><div class="score-val" id="chainLen">0</div></div>
+  <div class="score-box"><div class="score-label">BEST</div><div class="score-val" id="bestChain">0</div></div>
+  <div class="score-box"><div class="score-label">ROUND</div><div class="score-val" id="roundNum">1</div></div>
+</div>
+
+<div class="timer-bar"><div class="timer-fill" id="timerFill" style="width:100%;"></div></div>
+
+<div class="status-box">
+  <div class="status-label">NEXT CITY MUST START WITH:</div>
+  <div class="status-letter" id="nextLetter">?</div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div class="input-row">
+  <input type="text" class="city-input" id="cityInput" placeholder="TYPE A CITY..." maxlength="30" autocomplete="off"/>
+  <button class="submit-btn" onclick="submitCity()">▶ GO</button>
+</div>
+
+<div class="hint-text">PRESS ENTER OR CLICK GO · 15 SECONDS PER TURN</div>
+
+<div class="history-wrap">
+  <div class="chain-display" id="chainDisplay"></div>
+</div>
+<button class="new-btn" onclick="newGame()">↻ NEW GAME</button>
+
+<script>
+// Large city list
+const CITIES = [
+  'AMSTERDAM','ATHENS','AUSTIN','ANKARA','ABUJA','ACCRA','ADDIS ABABA',
+  'BEIJING','BERLIN','BOGOTA','BRUSSELS','BUCHAREST','BUDAPEST','BUENOS AIRES','BANGKOK','BARCELONA','BANGALORE','BEIRUT',
+  'CAIRO','CAPE TOWN','CHICAGO','COLOMBO','COPENHAGEN','CASABLANCA','CALCUTTA','CAMBRIDGE','CARACAS','CHENNAI',
+  'DELHI','DHAKA','DUBAI','DUBLIN','DOHA','DENVER','DAMASCUS','DAKAR',
+  'EDINBURGH','EKATERINBURG','EINDHOVEN',
+  'FRANKFURT','FLORENCE','FLORENCE',
+  'GENEVA','GUANGZHOU','GUADALAJARA',
+  'HAMBURG','HANOI','HAVANA','HELSINKI','HYDERABAD','HONG KONG',
+  'ISTANBUL','ISLAMABAD','INDIANAPOLIS',
+  'JAKARTA','JERUSALEM','JOHANNESBURG','JAIPUR',
+  'KABUL','KAMPALA','KARACHI','KATHMANDU','KINSHASA','KUALA LUMPUR','KYOTO','KOLKATA',
+  'LAGOS','LAHORE','LIMA','LISBON','LONDON','LOS ANGELES','LUXEMBOURG','LUCKNOW',
+  'MADRID','MANILA','MELBOURNE','MEXICO CITY','MIAMI','MILAN','MONTREAL','MOSCOW','MUMBAI','MUSCAT',
+  'NAIROBI','NEW DELHI','NEW YORK','NICOSIA','NAPLES',
+  'OSLO','OTTAWA',
+  'PARIS','PRAGUE','PRETORIA','PESHAWAR','PERTH',
+  'QUITO','QUEENSLAND',
+  'RIYADH','ROME','ROTTERDAM','RIO DE JANEIRO',
+  'SANTIAGO','SEOUL','SHANGHAI','SINGAPORE','SOFIA','STOCKHOLM','SYDNEY','SURABAYA',
+  'TAIPEI','TEHRAN','TOKYO','TORONTO','TUNIS',
+  'ULAANBAATAR',
+  'VANCOUVER','VIENNA','VILNIUS',
+  'WARSAW','WASHINGTON',
+  'XIAMEN',
+  'YANGON','YOKOHAMA',
+  'ZAGREB','ZURICH',
+  'ABERDEEN','AUCKLAND','ALMATY','ANTWERP',
+  'BAKU','BELGRADE','BISHKEK','BRATISLAVA',
+  'CHENGDU','COLOMBO','CHRISTCHURCH',
+  'DURBAN','DUSHANBE',
+  'EDINBURGH','ESSEN',
+  'FREETOWN','FUKUOKA',
+  'GLASGOW','GOTHENBURG',
+  'HARARE','HOBART',
+  'INCHEON',
+  'JEDDAH',
+  'KRAKOW','KUWAIT',
+  'LOME','LUANDA',
+  'MECCA','MEDINA','MINSK','MONTERREY',
+  'NANTES','NANJING',
+  'ODESSA',
+  'PORTO','PYONGYANG',
+  'RALEIGH','RABAT',
+  'SALZBURG','SARAJEVO','SAPPORO',
+  'TBILISI','TASHKENT','TRIPOLI',
+  'ULURU',
+  'VALENCIA','VALLETTA',
+  'WINDHOEK',
+  'YEREVAN',
+  'ZANZIBAR',
+];
+
+let chain, usedCities, currentLetter, chainLength, round, timerInterval, timeLeft, gameActive;
+let best = parseInt(localStorage.getItem('atlas_best')||'0');
+document.getElementById('bestChain').textContent = best;
+document.getElementById('hudStreak').textContent = localStorage.getItem('atlas_streak')||'0';
+
+function newGame() {
+  chain = []; usedCities = new Set(); gameActive = true;
+  round = 1; chainLength = 0;
+  document.getElementById('roundNum').textContent = round;
+  document.getElementById('chainLen').textContent = 0;
+  document.getElementById('chainDisplay').innerHTML = '';
+  document.getElementById('cityInput').value = '';
+  document.getElementById('cityInput').disabled = false;
+  currentLetter = null;
+  setMsg('START WITH ANY CITY!', '#bb00ff');
+  document.getElementById('nextLetter').textContent = 'ANY';
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timeLeft = 15;
+  document.getElementById('timerFill').style.transition = 'none';
+  document.getElementById('timerFill').style.width = '100%';
+  setTimeout(() => {
+    document.getElementById('timerFill').style.transition = 'width 15s linear';
+    document.getElementById('timerFill').style.width = '0%';
+  }, 50);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    if (timeLeft <= 0) { clearInterval(timerInterval); timeOut(); }
+  }, 1000);
+}
+
+function timeOut() {
+  if (!gameActive) return;
+  gameActive = false;
+  setMsg('⏰ TIME UP! GAME OVER', '#ff2244');
+  document.getElementById('cityInput').disabled = true;
+  saveBest();
+}
+
+function submitCity() {
+  if (!gameActive) return;
+  const inp = document.getElementById('cityInput');
+  const city = inp.value.trim().toUpperCase();
+  inp.value = '';
+  if (!city) return;
+
+  if (usedCities.has(city)) { setMsg('⚠ ALREADY USED!', '#ff7700'); return; }
+  if (currentLetter && city[0] !== currentLetter) {
+    setMsg(`⚠ MUST START WITH '${currentLetter}'`, '#ff2244'); return;
+  }
+  if (!CITIES.includes(city)) { setMsg('⚠ NOT A KNOWN CITY!', '#ff2244'); return; }
+
+  usedCities.add(city);
+  chain.push({ city, who: 'YOU' });
+  chainLength++;
+  currentLetter = city[city.length-1];
+  document.getElementById('nextLetter').textContent = currentLetter;
+  document.getElementById('chainLen').textContent = chainLength;
+  addToDisplay(city, 'player');
+  setMsg('✓ GOOD! AI THINKING...', '#00ff9d');
+
+  let xp = parseInt(localStorage.getItem('hvXP')||'0') + 5;
+  localStorage.setItem('hvXP', xp);
+
+  setTimeout(aiTurn, 1200);
+}
+
+function aiTurn() {
+  if (!gameActive) return;
+  const possible = CITIES.filter(c => c[0] === currentLetter && !usedCities.has(c));
+  if (!possible.length) {
+    // AI loses
+    gameActive = false; clearInterval(timerInterval);
+    setMsg('🏆 AI HAS NO ANSWER! YOU WIN!', '#00ff9d');
+    document.getElementById('timerFill').style.width = '100%';
+    let wins = parseInt(localStorage.getItem('hvWins')||'0')+1;
+    localStorage.setItem('hvWins', wins);
+    let streak = parseInt(localStorage.getItem('atlas_streak')||'0')+1;
+    localStorage.setItem('atlas_streak', streak);
+    document.getElementById('hudStreak').textContent = streak;
+    saveBest();
+    return;
+  }
+  const aiCity = possible[Math.floor(Math.random()*possible.length)];
+  usedCities.add(aiCity);
+  chain.push({ city: aiCity, who: 'AI' });
+  chainLength++;
+  currentLetter = aiCity[aiCity.length-1];
+  document.getElementById('nextLetter').textContent = currentLetter;
+  document.getElementById('chainLen').textContent = chainLength;
+  addToDisplay(aiCity, 'ai');
+  setMsg(`YOUR TURN — START WITH '${currentLetter}'`, '#bb00ff');
+  round++;
+  document.getElementById('roundNum').textContent = round;
+  startTimer();
+}
+
+function addToDisplay(city, who) {
+  const el = document.createElement('div');
+  el.className = `chain-item ${who}`;
+  el.innerHTML = `<span class="chain-who">${who==='player'?'YOU':'AI'}</span><span class="chain-city">${city}</span><span class="chain-letter">${city[city.length-1]}</span>`;
+  const d = document.getElementById('chainDisplay');
+  d.appendChild(el);
+  d.scrollTop = d.scrollHeight;
+}
+
+function saveBest() {
+  if (chainLength > best) {
+    best = chainLength;
+    localStorage.setItem('atlas_best', best);
+    document.getElementById('bestChain').textContent = best;
+  }
+}
+
+function setMsg(m, col='#bb00ff') {
+  const el = document.getElementById('msg');
+  el.textContent = m; el.style.color = col;
+}
+
+document.getElementById('cityInput').addEventListener('keydown', e => { if(e.key==='Enter') submitCity(); });
+newGame();
+</script>
+</body>
+</html>

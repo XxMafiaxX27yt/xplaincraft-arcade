@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NEON RUNNER — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { background: #000; overflow: hidden; }
+    #gameWrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: linear-gradient(180deg,rgba(0,0,0,0.9)0%,transparent); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #cc00ff; font-size: 0.8rem; letter-spacing: 2px; }
+    .score-hud { position: fixed; top: 55px; left: 50%; transform: translateX(-50%); z-index: 20; font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 900; color: #cc00ff; text-shadow: 0 0 20px #cc00ff; }
+    .overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,10,0.93); font-family: 'Orbitron', sans-serif; }
+    .overlay.hidden { display: none; }
+    .ov-title { font-size: clamp(2rem,6vw,4rem); font-weight: 900; color: #cc00ff; letter-spacing: 6px; text-shadow: 0 0 30px #cc00ff; margin-bottom: 14px; }
+    .ov-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 5px; color: #440066; margin-bottom: 24px; }
+    .ov-btn { background: linear-gradient(135deg, #440066, #880099); border: none; color: #fff; font-family: 'Orbitron', sans-serif; font-size: 0.9rem; letter-spacing: 3px; padding: 14px 36px; cursor: pointer; clip-path: polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); transition: all .3s; }
+    .ov-btn:hover { box-shadow: 0 0 30px #cc00ff; }
+    .ov-stat { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; color: #440066; margin-bottom: 8px; }
+    .ov-stat span { color: #cc00ff; }
+    .ctrl-hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 2px; color: rgba(200,0,255,0.3); z-index: 20; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="fun-hub.html" style="color:#cc00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(200,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🏃 NEON RUNNER</div>
+  <div class="hud-val">BEST: <span id="hudBest">0</span></div>
+</div>
+<div class="score-hud" id="scoreDisp">0</div>
+<div class="ctrl-hint">↑/SPACE = JUMP · ↓ = SLIDE</div>
+
+<div id="gameWrap"><canvas id="c"></canvas></div>
+
+<div class="overlay" id="startOv">
+  <div style="font-size:4rem;margin-bottom:16px;">🏃</div>
+  <div class="ov-title">NEON RUNNER</div>
+  <div class="ov-sub">▸ RUN · JUMP · SLIDE · SURVIVE ◂</div>
+  <div class="ov-stat">BEST: <span id="startBest">0</span></div>
+  <div class="ov-stat" style="margin-bottom:24px;color:rgba(200,0,255,0.4);">↑ SPACE = JUMP  |  ↓ = SLIDE</div>
+  <button class="ov-btn" onclick="startGame()">▶ START RUNNING</button>
+</div>
+
+<div class="overlay hidden" id="overOv">
+  <div style="font-size:4rem;margin-bottom:16px;">💥</div>
+  <div class="ov-title">WIPED OUT</div>
+  <div class="ov-sub">▸ YOU HIT AN OBSTACLE ◂</div>
+  <div class="ov-stat">SCORE: <span id="ovScore">0</span></div>
+  <div class="ov-stat" style="margin-bottom:24px;">BEST: <span id="ovBest">0</span></div>
+  <button class="ov-btn" onclick="startGame()">▶ RUN AGAIN</button>
+  <a href="fun-hub.html" style="margin-top:14px;color:rgba(200,0,255,0.5);font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;text-decoration:none;">◄ BACK</a>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = Math.min(700, window.innerWidth);
+  H = canvas.height = Math.min(400, window.innerHeight - 80);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const GROUND = H => H * 0.78;
+let player, obstacles, coins, score, speed, frame, running, gameOver, animFrame, bg;
+
+const bestStored = parseInt(localStorage.getItem('nr_best')||'0');
+document.getElementById('hudBest').textContent = bestStored;
+document.getElementById('startBest').textContent = bestStored;
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if ((e.code === 'Space' || e.code === 'ArrowUp') && running && !player.isSliding) jump();
+  if (e.code === 'ArrowDown' && running) startSlide();
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'ArrowDown') endSlide();
+});
+canvas.addEventListener('touchstart', e => {
+  if (!running) return;
+  const touch = e.touches[0];
+  if (touch.clientY < window.innerHeight / 2) jump();
+  else startSlide();
+  e.preventDefault();
+}, {passive:false});
+canvas.addEventListener('touchend', () => endSlide());
+
+function startGame() {
+  document.getElementById('startOv').classList.add('hidden');
+  document.getElementById('overOv').classList.add('hidden');
+  score = 0; speed = 4; frame = 0; running = true; gameOver = false;
+  const g = GROUND(H);
+  player = { x: 80, y: g, w: 30, h: 44, vy: 0, onGround: true, isSliding: false, slideTimer: 0, trail: [] };
+  obstacles = []; coins = [];
+  bg = { layers: [
+    { x: 0, speed: 0.3, items: Array.from({length:30},()=>({x:Math.random()*W,y:Math.random()*H*0.6,s:Math.random()*2+0.5})) },
+    { x: 0, speed: 0.8, items: Array.from({length:15},()=>({x:Math.random()*W,y:Math.random()*H*0.5,s:Math.random()*3+1})) },
+  ]};
+  document.getElementById('scoreDisp').textContent = '0';
+  cancelAnimationFrame(animFrame);
+  loop();
+}
+
+function jump() {
+  if (player.onGround && !player.isSliding) {
+    player.vy = -11;
+    player.onGround = false;
+  }
+}
+function startSlide() {
+  if (player.onGround) { player.isSliding = true; player.slideTimer = 40; }
+}
+function endSlide() {
+  player.isSliding = false;
+}
+
+function loop() {
+  update();
+  draw();
+  if (!gameOver) animFrame = requestAnimationFrame(loop);
+}
+
+function update() {
+  frame++;
+  speed += 0.001;
+  score = Math.floor(frame * speed / 10);
+  document.getElementById('scoreDisp').textContent = score;
+
+  // Player physics
+  const g = GROUND(H);
+  if (!player.onGround) {
+    player.vy += 0.55;
+    player.y += player.vy;
+  }
+  if (player.y >= g) {
+    player.y = g;
+    player.vy = 0;
+    player.onGround = true;
+  }
+  if (player.isSliding) {
+    player.slideTimer--;
+    if (player.slideTimer <= 0) player.isSliding = false;
+  }
+  player.trail.push({x: player.x, y: player.y});
+  if (player.trail.length > 8) player.trail.shift();
+
+  // BG parallax
+  bg.layers.forEach(l => { l.items.forEach(i => { i.x -= l.speed; if(i.x < -10) i.x = W + 10; }); });
+
+  // Spawn obstacles
+  if (frame % Math.max(60, Math.floor(90 - frame * 0.02)) === 0) {
+    const type = Math.random();
+    if (type < 0.4) {
+      // Ground block
+      obstacles.push({ x: W+20, y: g - 40, w: 30, h: 40, type: 'block' });
+    } else if (type < 0.7) {
+      // Tall block (must jump high)
+      obstacles.push({ x: W+20, y: g - 70, w: 25, h: 70, type: 'tall' });
+    } else {
+      // Floating barrier (must slide under)
+      obstacles.push({ x: W+20, y: g - 80, w: 15, h: 50, type: 'float' });
+    }
+  }
+  // Spawn coins
+  if (frame % 40 === 0) {
+    const coinY = g - 20 - Math.random() * 60;
+    coins.push({ x: W, y: coinY, collected: false });
+  }
+
+  // Update obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    obstacles[i].x -= speed;
+    if (obstacles[i].x + obstacles[i].w < 0) { obstacles.splice(i,1); continue; }
+    // Collision
+    const o = obstacles[i];
+    const ph = player.isSliding ? 22 : player.h;
+    const py = player.isSliding ? player.y - 22 : player.y - player.h;
+    if (player.x + 20 > o.x && player.x < o.x + o.w && py < o.y + o.h && py + ph > o.y) {
+      endGame(); return;
+    }
+  }
+  // Update coins
+  for (let i = coins.length - 1; i >= 0; i--) {
+    coins[i].x -= speed;
+    if (coins[i].x < -10) { coins.splice(i,1); continue; }
+    if (!coins[i].collected) {
+      const ph = player.isSliding ? 22 : player.h;
+      const py = player.isSliding ? player.y - 22 : player.y - player.h;
+      if (player.x + 20 > coins[i].x - 8 && player.x < coins[i].x + 8 && py < coins[i].y + 8 && py + ph > coins[i].y - 8) {
+        coins[i].collected = true;
+        score += 5;
+      }
+    }
+  }
+}
+
+function draw() {
+  // Sky
+  const sky = ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#050005'); sky.addColorStop(1,'#0a0015');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
+
+  // Stars BG
+  bg.layers[0].items.forEach(s => {
+    ctx.fillStyle = `rgba(200,0,255,${0.2 + s.s*0.1})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.s*0.5, 0, Math.PI*2); ctx.fill();
+  });
+  bg.layers[1].items.forEach(s => {
+    ctx.fillStyle = `rgba(255,255,255,${0.1 + s.s*0.05})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.s*0.3, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Ground
+  const g = GROUND(H);
+  const gradG = ctx.createLinearGradient(0, g, 0, H);
+  gradG.addColorStop(0,'#1a0033'); gradG.addColorStop(1,'#000');
+  ctx.fillStyle = gradG; ctx.fillRect(0, g, W, H - g);
+  ctx.strokeStyle = '#cc00ff'; ctx.lineWidth = 2;
+  ctx.shadowColor = '#cc00ff'; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.moveTo(0,g); ctx.lineTo(W,g); ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Grid lines on ground
+  for (let gx = (frame*speed*0.5)%40; gx < W; gx += 40) {
+    ctx.strokeStyle = 'rgba(200,0,255,0.1)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(gx, g); ctx.lineTo(gx, H); ctx.stroke();
+  }
+
+  // Obstacles
+  obstacles.forEach(o => {
+    ctx.shadowColor = '#ff2244'; ctx.shadowBlur = 15;
+    const grad = ctx.createLinearGradient(o.x, o.y, o.x + o.w, o.y + o.h);
+    grad.addColorStop(0, '#440011'); grad.addColorStop(0.5, '#880022'); grad.addColorStop(1, '#440011');
+    ctx.fillStyle = grad; ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.strokeStyle = '#ff2244'; ctx.lineWidth = 1;
+    ctx.strokeRect(o.x, o.y, o.w, o.h);
+    ctx.shadowBlur = 0;
+  });
+
+  // Coins
+  coins.forEach(co => {
+    if (co.collected) return;
+    ctx.shadowColor = '#ffe500'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffe500';
+    ctx.beginPath(); ctx.arc(co.x, co.y, 7, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#ffaa00'; ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  });
+
+  // Player trail
+  player.trail.forEach((t, i) => {
+    const ph = player.isSliding ? 22 : player.h;
+    ctx.fillStyle = `rgba(200,0,255,${0.15 * i/player.trail.length})`;
+    ctx.fillRect(t.x - 10, t.y - ph, 22, ph);
+  });
+
+  // Player
+  const ph = player.isSliding ? 22 : player.h;
+  const py = player.y - ph;
+  ctx.shadowColor = '#cc00ff'; ctx.shadowBlur = 20;
+  const pgrad = ctx.createLinearGradient(player.x - 10, py, player.x + 12, py + ph);
+  pgrad.addColorStop(0, '#cc00ff'); pgrad.addColorStop(1, '#880099');
+  ctx.fillStyle = pgrad;
+  ctx.beginPath(); ctx.roundRect(player.x - 10, py, 22, ph, 4); ctx.fill();
+  // Visor
+  ctx.fillStyle = '#00fff7';
+  ctx.fillRect(player.x - 6, py + 8, 14, 6);
+  ctx.shadowBlur = 0;
+
+  // Speed indicator
+  ctx.fillStyle = 'rgba(200,0,255,0.4)';
+  ctx.font = '10px monospace';
+  ctx.fillText(`SPEED ×${speed.toFixed(1)}`, 10, H - 10);
+}
+
+function endGame() {
+  gameOver = true; running = false;
+  const prev = parseInt(localStorage.getItem('nr_best')||'0');
+  if (score > prev) {
+    localStorage.setItem('nr_best', score);
+    document.getElementById('hudBest').textContent = score;
+    let wins = parseInt(localStorage.getItem('hvWins')||'0') + 1;
+    localStorage.setItem('hvWins', wins);
+    let xp = parseInt(localStorage.getItem('hvXP')||'0') + score;
+    localStorage.setItem('hvXP', xp);
+  } else {
+    let losses = parseInt(localStorage.getItem('hvLosses')||'0') + 1;
+    localStorage.setItem('hvLosses', losses);
+  }
+  document.getElementById('ovScore').textContent = score;
+  document.getElementById('ovBest').textContent = Math.max(score, prev);
+  document.getElementById('overOv').classList.remove('hidden');
+}
+
+resize(); 
+</script>
+</body>
+</html>

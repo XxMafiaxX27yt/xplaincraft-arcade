@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WRONG NEIGHBOUR — HELLVERSE</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'Share Tech Mono',monospace;}
+#gameCanvas{display:block;width:100vw;height:100vh;cursor:default;}
+/* SCREENS */
+.screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;background:rgba(0,0,0,0.97);}
+.screen.off{display:none;}
+.s-icon{font-size:4rem;margin-bottom:14px;}
+.s-title{font-size:clamp(1.5rem,5vw,3rem);font-weight:900;letter-spacing:6px;margin-bottom:12px;}
+.s-msg{font-family:'Share Tech Mono',monospace;font-size:0.72rem;letter-spacing:2px;line-height:2.2;text-align:center;margin-bottom:24px;}
+.s-btn{background:none;border:2px solid currentColor;font-family:'Orbitron',sans-serif;font-size:0.75rem;letter-spacing:3px;padding:12px 30px;cursor:pointer;transition:all .3s;margin:5px;}
+.s-btn:hover{opacity:0.65;}
+.purple{color:#cc00cc;}.red{color:#ff2244;}.green{color:#00cc55;}
+.diff-row{display:flex;gap:10px;margin-bottom:20px;}
+.diff-btn{background:none;border:1px solid rgba(150,0,150,0.4);color:#660066;font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;padding:7px 16px;cursor:pointer;transition:all .3s;}
+.diff-btn.active,.diff-btn:hover{border-color:#cc00cc;color:#ff00ff;background:rgba(60,0,60,0.3);}
+/* JUMPSCARE */
+#js{position:fixed;inset:0;z-index:100;background:#000;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .04s;}
+#js.show{opacity:1;}
+#js-e{font-size:min(40vw,40vh);line-height:1;}
+#js-t{font-family:'Orbitron',sans-serif;font-size:clamp(1rem,4vw,2rem);color:#ff0000;letter-spacing:6px;margin-top:16px;text-shadow:0 0 30px #ff0000;}
+/* SCANLINES */
+#scanlines{position:fixed;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05)2px,rgba(0,0,0,0.05)4px);}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="scanlines"></div>
+<!-- JUMPSCARE -->
+<div id="js"><div id="js-e"></div><div id="js-t"></div></div>
+
+<!-- START SCREEN -->
+<div class="screen" id="scr-start">
+  <div class="s-icon">🚪</div>
+  <div class="s-title purple">WRONG NEIGHBOUR</div>
+  <div class="s-msg" style="color:#440044;">
+    YOU ARE THE DOORMAN OF BUILDING 4B<br/>
+    SOMEONE IS AT THE DOOR<br/><br/>
+    LOOK AT THEIR FACE CAREFULLY<br/>
+    COMPARE WITH YOUR RESIDENT RECORDS<br/>
+    SPOT WHAT IS DIFFERENT<br/><br/>
+    REAL RESIDENTS — LET THEM IN ✔<br/>
+    IMPOSTORS — DENY ENTRY ✕<br/><br/>
+    ⚠ IMPOSTORS LOOK ALMOST HUMAN ⚠
+  </div>
+  <div class="diff-row">
+    <button class="diff-btn active" id="d0" onclick="setDiff(0)">EASY</button>
+    <button class="diff-btn" id="d1" onclick="setDiff(1)">MEDIUM</button>
+    <button class="diff-btn" id="d2" onclick="setDiff(2)">HARD</button>
+  </div>
+  <button class="s-btn purple" onclick="startGame()" style="border-color:#cc00cc;">▶ OPEN FOR DUTY</button>
+  <a href="horror-hub.html" style="color:#330033;font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;margin-top:14px;text-decoration:none;">◄ BACK</a>
+</div>
+<!-- GAME OVER -->
+<div class="screen off" id="scr-over">
+  <div class="s-icon">💀</div>
+  <div class="s-title red">IT GOT IN</div>
+  <div class="s-msg" style="color:#440011;" id="overMsg">YOU LET THE WRONG ONE INSIDE<br/>YOU WILL NOT BE FOUND</div>
+  <button class="s-btn red" onclick="restartGame()" style="border-color:#ff2244;">⟳ NEW SHIFT</button>
+  <button class="s-btn" onclick="goHub()" style="color:#330011;border-color:#330011;">⌂ EXIT</button>
+</div>
+<!-- WIN -->
+<div class="screen off" id="scr-win">
+  <div class="s-icon">🏆</div>
+  <div class="s-title green">SHIFT COMPLETE</div>
+  <div class="s-msg" style="color:#003311;" id="winMsg">ALL VISITORS PROCESSED</div>
+  <button class="s-btn green" onclick="nextDay()" style="border-color:#00cc55;">▶ NEXT SHIFT</button>
+  <button class="s-btn" onclick="goHub()" style="color:#003300;border-color:#003300;">⌂ EXIT</button>
+</div>
+
+<!-- AUDIO -->
+<audio id="snd-ambient" loop><source src="assets/ambient.mp3"></audio>
+<audio id="snd-scream"><source src="assets/scream.mp3"></audio>
+<audio id="snd-scream2"><source src="assets/sream2.mp3"></audio>
+<audio id="snd-scream3"><source src="assets/scream 3.mp3"></audio>
+<audio id="snd-knock"><source src="assets/doorknock.mp3"></audio>
+<audio id="snd-correct"><source src="assets/correct.mp3"></audio>
+<audio id="snd-wrong"><source src="assets/wrong.mp3"></audio>
+<audio id="snd-heartbeat" loop><source src="assets/heartbeat.mp3"></audio>
+<audio id="snd-creak"><source src="assets/creak.mp3"></audio>
+
+<script>
+'use strict';
+const cv=document.getElementById('gameCanvas');
+const ctx=cv.getContext('2d');
+let W,H;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+
+// ── SOUND ─────────────────────────────────────
+function snd(id,vol=0.7){try{const a=document.getElementById(id);if(!a)return;a.volume=vol;a.currentTime=0;a.play().catch(()=>{});}catch(e){}}
+function scream(){snd(['snd-scream','snd-scream2','snd-scream3'][Math.floor(Math.random()*3)],1);}
+
+// ── DIFFICULTY ────────────────────────────────
+let DIFF=0;
+// Subtlety: how many and how different the anomalies are
+const DCFG=[
+  {visitors:4,impostorChance:0.35,anomalyCount:1,subtlety:'obvious', timeLimit:40},
+  {visitors:6,impostorChance:0.45,anomalyCount:2,subtlety:'subtle',  timeLimit:28},
+  {visitors:8,impostorChance:0.55,anomalyCount:3,subtlety:'extreme', timeLimit:18},
+];
+function setDiff(d){DIFF=d;['d0','d1','d2'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===d));}
+
+// ── RESIDENT DATABASE ─────────────────────────
+// Each resident has visual traits used to DRAW them
+const RESIDENTS=[
+  {id:0,name:'MARA VOSS',  unit:'2A',skinTone:'#c8906a',hairCol:'#8B1a1a',hairStyle:'long',  eyeCol:'#2ecc71',eyeShape:'round', faceShape:'oval',  teeth:false,badge:'#2201',clothing:'#1a3a6a'},
+  {id:1,name:'TOM HALE',   unit:'2B',skinTone:'#d4a574',hairCol:'#3d2b1f',hairStyle:'short', eyeCol:'#3498db',eyeShape:'narrow',faceShape:'square', teeth:false,badge:'#2202',clothing:'#2a1a0a'},
+  {id:2,name:'ELSA KERN',  unit:'3A',skinTone:'#f0d0a0',hairCol:'#d4af37',hairStyle:'bun',   eyeCol:'#95a5a6',eyeShape:'wide',  faceShape:'round',  teeth:false,badge:'#3301',clothing:'#4a1a4a'},
+  {id:3,name:'DAVE MILL',  unit:'3B',skinTone:'#8B6355',hairCol:'#1a1a1a',hairStyle:'none',  eyeCol:'#6d4c41',eyeShape:'round', faceShape:'square', teeth:false,badge:'#3302',clothing:'#1a2a1a'},
+  {id:4,name:'NINA SHAW',  unit:'4A',skinTone:'#c07850',hairCol:'#1a1a1a',hairStyle:'long',  eyeCol:'#e67e22',eyeShape:'almond',faceShape:'heart',  teeth:false,badge:'#4401',clothing:'#6a1a1a'},
+  {id:5,name:'ROY BLAKE',  unit:'4C',skinTone:'#d0b090',hairCol:'#888888',hairStyle:'short', eyeCol:'#2980b9',eyeShape:'narrow',faceShape:'oval',   teeth:false,badge:'#4403',clothing:'#1a1a4a'},
+  {id:6,name:'AMY CROSS',  unit:'5A',skinTone:'#f5deb3',hairCol:'#a0522d',hairStyle:'wavy',  eyeCol:'#27ae60',eyeShape:'wide',  faceShape:'heart',  teeth:false,badge:'#5501',clothing:'#2a4a2a'},
+  {id:7,name:'KEN FORD',   unit:'5B',skinTone:'#8B7355',hairCol:'#1a1a1a',hairStyle:'none',  eyeCol:'#5d4037',eyeShape:'round', faceShape:'round',  teeth:false,badge:'#5502',clothing:'#3a1a0a'},
+];
+
+// ── IMPOSTOR MUTATIONS ────────────────────────
+const MUTATIONS_OBVIOUS=[
+  r=>({...r,eyeCol:'#ff0000',_diff:'RED EYES'}),
+  r=>({...r,teeth:true,_diff:'TOO MANY TEETH'}),
+  r=>({...r,hairCol:'#ffffff',_diff:'HAIR IS WHITE'}),
+  r=>({...r,skinTone:'#607060',_diff:'SKIN IS GREY-GREEN'}),
+];
+const MUTATIONS_SUBTLE=[
+  r=>({...r,eyeCol:shiftColor(r.eyeCol,40),_diff:'WRONG EYE COLOR'}),
+  r=>({...r,badge:'#'+Math.floor(1000+Math.random()*8999),_diff:'WRONG BADGE NUMBER'}),
+  r=>({...r,unit:['1X','6Z','B2','??'][Math.floor(Math.random()*4)],_diff:'WRONG UNIT'}),
+  r=>({...r,skinTone:shiftColor(r.skinTone,30),_diff:'SKIN TONE OFF'}),
+];
+const MUTATIONS_EXTREME=[
+  r=>({...r,eyeCol:shiftColor(r.eyeCol,15),_diff:'EYES SLIGHTLY OFF'}),
+  r=>({...r,hairCol:shiftColor(r.hairCol,20),_diff:'HAIR SLIGHTLY DIFFERENT'}),
+  r=>({...r,faceShape:r.faceShape==='oval'?'round':'oval',_diff:'FACE SHAPE DIFFERENT'}),
+  r=>({...r,eyeShape:r.eyeShape==='round'?'narrow':'round',_diff:'EYE SHAPE DIFFERENT'}),
+];
+function shiftColor(hex,amt){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return '#'+[r+amt,g,b-amt].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('');
+}
+
+// ── STATE ─────────────────────────────────────
+let gameRunning=false,currentDay=1;
+let visitorsQueue=[],currentVisitorIdx=0;
+let correctCount=0,mistakeCount=0;
+let timerLeft=0,timerInterval=null;
+let frame=0,animId=null;
+let jsCooldown=false;
+let phase='waiting'; // waiting|deciding|result
+let lastResult=null; // {correct,msg}
+let resultTimer=0;
+let currentVisitor=null;
+let dbScroll=0,dbScrollTarget=0;
+let dbMaxScroll=0;
+let hoveredBtn=null;
+
+// ── BUILD VISITOR ──────────────────────────────
+function buildVisitor(){
+  const res=RESIDENTS[Math.floor(Math.random()*RESIDENTS.length)];
+  const cfg=DCFG[DIFF];
+  const isImpostor=Math.random()<cfg.impostorChance;
+  if(!isImpostor) return {...res,isImpostor:false,_diff:null};
+  // Apply mutations
+  const pools=[MUTATIONS_OBVIOUS,MUTATIONS_SUBTLE,MUTATIONS_EXTREME];
+  const pool=pools[DIFF];
+  let mutated={...res,isImpostor:true};
+  const count=cfg.anomalyCount;
+  const used=[];
+  for(let i=0;i<count;i++){
+    const mut=pool[Math.floor(Math.random()*pool.length)];
+    if(!used.includes(mut)){used.push(mut);mutated=mut(mutated);}
+  }
+  return mutated;
+}
+
+// ── DRAWING — FACE ────────────────────────────
+function drawFace(res,cx,cy,scale=1,label=true){
+  const S=scale;
+  // Face shape
+  ctx.save();ctx.translate(cx,cy);
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.beginPath();ctx.ellipse(4*S,4*S,42*S,52*S,0,0,Math.PI*2);ctx.fill();
+  // Skin
+  ctx.fillStyle=res.skinTone;
+  if(res.faceShape==='oval') ctx.beginPath(),ctx.ellipse(0,0,38*S,50*S,0,0,Math.PI*2),ctx.fill();
+  else if(res.faceShape==='round') ctx.beginPath(),ctx.ellipse(0,0,44*S,44*S,0,0,Math.PI*2),ctx.fill();
+  else if(res.faceShape==='square'){ctx.fillRect(-38*S,-46*S,76*S,88*S);ctx.beginPath();ctx.arc(-20*S,-30*S,20*S,Math.PI,1.5*Math.PI);ctx.arc(20*S,-30*S,20*S,1.5*Math.PI,0);ctx.fill();}
+  else if(res.faceShape==='heart'){ctx.beginPath();ctx.moveTo(0,40*S);ctx.bezierCurveTo(-50*S,-10*S,-50*S,-50*S,-20*S,-50*S);ctx.bezierCurveTo(0,-50*S,0,-35*S,0,-35*S);ctx.bezierCurveTo(0,-35*S,0,-50*S,20*S,-50*S);ctx.bezierCurveTo(50*S,-50*S,50*S,-10*S,0,40*S);ctx.fill();}
+  // Hair
+  ctx.fillStyle=res.hairCol;
+  if(res.hairStyle==='long'){ctx.beginPath();ctx.ellipse(0,-45*S,42*S,22*S,0,Math.PI,Math.PI*2);ctx.fill();ctx.fillRect(-42*S,-30*S,8*S,70*S);ctx.fillRect(34*S,-30*S,8*S,70*S);}
+  else if(res.hairStyle==='short'){ctx.beginPath();ctx.ellipse(0,-45*S,40*S,18*S,0,Math.PI,Math.PI*2);ctx.fill();}
+  else if(res.hairStyle==='bun'){ctx.beginPath();ctx.ellipse(0,-45*S,38*S,16*S,0,Math.PI,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(0,-60*S,16*S,0,Math.PI*2);ctx.fill();}
+  else if(res.hairStyle==='wavy'){ctx.beginPath();ctx.ellipse(0,-45*S,42*S,20*S,0,Math.PI,Math.PI*2);ctx.fill();for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(-44*S+i*16*S,-30*S+i*5*S,8*S,0,Math.PI*2);ctx.fill();}}
+  // none = bald, skip
+  // Ears
+  ctx.fillStyle=res.skinTone;
+  ctx.beginPath();ctx.ellipse(-42*S,0,8*S,12*S,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(42*S,0,8*S,12*S,0,0,Math.PI*2);ctx.fill();
+  // Eyes
+  function drawEye(ex,ey){
+    ctx.fillStyle='#fff';
+    if(res.eyeShape==='round') ctx.beginPath(),ctx.ellipse(ex,ey,10*S,8*S,0,0,Math.PI*2),ctx.fill();
+    else if(res.eyeShape==='narrow') ctx.beginPath(),ctx.ellipse(ex,ey,12*S,5*S,0,0,Math.PI*2),ctx.fill();
+    else if(res.eyeShape==='wide') ctx.beginPath(),ctx.ellipse(ex,ey,13*S,9*S,0,0,Math.PI*2),ctx.fill();
+    else if(res.eyeShape==='almond'){ctx.beginPath();ctx.moveTo(ex-12*S,ey);ctx.quadraticCurveTo(ex,-ey*0.1+ey-8*S,ex+12*S,ey);ctx.quadraticCurveTo(ex,-ey*0.1+ey+8*S,ex-12*S,ey);ctx.fill();}
+    // Iris
+    ctx.fillStyle=res.eyeCol;
+    ctx.beginPath();ctx.arc(ex,ey,5.5*S,0,Math.PI*2);ctx.fill();
+    // Pupil
+    ctx.fillStyle='#000';
+    ctx.beginPath();ctx.arc(ex,ey,2.5*S,0,Math.PI*2);ctx.fill();
+    // Highlight
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    ctx.beginPath();ctx.arc(ex+2*S,ey-2*S,1.5*S,0,Math.PI*2);ctx.fill();
+  }
+  drawEye(-16*S,-8*S);drawEye(16*S,-8*S);
+  // Eyebrows
+  ctx.strokeStyle=res.hairStyle==='none'?'#555':res.hairCol;ctx.lineWidth=2.5*S;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-26*S,-22*S);ctx.lineTo(-6*S,-20*S);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(26*S,-22*S);ctx.lineTo(6*S,-20*S);ctx.stroke();
+  // Nose
+  ctx.fillStyle=shiftColor(res.skinTone,-15);
+  ctx.beginPath();ctx.arc(-5*S,14*S,3*S,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(5*S,14*S,3*S,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=shiftColor(res.skinTone,-25);ctx.lineWidth=1.5*S;
+  ctx.beginPath();ctx.moveTo(0,-5*S);ctx.lineTo(-5*S,14*S);ctx.lineTo(5*S,14*S);ctx.stroke();
+  // Mouth
+  ctx.strokeStyle=shiftColor(res.skinTone,-30);ctx.lineWidth=2*S;
+  ctx.beginPath();ctx.moveTo(-18*S,28*S);ctx.quadraticCurveTo(0,40*S,18*S,28*S);ctx.stroke();
+  // TEETH (impostor tell)
+  if(res.teeth){
+    ctx.fillStyle='#ffffff';
+    for(let t=0;t<8;t++){ctx.fillRect(-16*S+t*4*S,29*S,3.5*S,8*S);}
+    // Extra teeth showing above
+    ctx.fillStyle='#dddddd';
+    for(let t=0;t<6;t++){ctx.fillRect(-12*S+t*4*S,23*S,3*S,6*S);}
+  }
+  // Clothing hint at bottom
+  ctx.fillStyle=res.clothing;
+  ctx.fillRect(-45*S,52*S,90*S,30*S);
+  // Badge on shirt
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(-10*S,58*S,20*S,12*S);
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font=`${6*S}px monospace`;ctx.textAlign='center';
+  ctx.fillText(res.badge,0,67*S);ctx.textAlign='left';
+  ctx.restore();
+  if(label){
+    ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font=`${Math.max(10,12*S)}px Share Tech Mono`;
+    ctx.textAlign='center';ctx.fillText(res.name,cx,cy+90*S);ctx.textAlign='left';
+  }
+}
+
+// ── DRAW DESK SCENE ───────────────────────────
+function drawScene(){
+  // DESK BACKGROUND
+  ctx.fillStyle='#0d0010';ctx.fillRect(0,0,W,H);
+  // Wall
+  ctx.fillStyle='#0a0015';ctx.fillRect(0,0,W,H*0.62);
+  // Desk surface
+  const dg=ctx.createLinearGradient(0,H*0.62,0,H);
+  dg.addColorStop(0,'#1a0025');dg.addColorStop(1,'#0d0018');
+  ctx.fillStyle=dg;ctx.fillRect(0,H*0.62,W,H*0.38);
+  ctx.strokeStyle='rgba(120,0,150,0.4)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(0,H*0.62);ctx.lineTo(W,H*0.62);ctx.stroke();
+
+  // CALENDAR top-left
+  ctx.fillStyle='#1a0a00';ctx.fillRect(W*0.02,H*0.05,W*0.1,H*0.12);
+  ctx.fillStyle='#cc4400';ctx.fillRect(W*0.02,H*0.05,W*0.1,H*0.035);
+  ctx.fillStyle='#fff';ctx.font=`${Math.floor(H*0.012)}px Share Tech Mono`;
+  ctx.fillText('MAY 1955',W*0.025,H*0.05+H*0.025);
+  ctx.fillStyle='#dd8800';ctx.font=`${Math.floor(H*0.02)}px Share Tech Mono`;
+  ctx.fillText('DAY '+currentDay,W*0.025,H*0.065+H*0.04);
+
+  // BUILDING NUMBER sign
+  ctx.fillStyle='#1a0015';ctx.fillRect(W*0.14,H*0.04,W*0.12,H*0.1);
+  ctx.strokeStyle='rgba(150,0,150,0.5)';ctx.lineWidth=1;ctx.strokeRect(W*0.14,H*0.04,W*0.12,H*0.1);
+  ctx.fillStyle='#cc00cc';ctx.font=`bold ${Math.floor(H*0.03)}px Orbitron`;ctx.textAlign='center';
+  ctx.fillText('4B',W*0.2,H*0.085);ctx.textAlign='left';
+  ctx.fillStyle='#440044';ctx.font=`${Math.floor(H*0.012)}px Share Tech Mono`;
+  ctx.fillText('D.D.D. BLDG',W*0.145,H*0.12);
+
+  // DOOR WINDOW — left side (visitor view)
+  const doorW=W*0.3,doorH=H*0.55;
+  const doorX=W*0.04,doorY=H*0.06;
+  // Door frame
+  ctx.fillStyle='#0a0510';ctx.fillRect(doorX-6,doorY-6,doorW+12,doorH+12);
+  ctx.strokeStyle='rgba(80,0,80,0.6)';ctx.lineWidth=4;ctx.strokeRect(doorX-6,doorY-6,doorW+12,doorH+12);
+  // Door surface
+  ctx.fillStyle='#06030e';ctx.fillRect(doorX,doorY,doorW,doorH);
+  ctx.strokeStyle='rgba(60,0,60,0.4)';ctx.lineWidth=1;
+  // Door panels
+  ctx.strokeRect(doorX+10,doorY+10,doorW-20,doorH*0.4);
+  ctx.strokeRect(doorX+10,doorY+doorH*0.45,doorW-20,doorH*0.5);
+  // Peephole / window in door
+  const ww=doorW*0.7,wh=doorH*0.65;
+  const wx=doorX+doorW/2-ww/2,wy=doorY+doorH*0.05;
+  ctx.fillStyle='#040208';ctx.fillRect(wx,wy,ww,wh);
+  ctx.strokeStyle='rgba(100,0,100,0.5)';ctx.lineWidth=2;ctx.strokeRect(wx,wy,ww,wh);
+  // Draw visitor face in window
+  if(currentVisitor){
+    const faceCX=wx+ww/2, faceCY=wy+wh*0.42;
+    const faceScale=Math.min(ww,wh)/140;
+    drawFace(currentVisitor,faceCX,faceCY,faceScale,false);
+    // Visitor name label under window
+    ctx.fillStyle='rgba(150,0,150,0.8)';ctx.fillRect(doorX,doorY+doorH*0.72,doorW,H*0.04);
+    ctx.fillStyle='#ff88ff';ctx.font=`${Math.floor(H*0.016)}px Share Tech Mono`;ctx.textAlign='center';
+    ctx.fillText(currentVisitor.name+' — UNIT '+currentVisitor.unit,doorX+doorW/2,doorY+doorH*0.72+H*0.027);
+    ctx.textAlign='left';
+  }
+  // Door label
+  ctx.fillStyle='#330033';ctx.font=`${Math.floor(H*0.012)}px Share Tech Mono`;ctx.textAlign='center';
+  ctx.fillText('VISITOR',doorX+doorW/2,doorY+doorH+H*0.025);ctx.textAlign='left';
+
+  // DATABASE PANEL — right side
+  const dbX=W*0.37,dbY=H*0.04,dbW=W*0.38,dbH=H*0.56;
+  ctx.fillStyle='#050008';ctx.fillRect(dbX,dbY,dbW,dbH);
+  ctx.strokeStyle='rgba(100,0,100,0.4)';ctx.lineWidth=1;ctx.strokeRect(dbX,dbY,dbW,dbH);
+  // DB header
+  ctx.fillStyle='rgba(40,0,50,0.9)';ctx.fillRect(dbX,dbY,dbW,H*0.04);
+  ctx.fillStyle='#aa00aa';ctx.font=`bold ${Math.floor(H*0.018)}px Orbitron`;ctx.textAlign='center';
+  ctx.fillText('RESIDENT DATABASE',dbX+dbW/2,dbY+H*0.027);ctx.textAlign='left';
+
+  // RESIDENTS list with faces
+  const itemH=H*0.13;
+  const totalH=RESIDENTS.length*itemH;
+  dbMaxScroll=Math.max(0,totalH-(dbH-H*0.04));
+  dbScroll+=(dbScrollTarget-dbScroll)*0.12;
+  ctx.save();ctx.beginPath();ctx.rect(dbX,dbY+H*0.04,dbW,dbH-H*0.04);ctx.clip();
+  RESIDENTS.forEach((res,i)=>{
+    const ry=dbY+H*0.04+i*itemH-dbScroll;
+    if(ry+itemH<dbY||ry>dbY+dbH) return;
+    ctx.fillStyle=i%2===0?'#050008':'#060009';ctx.fillRect(dbX,ry,dbW,itemH);
+    ctx.strokeStyle='rgba(50,0,50,0.3)';ctx.lineWidth=0.5;ctx.strokeRect(dbX,ry,dbW,itemH);
+    // Mini face
+    const faceS=Math.min(itemH*0.35/50,0.5);
+    drawFace(res,dbX+itemH*0.38,ry+itemH*0.5,faceS,false);
+    // Text info
+    const tx=dbX+itemH*0.75,ty=ry+itemH*0.22;
+    ctx.fillStyle='#cc00cc';ctx.font=`bold ${Math.floor(H*0.018)}px Share Tech Mono`;
+    ctx.fillText(res.name,tx,ty);
+    ctx.fillStyle='#660066';ctx.font=`${Math.floor(H*0.013)}px Share Tech Mono`;
+    ctx.fillText(`UNIT: ${res.unit}   BADGE: ${res.badge}`,tx,ty+H*0.022);
+    ctx.fillText(`HAIR: ${res.hairStyle.toUpperCase()}   EYES: ${res.eyeCol.toUpperCase()}`,tx,ty+H*0.04);
+    // Draw small eye color swatch
+    ctx.fillStyle=res.eyeCol;ctx.beginPath();ctx.arc(dbX+dbW-20,ry+itemH*0.4,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=res.skinTone;ctx.beginPath();ctx.arc(dbX+dbW-20,ry+itemH*0.7,6,0,Math.PI*2);ctx.fill();
+  });
+  ctx.restore();
+  // Scroll indicator
+  if(dbMaxScroll>0){
+    const scrollPct=dbScroll/dbMaxScroll;
+    const trackH=dbH-H*0.04;
+    ctx.fillStyle='rgba(80,0,80,0.3)';ctx.fillRect(dbX+dbW-5,dbY+H*0.04,4,trackH);
+    ctx.fillStyle='#660066';ctx.fillRect(dbX+dbW-5,dbY+H*0.04+scrollPct*(trackH*0.8),4,trackH*0.2);
+  }
+
+  // FOLDERS — far right
+  const fColors=['#cc7700','#aa5500','#884400'];
+  ['1st FLOOR','2nd FLOOR','3rd FLOOR'].forEach((fl,i)=>{
+    const fx=W*0.77,fy=H*(0.06+i*0.17);
+    ctx.fillStyle=fColors[i];ctx.fillRect(fx,fy,W*0.08,H*0.14);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(fx,fy,W*0.08,H*0.025);
+    ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font=`${Math.floor(H*0.013)}px Share Tech Mono`;
+    ctx.textAlign='center';ctx.fillText(fl,fx+W*0.04,fy+H*0.085);ctx.textAlign='left';
+  });
+
+  // PHONE bottom left
+  ctx.fillStyle='#0a0810';ctx.beginPath();ctx.ellipse(W*0.08,H*0.82,W*0.05,H*0.06,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#060608';ctx.fillRect(W*0.03,H*0.84,W*0.1,H*0.1);
+
+  // DANGER BUTTON
+  const btnR=Math.min(W*0.04,H*0.055);
+  // DENY button (red)
+  const denyX=W*0.86,denyY=H*0.72;
+  const isHoverDeny=hoveredBtn==='deny';
+  ctx.fillStyle=isHoverDeny?'#ff0000':'#880000';
+  ctx.beginPath();ctx.arc(denyX,denyY,btnR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,0,0,0.3)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(denyX,denyY,btnR+6,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.floor(btnR*0.5)}px Orbitron`;ctx.textAlign='center';
+  ctx.fillText('DENY',denyX,denyY+btnR*0.18);
+
+  // ALLOW button (green)
+  const allowX=W*0.93,allowY=H*0.72;
+  const isHoverAllow=hoveredBtn==='allow';
+  ctx.fillStyle=isHoverAllow?'#00ff00':'#005500';
+  ctx.beginPath();ctx.arc(allowX,allowY,btnR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(0,255,0,0.2)';ctx.lineWidth=4;ctx.beginPath();ctx.arc(allowX,allowY,btnR+6,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.floor(btnR*0.5)}px Orbitron`;
+  ctx.fillText('LET',allowX,allowY-btnR*0.15);ctx.fillText('IN',allowX,allowY+btnR*0.35);
+  ctx.textAlign='left';
+
+  // HUD top bar
+  ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,W,H*0.04);
+  ctx.fillStyle='#aa00aa';ctx.font=`bold ${Math.floor(H*0.018)}px Share Tech Mono`;
+  ctx.fillText('WRONG NEIGHBOUR',W*0.01,H*0.027);
+  ctx.fillStyle='#660066';
+  ctx.fillText(`DAY ${currentDay}   ✔ ${correctCount}   ✗ ${mistakeCount}   VISITOR ${currentVisitorIdx+1}/${DCFG[DIFF].visitors}`,W*0.22,H*0.027);
+  // Timer
+  const urgCol=timerLeft<=8?`rgba(255,${Math.floor(255*timerLeft/8)},0,1)`:'#ff00ff';
+  ctx.fillStyle=urgCol;ctx.font=`bold ${Math.floor(H*0.025)}px Orbitron`;ctx.textAlign='right';
+  ctx.fillText(`00:${String(timerLeft).padStart(2,'0')}`,W*0.99,H*0.03);ctx.textAlign='left';
+
+  // RESULT overlay
+  if(phase==='result'&&lastResult){
+    const rog=Math.min(1,resultTimer/20);
+    ctx.fillStyle=`rgba(0,0,0,${rog*0.7})`;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=lastResult.correct?`rgba(0,200,80,${rog})`:`rgba(255,30,30,${rog})`;
+    ctx.font=`bold ${Math.floor(H*0.06)}px Orbitron`;ctx.textAlign='center';
+    ctx.fillText(lastResult.correct?'✔ CORRECT':'✗ WRONG',W/2,H*0.42);
+    ctx.font=`${Math.floor(H*0.022)}px Share Tech Mono`;
+    ctx.fillText(lastResult.msg,W/2,H*0.52);
+    if(currentVisitor&&currentVisitor._diff){
+      ctx.fillStyle=`rgba(255,200,0,${rog})`;
+      ctx.font=`${Math.floor(H*0.018)}px Share Tech Mono`;
+      ctx.fillText('DIFFERENCE: '+currentVisitor._diff,W/2,H*0.58);
+    }
+    ctx.textAlign='left';
+  }
+}
+
+// ── GAME LOOP ─────────────────────────────────
+function gameLoop(){
+  if(!gameRunning){animId=requestAnimationFrame(gameLoop);return;}
+  frame++;
+  drawScene();
+  if(phase==='result'){
+    resultTimer++;
+    if(resultTimer>80){
+      phase='waiting';
+      nextVisitor();
+    }
+  }
+  animId=requestAnimationFrame(gameLoop);
+}
+
+// ── TIMER ─────────────────────────────────────
+function startTimer(){
+  clearInterval(timerInterval);
+  timerLeft=DCFG[DIFF].timeLimit;
+  timerInterval=setInterval(()=>{
+    timerLeft--;
+    if(timerLeft<=5) snd('snd-heartbeat',0.2);
+    if(timerLeft<=0){clearInterval(timerInterval);timeOut();}
+  },1000);
+}
+
+function timeOut(){
+  // Time out = auto deny (risky)
+  processDecision(false);
+}
+
+// ── DECISION ──────────────────────────────────
+function processDecision(allow){
+  if(phase!=='deciding') return;
+  clearInterval(timerInterval);
+  phase='result';resultTimer=0;
+  const v=currentVisitor;
+  const correct=(allow&&!v.isImpostor)||(!allow&&v.isImpostor);
+  if(correct){
+    correctCount++;
+    snd('snd-correct',0.8);
+    lastResult={correct:true,msg:v.isImpostor?'IMPOSTOR DENIED — GOOD EYE':'REAL RESIDENT — ACCESS GRANTED'};
+  } else {
+    mistakeCount++;
+    snd('snd-wrong',0.8);
+    if(allow&&v.isImpostor){
+      // Let monster in!
+      lastResult={correct:false,msg:'YOU LET AN IMPOSTOR INSIDE'};
+      setTimeout(()=>{ doJumpscare(true); setTimeout(gameOver,800); },600);
+    } else {
+      lastResult={correct:false,msg:'THAT WAS A REAL RESIDENT'};
+      if(mistakeCount>=3){ setTimeout(gameOver,2000); return; }
+    }
+  }
+}
+
+function nextVisitor(){
+  currentVisitorIdx++;
+  if(currentVisitorIdx>=DCFG[DIFF].visitors){
+    shiftComplete();return;
+  }
+  currentVisitor=buildVisitor();
+  phase='deciding';
+  snd('snd-knock',0.7);
+  startTimer();
+  if(Math.random()<0.04+DIFF*0.02) snd('snd-creak',0.15);
+}
+
+function shiftComplete(){
+  gameRunning=false;clearInterval(timerInterval);
+  const w=parseInt(localStorage.getItem('hvWins')||'0')+1;localStorage.setItem('hvWins',w);
+  document.getElementById('winMsg').innerHTML=`DAY ${currentDay} COMPLETE<br/>✔ ${correctCount} CORRECT &nbsp; ✗ ${mistakeCount} WRONG<br/>THE BUILDING IS SAFE... FOR NOW`;
+  document.getElementById('scr-win').classList.remove('off');
+}
+
+function gameOver(){
+  gameRunning=false;clearInterval(timerInterval);
+  const l=parseInt(localStorage.getItem('hvLosses')||'0')+1;localStorage.setItem('hvLosses',l);
+  document.getElementById('scr-over').classList.remove('off');
+}
+
+// ── JUMPSCARE ─────────────────────────────────
+const JS_MSGS=['IT IS INSIDE','YOU OPENED THE DOOR','TOO LATE','RUN'];
+function doJumpscare(fatal=false){
+  jsCooldown=true;scream();
+  const el=document.getElementById('js');
+  const ghosts=['😱','👁','💀','🕷','👻'];
+  document.getElementById('js-e').textContent=ghosts[Math.floor(Math.random()*ghosts.length)];
+  document.getElementById('js-t').textContent=JS_MSGS[Math.floor(Math.random()*JS_MSGS.length)];
+  el.classList.add('show');
+  setTimeout(()=>{el.classList.remove('show');if(!fatal)setTimeout(()=>jsCooldown=false,15000);},fatal?900:700);
+}
+
+// ── MOUSE / CLICK ─────────────────────────────
+cv.addEventListener('mousemove',e=>{
+  const rect=cv.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const btnR=Math.min(W*0.04,H*0.055);
+  const denyX=W*0.86,denyY=H*0.72;
+  const allowX=W*0.93,allowY=H*0.72;
+  const overDeny=Math.sqrt((mx-denyX)**2+(my-denyY)**2)<btnR+8;
+  const overAllow=Math.sqrt((mx-allowX)**2+(my-allowY)**2)<btnR+8;
+  hoveredBtn=overDeny?'deny':overAllow?'allow':null;
+  // DB scroll detection
+  const dbX=W*0.37,dbY=H*0.04,dbW=W*0.38,dbH=H*0.56;
+  if(mx>dbX&&mx<dbX+dbW&&my>dbY&&my<dbY+dbH) cv.style.cursor='ns-resize';
+  else if(hoveredBtn) cv.style.cursor='pointer';
+  else cv.style.cursor='default';
+});
+
+cv.addEventListener('wheel',e=>{
+  const rect=cv.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const dbX=W*0.37,dbY=H*0.04,dbW=W*0.38,dbH=H*0.56;
+  if(mx>dbX&&mx<dbX+dbW&&my>dbY&&my<dbY+dbH){
+    dbScrollTarget=Math.max(0,Math.min(dbMaxScroll,dbScrollTarget+e.deltaY*0.5));
+  }
+});
+
+cv.addEventListener('click',e=>{
+  if(!gameRunning||phase!=='deciding') return;
+  if(hoveredBtn==='deny') processDecision(false);
+  else if(hoveredBtn==='allow') processDecision(true);
+});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(!gameRunning) return;
+  if(e.key==='d'||e.key==='D') processDecision(false);
+  if(e.key==='a'||e.key==='A') processDecision(true);
+});
+
+// ── START ─────────────────────────────────────
+function startGame(){
+  document.getElementById('scr-start').classList.add('off');
+  correctCount=0;mistakeCount=0;currentVisitorIdx=0;
+  currentVisitor=buildVisitor();
+  phase='deciding';
+  snd('snd-knock',0.7);
+  gameRunning=true;
+  try{document.getElementById('snd-ambient').volume=0.15;document.getElementById('snd-ambient').play().catch(()=>{});}catch(e){}
+  startTimer();
+  cancelAnimationFrame(animId);animId=requestAnimationFrame(gameLoop);
+}
+function nextDay(){
+  document.getElementById('scr-win').classList.add('off');
+  currentDay++;correctCount=0;mistakeCount=0;currentVisitorIdx=0;
+  currentVisitor=buildVisitor();
+  phase='deciding';gameRunning=true;snd('snd-knock',0.7);startTimer();
+}
+function restartGame(){
+  document.getElementById('scr-over').classList.add('off');
+  currentDay=1;correctCount=0;mistakeCount=0;currentVisitorIdx=0;
+  currentVisitor=buildVisitor();
+  phase='deciding';gameRunning=true;snd('snd-knock',0.7);startTimer();
+}
+function goHub(){window.location.href='horror-hub.html';}
+</script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PIXEL MINER — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { background: #000; overflow: hidden; font-family: 'Share Tech Mono', monospace; }
+    #ui { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; background: #0a0012; overflow: hidden; }
+    .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(0,200,255,0.2); }
+    .hud-val { color: #00c8ff; font-size: 0.75rem; letter-spacing: 2px; }
+    #gameArea { display: flex; gap: 0; width: 100%; height: 100vh; padding-top: 50px; }
+    #worldCanvas { flex: 1; cursor: crosshair; }
+    #sidebar { width: 200px; background: rgba(0,0,0,0.85); border-left: 1px solid rgba(0,200,255,0.2); padding: 16px; overflow-y: auto; flex-shrink: 0; }
+    .sb-title { font-size: 0.6rem; letter-spacing: 3px; color: #004466; margin-bottom: 10px; border-bottom: 1px solid rgba(0,200,255,0.1); padding-bottom: 6px; }
+    .inv-slot { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid rgba(0,200,255,0.05); font-size: 0.6rem; color: #006688; }
+    .inv-icon { font-size: 1.1rem; width: 24px; }
+    .inv-count { margin-left: auto; color: #00c8ff; }
+    .depth-bar { margin-top: 14px; }
+    .depth-label { font-size: 0.55rem; color: #004466; letter-spacing: 2px; }
+    .depth-val { font-size: 0.9rem; color: #00c8ff; margin-top: 2px; }
+    .craft-btn { width: 100%; margin-top: 8px; padding: 8px; background: none; border: 1px solid rgba(0,200,255,0.3); color: #00c8ff; font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 2px; cursor: pointer; transition: all .2s; }
+    .craft-btn:hover { background: rgba(0,200,255,0.1); }
+    .craft-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,10,0.95); font-family: 'Orbitron', sans-serif; }
+    .overlay.hidden { display: none; }
+    .ov-title { font-size: clamp(2rem,5vw,3.5rem); font-weight: 900; color: #00c8ff; letter-spacing: 6px; text-shadow: 0 0 30px #00c8ff; margin-bottom: 12px; }
+    .ov-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 4px; color: #004466; margin-bottom: 24px; }
+    .ov-btn { background: linear-gradient(135deg,#004488,#0088cc); border: none; color: #fff; font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 3px; padding: 14px 32px; cursor: pointer; clip-path: polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); transition: all .3s; }
+    .ov-btn:hover { box-shadow: 0 0 30px #00c8ff; }
+    .notif { position: fixed; top: 60px; right: 16px; z-index: 25; font-size: 0.65rem; letter-spacing: 2px; padding: 8px 14px; background: rgba(0,0,0,0.9); border: 1px solid rgba(0,200,255,0.4); color: #00c8ff; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    .notif.show { opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="fun-hub.html" style="color:#00c8ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(0,200,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">⛏ PIXEL MINER</div>
+  <div class="hud-val">SCORE: <span id="scoreDisp">0</span></div>
+</div>
+<div id="notif" class="notif"></div>
+
+<div id="ui">
+  <div id="gameArea">
+    <canvas id="worldCanvas"></canvas>
+    <div id="sidebar">
+      <div class="sb-title">◈ INVENTORY ◈</div>
+      <div class="inv-slot"><span class="inv-icon">🪨</span><span>STONE</span><span class="inv-count" id="inv_stone">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">🟤</span><span>DIRT</span><span class="inv-count" id="inv_dirt">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">⬛</span><span>COAL</span><span class="inv-count" id="inv_coal">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">🔩</span><span>IRON</span><span class="inv-count" id="inv_iron">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">💎</span><span>DIAMOND</span><span class="inv-count" id="inv_diamond">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">🥇</span><span>GOLD</span><span class="inv-count" id="inv_gold">0</span></div>
+      <div class="inv-slot"><span class="inv-icon">💎</span><span>EMERALD</span><span class="inv-count" id="inv_emerald">0</span></div>
+      <div class="depth-bar">
+        <div class="depth-label">DEPTH</div>
+        <div class="depth-val" id="depthVal">0m</div>
+        <div class="depth-label" style="margin-top:8px;">PICKAXE</div>
+        <div class="depth-val" id="pickaxeVal">WOOD</div>
+      </div>
+      <div class="sb-title" style="margin-top:14px;">◈ CRAFT ◈</div>
+      <button class="craft-btn" id="btn_iron" onclick="craft('iron')">🔩 IRON PICK<br/><span style="color:#004466;">5 IRON</span></button>
+      <button class="craft-btn" id="btn_diamond" onclick="craft('diamond')">💎 DIAMOND PICK<br/><span style="color:#004466;">3 DIAMOND</span></button>
+      <button class="craft-btn" id="btn_torch" onclick="craft('torch')">🔦 TORCH<br/><span style="color:#004466;">2 COAL</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="startOv">
+  <div style="font-size:4rem;margin-bottom:14px;">⛏️</div>
+  <div class="ov-title">PIXEL MINER</div>
+  <div class="ov-sub">◈ MINE DEEP · FIND DIAMONDS ◈</div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;color:#004466;margin-bottom:24px;text-align:center;line-height:2;">
+    CLICK BLOCKS TO MINE<br/>
+    DEEPER = RARER ORES<br/>
+    CRAFT BETTER PICKAXES TO MINE HARDER BLOCKS
+  </div>
+  <button class="ov-btn" onclick="startGame()">▶ START MINING</button>
+</div>
+
+<script>
+const canvas = document.getElementById('worldCanvas');
+const ctx = canvas.getContext('2d');
+const SB = 200;
+const TILE = 32;
+let cols, rows, world, camY, score, pickaxe, inventory, torches;
+
+const BLOCKS = {
+  air:     { col: null, hp: 0, score: 0 },
+  grass:   { col: '#228B22', hp: 1, score: 1 },
+  dirt:    { col: '#8B4513', hp: 1, score: 1, inv: 'dirt' },
+  stone:   { col: '#555', hp: 2, score: 2, inv: 'stone' },
+  coal:    { col: '#222', hp: 2, score: 5, inv: 'coal', glow: '#444' },
+  iron:    { col: '#A0522D', hp: 3, score: 10, inv: 'iron', glow: '#cc7744' },
+  gold:    { col: '#DAA520', hp: 3, score: 20, inv: 'gold', glow: '#ffe500' },
+  diamond: { col: '#00CED1', hp: 4, score: 50, inv: 'diamond', glow: '#00fff7' },
+  emerald: { col: '#00C957', hp: 4, score: 40, inv: 'emerald', glow: '#00ff9d' },
+  bedrock: { col: '#111', hp: 99, score: 0 },
+};
+
+const PICKAXES = { wood:1, stone:2, iron:3, diamond:4 };
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth - SB;
+  canvas.height = window.innerHeight - 50;
+  cols = Math.ceil(canvas.width / TILE) + 2;
+  rows = 200;
+}
+window.addEventListener('resize', () => { resizeCanvas(); if(world) render(); });
+
+function startGame() {
+  document.getElementById('startOv').classList.add('hidden');
+  resizeCanvas();
+  score = 0; camY = 0; pickaxe = 'wood';
+  inventory = { stone:0, dirt:0, coal:0, iron:0, diamond:0, gold:0, emerald:0 };
+  torches = [];
+  generateWorld();
+  render();
+  document.getElementById('scoreDisp').textContent = '0';
+  updateUI();
+}
+
+function generateWorld() {
+  world = [];
+  for (let y = 0; y < rows; y++) {
+    world[y] = [];
+    for (let x = 0; x < cols; x++) {
+      let type;
+      if (y === 0) type = 'grass';
+      else if (y < 4) type = 'dirt';
+      else if (y >= rows - 2) type = 'bedrock';
+      else {
+        const r = Math.random();
+        const depth = y / rows;
+        if (depth > 0.8 && r < 0.03) type = 'emerald';
+        else if (depth > 0.6 && r < 0.04) type = 'diamond';
+        else if (depth > 0.4 && r < 0.05) type = 'gold';
+        else if (depth > 0.2 && r < 0.08) type = 'iron';
+        else if (depth > 0.1 && r < 0.1) type = 'coal';
+        else type = 'stone';
+      }
+      world[y][x] = { type, hp: BLOCKS[type].hp, maxHp: BLOCKS[type].hp };
+    }
+  }
+}
+
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0012';
+  ctx.fillRect(0,0,W,H);
+
+  const startRow = Math.floor(camY / TILE);
+  const visRows = Math.ceil(H / TILE) + 2;
+
+  for (let y = startRow; y < Math.min(startRow + visRows, rows); y++) {
+    for (let x = 0; x < cols; x++) {
+      const block = world[y] && world[y][x];
+      if (!block || block.type === 'air') continue;
+      const bx = x * TILE;
+      const by = y * TILE - camY;
+      const b = BLOCKS[block.type];
+
+      // Darkness by depth
+      const darkness = Math.max(0, 1 - (y / rows) * 0.7);
+      // Light from torches
+      let light = 0;
+      torches.forEach(t => {
+        const dx = (x - t.x) * TILE;
+        const dy = (y - t.y) * TILE - camY + t.y * TILE;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 100) light = Math.max(light, 1 - dist/100);
+      });
+      const finalLight = Math.min(1, darkness + light);
+
+      ctx.globalAlpha = 0.3 + finalLight * 0.7;
+      ctx.fillStyle = b.col;
+      ctx.fillRect(bx, by, TILE-1, TILE-1);
+
+      // Glow for ore
+      if (b.glow) {
+        ctx.shadowColor = b.glow; ctx.shadowBlur = 8;
+        ctx.strokeStyle = b.glow; ctx.lineWidth = 0.5;
+        ctx.strokeRect(bx+1, by+1, TILE-3, TILE-3);
+        ctx.shadowBlur = 0;
+      }
+
+      // Damage cracks
+      if (block.hp < block.maxHp && block.maxHp > 0) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(bx, by, TILE-1, Math.floor(TILE * (1 - block.hp/block.maxHp)));
+      }
+
+      ctx.globalAlpha = 1;
+      // Grid line
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(bx, by, TILE-1, TILE-1);
+    }
+  }
+
+  // Torches
+  torches.forEach(t => {
+    const by = t.y * TILE - camY;
+    ctx.font = `${TILE*0.8}px serif`;
+    ctx.fillText('🔦', t.x * TILE, by + TILE);
+  });
+
+  // Depth indicator
+  ctx.fillStyle = 'rgba(0,200,255,0.3)';
+  ctx.font = '11px monospace';
+  ctx.fillText(`DEPTH: ${Math.floor(camY/TILE)}m`, 10, H-10);
+}
+
+canvas.addEventListener('click', e => {
+  if (!world) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const tx = Math.floor(mx / TILE);
+  const ty = Math.floor((my + camY) / TILE);
+  if (ty < 0 || ty >= rows || tx < 0 || tx >= cols) return;
+  const block = world[ty] && world[ty][tx];
+  if (!block || block.type === 'air' || block.type === 'bedrock') return;
+
+  const b = BLOCKS[block.type];
+  const pickPower = PICKAXES[pickaxe];
+  if (pickPower < b.hp && b.hp > 1 && pickaxe === 'wood') {
+    showNotif('⚠ NEED BETTER PICKAXE!'); return;
+  }
+
+  block.hp -= pickPower;
+  if (block.hp <= 0) {
+    if (b.inv) {
+      inventory[b.inv]++;
+      document.getElementById('inv_' + b.inv).textContent = inventory[b.inv];
+    }
+    score += b.score;
+    document.getElementById('scoreDisp').textContent = score;
+    block.type = 'air';
+    // Auto-scroll down if mining bottom of screen
+    const sy = ty * TILE - camY;
+    if (sy > canvas.height * 0.7) camY = Math.min((rows-1)*TILE - canvas.height, camY + TILE);
+    updateDepth();
+    let xp = parseInt(localStorage.getItem('hvXP')||'0') + b.score;
+    localStorage.setItem('hvXP', xp);
+  }
+  updateCrafting();
+  render();
+});
+
+canvas.addEventListener('wheel', e => {
+  camY = Math.max(0, Math.min((rows-1)*TILE - canvas.height, camY + e.deltaY));
+  updateDepth();
+  render();
+});
+
+function updateDepth() {
+  document.getElementById('depthVal').textContent = Math.floor(camY/TILE) + 'm';
+}
+function updateUI() {
+  document.getElementById('pickaxeVal').textContent = pickaxe.toUpperCase();
+  updateCrafting();
+}
+function updateCrafting() {
+  document.getElementById('btn_iron').disabled = inventory.iron < 5 || PICKAXES[pickaxe] >= 3;
+  document.getElementById('btn_diamond').disabled = inventory.diamond < 3 || PICKAXES[pickaxe] >= 4;
+  document.getElementById('btn_torch').disabled = inventory.coal < 2;
+}
+
+function craft(item) {
+  if (item === 'iron' && inventory.iron >= 5 && PICKAXES[pickaxe] < 3) {
+    inventory.iron -= 5;
+    document.getElementById('inv_iron').textContent = inventory.iron;
+    pickaxe = 'iron';
+    document.getElementById('pickaxeVal').textContent = 'IRON';
+    showNotif('✔ IRON PICKAXE CRAFTED!');
+    score += 30;
+  } else if (item === 'diamond' && inventory.diamond >= 3 && PICKAXES[pickaxe] < 4) {
+    inventory.diamond -= 3;
+    document.getElementById('inv_diamond').textContent = inventory.diamond;
+    pickaxe = 'diamond';
+    document.getElementById('pickaxeVal').textContent = 'DIAMOND';
+    showNotif('💎 DIAMOND PICKAXE CRAFTED!');
+    score += 100;
+  } else if (item === 'torch' && inventory.coal >= 2) {
+    inventory.coal -= 2;
+    document.getElementById('inv_coal').textContent = inventory.coal;
+    const ty = Math.floor(camY / TILE) + 5;
+    torches.push({ x: Math.floor(cols/2), y: ty });
+    if (torches.length > 10) torches.shift();
+    showNotif('🔦 TORCH PLACED!');
+  }
+  updateCrafting();
+  document.getElementById('scoreDisp').textContent = score;
+  render();
+}
+
+let notifTimer;
+function showNotif(msg) {
+  const n = document.getElementById('notif');
+  n.textContent = msg; n.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => n.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>

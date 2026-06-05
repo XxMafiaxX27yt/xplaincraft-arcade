@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TIC TAC TOE — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #050005; }
+    .hud { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(180,0,255,0.2); font-family: 'Share Tech Mono', monospace; }
+    .hud-val { color: #bb00ff; font-size: 0.8rem; letter-spacing: 2px; }
+    .game-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 1.8rem; letter-spacing: 5px; color: #bb00ff; text-shadow: 0 0 20px #cc00ff; text-align: center; margin: 24px 0 4px; }
+    .mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 14px 0; }
+    .mode-btn { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; letter-spacing: 2px; padding: 8px 14px; background: none; border: 1px solid rgba(180,0,255,0.3); color: #660088; cursor: pointer; transition: all .2s; }
+    .mode-btn.active { background: rgba(180,0,255,0.2); border-color: #bb00ff; color: #bb00ff; }
+    .score-row { display: flex; gap: 16px; justify-content: center; margin-bottom: 16px; }
+    .score-box { background: rgba(0,0,0,0.7); border: 1px solid rgba(180,0,255,0.2); padding: 8px 16px; text-align: center; }
+    .score-label { font-family: 'Share Tech Mono', monospace; font-size: 0.52rem; letter-spacing: 2px; color: #440066; }
+    .score-val { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; }
+    .msg { font-family: 'Orbitron', sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: 4px; text-align: center; min-height: 1.8em; margin-bottom: 12px; }
+    .board { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; padding: 8px; background: rgba(30,0,60,0.5); border: 1px solid rgba(180,0,255,0.3); box-shadow: 0 0 30px rgba(180,0,255,0.15); }
+    .cell { width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-size: 2.8rem; font-weight: 900; cursor: pointer; border: 1px solid rgba(180,0,255,0.1); background: rgba(10,0,20,0.8); transition: all .2s; }
+    .cell:hover:not(.taken) { background: rgba(180,0,255,0.08); border-color: rgba(180,0,255,0.4); }
+    .cell.x { color: #00c8ff; text-shadow: 0 0 20px #00c8ff; animation: cellPop .2s ease-out; }
+    .cell.o { color: #ff2244; text-shadow: 0 0 20px #ff2244; animation: cellPop .2s ease-out; }
+    .cell.win { background: rgba(180,0,255,0.15); border-color: #bb00ff; animation: winGlow 0.8s ease infinite alternate; }
+    @keyframes cellPop { 0%{transform:scale(0)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+    @keyframes winGlow { 0%{box-shadow:0 0 10px #bb00ff} 100%{box-shadow:0 0 30px #bb00ff} }
+    .new-btn { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; padding: 12px 28px; background: none; border: 1px solid rgba(180,0,255,0.4); color: #bb00ff; cursor: pointer; margin-top: 14px; transition: all .2s; }
+    .new-btn:hover { background: rgba(180,0,255,0.1); }
+    @media(max-width:380px) { .cell{width:80px;height:80px;font-size:2.2rem;} }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="mind-hub.html" style="color:#bb00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(180,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">❌ TIC TAC TOE</div>
+  <div class="hud-val">WINS: <span id="hudWins">0</span></div>
+</div>
+
+<div class="game-title">TIC TAC TOE</div>
+<div class="mode-row">
+  <button class="mode-btn active" id="btn_easy"   onclick="setDiff('easy')">🟢 EASY</button>
+  <button class="mode-btn"        id="btn_medium" onclick="setDiff('medium')">🟡 MEDIUM</button>
+  <button class="mode-btn"        id="btn_hard"   onclick="setDiff('hard')">🔴 UNBEATABLE</button>
+  <button class="mode-btn"        id="btn_2p"     onclick="setDiff('2p')">👥 2 PLAYER</button>
+</div>
+<div class="score-row">
+  <div class="score-box"><div class="score-label">YOU (X)</div><div class="score-val" style="color:#00c8ff;" id="scoreX">0</div></div>
+  <div class="score-box"><div class="score-label">DRAWS</div><div class="score-val" style="color:#440066;" id="scoreDraw">0</div></div>
+  <div class="score-box"><div class="score-label" id="oLabel">AI (O)</div><div class="score-val" style="color:#ff2244;" id="scoreO">0</div></div>
+</div>
+<div class="msg" id="msg"></div>
+<div class="board" id="board"></div>
+<button class="new-btn" onclick="newGame()">↻ NEW GAME</button>
+
+<script>
+let board, diff, turn, gameOver, sX=0, sO=0, sDraw=0;
+const hudWins = document.getElementById('hudWins');
+hudWins.textContent = localStorage.getItem('hvWins')||'0';
+diff = 'easy';
+
+const WIN_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+function setDiff(d) {
+  diff = d;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn_'+d).classList.add('active');
+  document.getElementById('oLabel').textContent = d === '2p' ? 'P2 (O)' : 'AI (O)';
+  newGame();
+}
+
+function newGame() {
+  board = Array(9).fill(null);
+  turn = 'X'; gameOver = false;
+  renderBoard();
+  setMsg('YOUR TURN (X)', '#00c8ff');
+}
+
+function renderBoard() {
+  const b = document.getElementById('board');
+  b.innerHTML = '';
+  board.forEach((val, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (val ? ' taken' : '') + (val === 'X' ? ' x' : val === 'O' ? ' o' : '');
+    cell.textContent = val || '';
+    cell.onclick = () => makeMove(i);
+    b.appendChild(cell);
+  });
+}
+
+function makeMove(i) {
+  if (gameOver || board[i]) return;
+  if (diff !== '2p' && turn === 'O') return;
+  board[i] = turn;
+  renderBoard();
+  const winner = checkWin();
+  if (winner) { endGame(winner); return; }
+  if (board.every(v=>v)) { endGame(null); return; }
+  turn = turn === 'X' ? 'O' : 'X';
+  if (diff !== '2p' && turn === 'O') {
+    setMsg('AI THINKING...', '#440066');
+    setTimeout(aiMove, 400);
+  } else {
+    setMsg(`${turn === 'X' ? 'YOUR' : 'P2'} TURN (${turn})`, turn === 'X' ? '#00c8ff' : '#ff2244');
+  }
+}
+
+function aiMove() {
+  let idx;
+  if (diff === 'easy') {
+    const empty = board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+    idx = empty[Math.floor(Math.random()*empty.length)];
+  } else if (diff === 'medium') {
+    idx = Math.random() < 0.6 ? minimax(board, 'O', 0).idx : randomMove();
+  } else {
+    idx = minimax(board, 'O', 0).idx;
+  }
+  if (idx !== undefined && idx !== null) {
+    board[idx] = 'O';
+    renderBoard();
+    const winner = checkWin();
+    if (winner) { endGame(winner); return; }
+    if (board.every(v=>v)) { endGame(null); return; }
+    turn = 'X';
+    setMsg('YOUR TURN (X)', '#00c8ff');
+  }
+}
+
+function randomMove() {
+  const empty = board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+  return empty[Math.floor(Math.random()*empty.length)];
+}
+
+function minimax(b, player, depth) {
+  const winner = checkWinOn(b);
+  if (winner === 'O') return { score: 10 - depth };
+  if (winner === 'X') return { score: depth - 10 };
+  const empty = b.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+  if (!empty.length) return { score: 0 };
+  const moves = empty.map(i => {
+    const nb = [...b]; nb[i] = player;
+    return { idx: i, score: minimax(nb, player==='O'?'X':'O', depth+1).score };
+  });
+  return moves.reduce((best,m) => player==='O' ? (m.score>best.score?m:best) : (m.score<best.score?m:best));
+}
+
+function checkWin() { return checkWinOn(board); }
+function checkWinOn(b) {
+  for (const [a,c,d] of WIN_LINES) {
+    if (b[a] && b[a]===b[c] && b[a]===b[d]) return b[a];
+  }
+  return null;
+}
+
+function endGame(winner) {
+  gameOver = true;
+  if (winner) {
+    for (const line of WIN_LINES) {
+      if (board[line[0]] && board[line[0]]===board[line[1]] && board[line[0]]===board[line[2]]) {
+        line.forEach(i => document.querySelectorAll('.cell')[i].classList.add('win'));
+      }
+    }
+    if (winner === 'X') {
+      sX++; document.getElementById('scoreX').textContent = sX;
+      setMsg('🏆 YOU WIN!', '#00c8ff');
+      let wins = parseInt(localStorage.getItem('hvWins')||'0')+1;
+      localStorage.setItem('hvWins', wins);
+      hudWins.textContent = wins;
+      let xp = parseInt(localStorage.getItem('hvXP')||'0')+30;
+      localStorage.setItem('hvXP', xp);
+    } else {
+      sO++; document.getElementById('scoreO').textContent = sO;
+      setMsg(diff==='2p'?'🏆 P2 WINS!':'💀 AI WINS!', '#ff2244');
+      if (diff!=='2p') { let l=parseInt(localStorage.getItem('hvLosses')||'0')+1; localStorage.setItem('hvLosses',l); }
+    }
+  } else {
+    sDraw++; document.getElementById('scoreDraw').textContent = sDraw;
+    setMsg('🤝 DRAW!', '#440066');
+  }
+  setTimeout(newGame, 2200);
+}
+
+function setMsg(m, col='#bb00ff') {
+  const el = document.getElementById('msg');
+  el.textContent = m; el.style.color = col;
+}
+
+newGame();
+</script>
+</body>
+</html>

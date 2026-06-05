@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+/* ══ LOADING SCREEN ══════════════════════════════════════════ */
+#loadScreen {
+  position: fixed; inset: 0; z-index: 1000;
+  background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 1s;
+}
+#loadScreen.fade-out { opacity: 0; pointer-events: none; }
+.load-logo-wrap { text-align: center; margin-bottom: 40px; }
+.load-logo-top {
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(0.7rem, 2.5vw, 1.1rem);
+  color: #00fff7;
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px #00fff7;
+  margin-bottom: 14px;
+  animation: flickerIn 0.5s ease-out;
+}
+.load-logo-main {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: clamp(2.5rem, 9vw, 6rem);
+  letter-spacing: 6px;
+  background: linear-gradient(135deg, #ff2244, #ff7700, #ffe500, #00ff9d, #00fff7, #cc00ff);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradShift 3s linear infinite, flickerIn 0.5s ease-out;
+  filter: drop-shadow(0 0 30px rgba(255,34,68,0.5));
+}
+@keyframes gradShift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+@keyframes flickerIn { 0%{opacity:0;transform:scale(0.95)} 100%{opacity:1;transform:scale(1)} }
+.load-tagline {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 6px;
+  color: rgba(255,34,68,0.6);
+  margin-top: 10px;
+  animation: warnPulse 2s infinite;
+}
+.load-bar-wrap {
+  width: min(500px, 80vw);
+  margin-bottom: 30px;
+}
+.load-bar-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 3px;
+  color: rgba(255,34,68,0.5);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+.load-bar-track {
+  width: 100%; height: 4px;
+  background: rgba(255,34,68,0.1);
+  border: 1px solid rgba(255,34,68,0.2);
+  overflow: hidden;
+}
+.load-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff2244, #ff7700, #ffe500);
+  width: 0%;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px rgba(255,34,68,0.8);
+}
+.load-status {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  color: rgba(255,34,68,0.4);
+  margin-top: 10px;
+  min-height: 1.2em;
+}
+.load-coins {
+  display: flex; gap: 16px; margin-bottom: 30px;
+}
+.load-coin {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255,228,0,0.3);
+  background: transparent;
+  transition: all 0.2s;
+}
+.load-coin.lit {
+  background: #ffe500;
+  border-color: #ffe500;
+  box-shadow: 0 0 12px #ffe500;
+}
+.press-start-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(0.6rem, 2vw, 0.85rem);
+  letter-spacing: 3px;
+  color: #000;
+  background: linear-gradient(135deg, #ff2244, #ff7700);
+  border: none;
+  padding: 18px 40px;
+  cursor: pointer;
+  clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+  animation: btnPulse 1.5s infinite, flickerIn 0.5s ease-out 2s both;
+  opacity: 0;
+}
+@keyframes btnPulse { 0%,100%{box-shadow:0 0 20px rgba(255,34,68,0.5)} 50%{box-shadow:0 0 50px rgba(255,34,68,0.9),0 0 80px rgba(255,119,0,0.4)} }
+.press-start-btn:hover { transform: scale(1.05); }
+.load-scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, #ff2244, transparent);
+  animation: scanDown 3s linear infinite; opacity: 0.4;
+}
+@keyframes scanDown { 0%{top:-2px} 100%{top:100%} }
+
+/* ══ MAIN HUB ════════════════════════════════════════════════ */
+#mainHub { display: none; }
+#mainHub.show { display: block; }
+
+/* HEADER */
+.site-header {
+  position: relative; z-index: 10;
+  padding: 40px 40px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+}
+.logo-wrap { text-align: center; }
+.logo-brand {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 6px;
+  color: var(--cyan);
+  text-shadow: 0 0 15px var(--cyan);
+  margin-bottom: 6px;
+}
+.logo-glitch {
+  font-family: var(--font-head);
+  font-size: clamp(2rem, 7vw, 5rem);
+  font-weight: 900;
+  letter-spacing: 8px;
+  background: linear-gradient(135deg, #ff2244 0%, #ff7700 40%, #ffe500 70%, #ff2244 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(255,34,68,0.7));
+  animation: glitch-text 6s infinite;
+  position: relative;
+}
+.logo-sub {
+  font-family: var(--font-hud); font-size: 0.75rem; letter-spacing: 8px;
+  color: rgba(255,34,68,0.5); margin-top: 6px;
+}
+
+/* STATS BAR */
+.stats-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center;
+  background: rgba(0,0,0,0.75);
+  border: 1px solid rgba(255,34,68,0.3);
+  padding: 10px 24px;
+  clip-path: polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+  box-shadow: 0 0 20px rgba(255,34,68,0.1), inset 0 0 20px rgba(0,0,0,0.5);
+}
+.stat-item { display: flex; align-items: center; gap: 6px; }
+.stat-icon { font-size: 0.85rem; }
+.stat-label { font-family: var(--font-hud); font-size: 0.55rem; color: #554455; letter-spacing: 2px; }
+.stat-value { font-family: var(--font-hud); font-size: 0.95rem; color: var(--red); }
+.win-color  { color: var(--green) !important; }
+.loss-color { color: var(--red) !important; }
+.player-color { color: var(--cyan) !important; }
+.xp-color { color: var(--yellow) !important; }
+.stat-divider { color: rgba(255,34,68,0.2); }
+
+/* PLAYER ENTRY */
+.player-entry {
+  position: relative; z-index: 10;
+  display: flex; justify-content: center;
+  padding: 36px 20px 0;
+  transition: all .5s;
+}
+.player-entry.player-set .entry-card { border-color: rgba(0,255,157,0.3); }
+.entry-card {
+  position: relative; width: min(620px, 92vw);
+  background: rgba(0,0,0,0.85);
+  border: 1px solid rgba(255,34,68,0.35);
+  padding: 28px 32px;
+  clip-path: polygon(16px 0,100% 0,calc(100% - 16px) 100%,0 100%);
+  box-shadow: 0 0 40px rgba(255,34,68,0.1);
+}
+.entry-label {
+  font-family: var(--font-hud); font-size: 0.62rem; letter-spacing: 4px;
+  color: var(--red-dim); margin-bottom: 14px; text-align: center;
+}
+.entry-row { display: flex; gap: 12px; align-items: stretch; }
+.input-wrap { flex: 1; }
+.player-input {
+  width: 100%; background: rgba(0,0,0,0.9);
+  border: 1px solid rgba(255,34,68,0.4); border-radius: 0;
+  color: var(--cyan); font-family: var(--font-hud); font-size: 1rem;
+  letter-spacing: 3px; padding: 14px 16px; outline: none; transition: border-color .3s;
+}
+.player-input::placeholder { color: rgba(255,34,68,0.3); letter-spacing: 2px; }
+.player-input:focus { border-color: var(--red); box-shadow: 0 0 20px rgba(255,34,68,0.2); }
+.enter-btn {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--red-dim), var(--red-deep));
+  border: 1px solid var(--red); color: var(--red);
+  font-family: var(--font-head); font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 3px; padding: 0 28px; cursor: pointer;
+  clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+  transition: all .3s;
+}
+.enter-btn:hover { background: var(--red); color: #000; box-shadow: 0 0 30px rgba(255,34,68,0.5); }
+.entry-hint {
+  font-family: var(--font-hud); font-size: 0.68rem; letter-spacing: 2px;
+  text-align: center; margin-top: 10px; min-height: 1.2em; color: var(--red-dim);
+}
+
+/* SECTION HEADERS */
+.section-wrap { position: relative; z-index: 10; padding: 44px 40px 0; }
+.section-header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; }
+.section-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--red), transparent); }
+.section-title { font-family: var(--font-hud); font-size: 0.75rem; letter-spacing: 6px; color: var(--red-dim); white-space: nowrap; }
+
+/* GENRE GRID */
+.genre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+.genre-card {
+  position: relative; overflow: hidden; background: rgba(5,0,0,0.9);
+  border: 1px solid rgba(255,34,68,0.2); cursor: pointer;
+  clip-path: polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px));
+  transition: transform .3s, box-shadow .3s, border-color .3s;
+  min-height: 280px;
+}
+.genre-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(255,34,68,0.7);
+  box-shadow: 0 20px 60px rgba(255,34,68,0.2), 0 0 40px rgba(255,34,68,0.1);
+}
+.genre-card:hover .gbg { opacity: 0.6; }
+.gbg { position: absolute; inset: 0; opacity: 0.3; transition: opacity .3s; }
+.gbg-horror { background: radial-gradient(ellipse at top, #330000 0%, #000 70%); animation: bgPulse 3s ease-in-out infinite; }
+.gbg-fun    { background: radial-gradient(ellipse at top, #001a33 0%, #000 70%); animation: bgPulse 4s ease-in-out infinite 1s; }
+.gbg-mind   { background: radial-gradient(ellipse at top, #1a0033 0%, #000 70%); animation: bgPulse 3.5s ease-in-out infinite 0.5s; }
+.gbg-relax  { background: radial-gradient(ellipse at top, #001a11 0%, #000 70%); animation: bgPulse 5s ease-in-out infinite 1.5s; }
+.gcard-inner { position: relative; z-index: 2; padding: 26px; display: flex; flex-direction: column; min-height: 280px; }
+.gcard-icon { font-size: 2.5rem; margin-bottom: 8px; }
+.gcard-num  { font-family: var(--font-hud); font-size: 0.55rem; color: rgba(255,34,68,0.3); letter-spacing: 4px; margin-bottom: 4px; }
+.gcard-title{ font-family: var(--font-head); font-size: 1.55rem; font-weight: 900; color: var(--red); letter-spacing: 4px; line-height: 1; }
+.gcard-sub  { font-family: var(--font-hud); font-size: 0.6rem; letter-spacing: 5px; color: var(--red-dim); margin-bottom: 14px; }
+.gcard-desc { font-family: var(--font-body); font-size: 0.85rem; font-weight: 300; color: rgba(200,180,190,0.7); line-height: 1.6; flex: 1; }
+.gcard-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 10px; }
+.gtag       { font-family: var(--font-hud); font-size: 0.52rem; letter-spacing: 1px; border: 1px solid rgba(255,34,68,0.3); color: var(--red-dim); padding: 3px 8px; }
+.gcard-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid rgba(255,34,68,0.1); }
+.gcard-play { font-family: var(--font-hud); font-size: 0.7rem; letter-spacing: 3px; color: var(--red); transition: letter-spacing .3s; }
+.genre-card:hover .gcard-play { letter-spacing: 5px; }
+.gcard-rating { font-size: 0.65rem; opacity: 0.45; }
+
+/* Per-genre accents */
+.genre-fun  { border-color: rgba(0,200,255,0.2); }
+.genre-fun:hover  { border-color: rgba(0,200,255,0.7); box-shadow: 0 20px 60px rgba(0,200,255,0.15); }
+.genre-fun  .gcard-title,.genre-fun  .gcard-play { color: #00c8ff; }
+.genre-fun  .card-corner { border-color: #00c8ff; }
+.genre-fun  .gcard-sub   { color: #0088bb; }
+.genre-fun  .gtag        { border-color: rgba(0,200,255,0.3); color: #0088bb; }
+
+.genre-mind { border-color: rgba(180,0,255,0.2); }
+.genre-mind:hover { border-color: rgba(180,0,255,0.7); box-shadow: 0 20px 60px rgba(180,0,255,0.15); }
+.genre-mind .gcard-title,.genre-mind .gcard-play { color: #bb00ff; }
+.genre-mind .card-corner { border-color: #bb00ff; }
+.genre-mind .gcard-sub   { color: #880099; }
+.genre-mind .gtag        { border-color: rgba(180,0,255,0.3); color: #880099; }
+
+.genre-relax{ border-color: rgba(0,255,150,0.2); }
+.genre-relax:hover{ border-color: rgba(0,255,150,0.7); box-shadow: 0 20px 60px rgba(0,255,150,0.15); }
+.genre-relax .gcard-title,.genre-relax .gcard-play { color: var(--green); }
+.genre-relax .card-corner { border-color: var(--green); }
+.genre-relax .gcard-sub   { color: #008844; }
+.genre-relax .gtag        { border-color: rgba(0,255,150,0.3); color: #008844; }
+
+/* ══ PRACTICE SECTION ════════════════════════════════════════ */
+.practice-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px; max-width: 1200px; margin: 0 auto;
+}
+.pcard {
+  background: rgba(0,0,0,0.8); border: 1px solid rgba(255,34,68,0.15);
+  padding: 20px; cursor: pointer; position: relative; overflow: hidden;
+  transition: all .3s; clip-path: polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));
+}
+.pcard:hover { border-color: rgba(255,34,68,0.5); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(255,34,68,0.15); }
+.pcard-icon  { font-size: 2rem; margin-bottom: 10px; }
+.pcard-name  { font-family: var(--font-head); font-size: 0.75rem; font-weight: 700; letter-spacing: 3px; color: var(--red); margin-bottom: 6px; }
+.pcard-desc  { font-family: var(--font-body); font-size: 0.8rem; color: rgba(200,180,190,0.6); line-height: 1.5; }
+.pcard-score { font-family: var(--font-hud); font-size: 0.6rem; letter-spacing: 2px; color: var(--yellow); margin-top: 10px; }
+
+/* ── PRACTICE MODALS ─────────────────────────────────────── */
+.practice-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.95); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.practice-overlay.open { opacity: 1; pointer-events: all; }
+.practice-box {
+  position: relative; background: #030008;
+  border: 1px solid rgba(255,34,68,0.4);
+  padding: 36px; width: min(600px, 94vw); max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 0 60px rgba(255,34,68,0.2);
+  clip-path: polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px));
+}
+.pb-close { position: absolute; top: 14px; right: 18px; color: var(--red-dim); cursor: pointer; font-size: 1.2rem; transition: color .2s; }
+.pb-close:hover { color: var(--red); }
+.pb-title { font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--red); letter-spacing: 4px; margin-bottom: 24px; }
+.pb-score { font-family: var(--font-hud); font-size: 0.7rem; letter-spacing: 2px; color: var(--yellow); margin-bottom: 20px; }
+
+/* Aim trainer */
+#aimTarget {
+  width: 100%; height: 280px; background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,34,68,0.2); position: relative;
+  cursor: crosshair; overflow: hidden;
+  border-radius: 2px;
+}
+.aim-dot {
+  position: absolute; border-radius: 50%;
+  background: var(--red); box-shadow: 0 0 16px var(--red), 0 0 30px rgba(255,34,68,0.4);
+  cursor: crosshair; transition: transform .05s;
+  animation: aimPulse 0.8s ease-in-out infinite;
+}
+@keyframes aimPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+.aim-hit { position: absolute; border-radius: 50%; background: var(--green); box-shadow: 0 0 20px var(--green); pointer-events: none; animation: hitFade 0.4s ease-out forwards; }
+@keyframes hitFade { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(3)} }
+
+/* Colour test */
+.colour-options {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 14px;
+}
+.col-opt {
+  height: 60px; border-radius: 4px; cursor: pointer; border: 2px solid transparent;
+  transition: all .2s; position: relative;
+}
+.col-opt:hover { transform: scale(1.05); border-color: rgba(255,255,255,0.4); }
+.colour-swatch { width: 100%; height: 80px; border-radius: 4px; margin-bottom: 14px; }
+.colour-result { font-family: var(--font-hud); font-size: 0.8rem; letter-spacing: 2px; text-align: center; min-height: 1.5em; color: var(--green); }
+
+/* Reaction test */
+.reaction-box {
+  width: 100%; height: 200px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,34,68,0.2); cursor: pointer;
+  font-family: var(--font-head); font-size: 1.2rem; letter-spacing: 4px; font-weight: 700;
+  background: rgba(0,0,0,0.6); transition: background .1s; border-radius: 2px;
+}
+.reaction-box.waiting  { color: rgba(255,34,68,0.4); }
+.reaction-box.ready    { background: #001100; color: var(--green); }
+.reaction-box.clicked  { background: #110000; color: var(--red); }
+
+/* Sequence memory */
+.seq-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 14px; }
+.seq-btn {
+  height: 60px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+  background: rgba(255,255,255,0.05); cursor: pointer; transition: all .15s;
+  font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
+}
+.seq-btn.lit { filter: brightness(3); transform: scale(1.05); }
+
+/* Type speed */
+.type-prompt {
+  font-family: var(--font-hud); font-size: 0.85rem; letter-spacing: 1px;
+  line-height: 1.8; color: rgba(200,180,190,0.6); margin-bottom: 16px;
+  padding: 14px; border: 1px solid rgba(255,34,68,0.15); background: rgba(0,0,0,0.6);
+}
+.type-prompt .typed-ok   { color: var(--green); }
+.type-prompt .typed-err  { color: var(--red); background: rgba(255,0,0,0.15); }
+.type-input {
+  width: 100%; background: rgba(0,0,0,0.9); border: 1px solid rgba(255,34,68,0.3);
+  color: var(--cyan); font-family: var(--font-hud); font-size: 0.9rem; padding: 12px;
+  outline: none; letter-spacing: 1px;
+}
+.type-input:focus { border-color: var(--red); }
+
+/* MUSIC CONTROL */
+.music-control { position: fixed; bottom: 24px; left: 24px; z-index: 50; display: flex; align-items: center; gap: 10px; }
+.music-btn {
+  background: rgba(0,0,0,0.8); border: 1px solid rgba(255,34,68,0.4);
+  color: var(--red); font-size: 0.9rem; padding: 10px 14px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: all .3s; font-family: var(--font-hud); letter-spacing: 2px;
+}
+.music-btn:hover { border-color: var(--red); background: rgba(255,34,68,0.1); }
+.music-label { font-size: 0.55rem; }
+.music-wave { display: flex; gap: 2px; align-items: flex-end; height: 20px; }
+.music-wave span { display: block; width: 3px; background: var(--red); border-radius: 2px; height: 4px; }
+.music-wave.active span:nth-child(1) { animation: wave 0.8s ease-in-out infinite; }
+.music-wave.active span:nth-child(2) { animation: wave 0.8s ease-in-out infinite 0.1s; }
+.music-wave.active span:nth-child(3) { animation: wave 0.8s ease-in-out infinite 0.2s; }
+.music-wave.active span:nth-child(4) { animation: wave 0.8s ease-in-out infinite 0.3s; }
+.music-wave.active span:nth-child(5) { animation: wave 0.8s ease-in-out infinite 0.4s; }
+@keyframes wave { 0%,100%{height:4px} 50%{height:18px} }
+
+/* FOOTER */
+.site-footer { position: relative; z-index: 10; padding: 40px 40px 24px; }
+.footer-line { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,34,68,0.3), transparent); margin-bottom: 14px; }
+.footer-text { display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; }
+.footer-logo { font-family: var(--font-head); font-size: 0.65rem; letter-spacing: 4px; color: rgba(255,34,68,0.3); }
+.footer-ver  { font-family: var(--font-hud); font-size: 0.6rem; color: rgba(255,34,68,0.2); }
+.footer-warn { font-family: var(--font-hud); font-size: 0.6rem; letter-spacing: 2px; color: rgba(255,34,68,0.25); animation: warnPulse 3s infinite; }
+
+@media (max-width: 600px) {
+  .site-header { padding: 24px 16px 0; }
+  .section-wrap { padding: 32px 16px 0; }
+  .stats-bar { gap: 8px; padding: 8px 12px; }
+}
+  </style>
+</head>
+<body>
+<!-- ── LOADING SCREEN ───────────────────────────────────────── -->
+<div id="loadScreen">
+  <div class="load-scan-line"></div>
+  <div class="scanlines"></div>
+  <div class="noise-overlay"></div>
+  <div class="load-logo-wrap">
+    <div class="load-logo-top">◈ XPLAINCRAFT PRESENTS ◈</div>
+    <div class="load-logo-main">ARCADE</div>
+    <div class="load-tagline">▸ THE ULTIMATE GAMING HUB ◂</div>
+  </div>
+  <div class="load-coins" id="loadCoins">
+    <div class="load-coin"></div><div class="load-coin"></div><div class="load-coin"></div>
+    <div class="load-coin"></div><div class="load-coin"></div><div class="load-coin"></div>
+    <div class="load-coin"></div><div class="load-coin"></div>
+  </div>
+  <div class="load-bar-wrap">
+    <div class="load-bar-label">
+      <span>LOADING SYSTEMS</span>
+      <span id="loadPct">0%</span>
+    </div>
+    <div class="load-bar-track"><div class="load-bar-fill" id="loadBar"></div></div>
+    <div class="load-status" id="loadStatus">INITIALIZING CORE...</div>
+  </div>
+  <button class="press-start-btn" id="pressStartBtn" onclick="enterHub()" style="display:none">
+    ▶ PRESS TO START GAMING
+  </button>
+</div>
+
+<!-- ── MAIN HUB ─────────────────────────────────────────────── -->
+<div id="mainHub">
+  <div class="scanlines"></div>
+  <div class="noise-overlay"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-particles" id="particles"></div>
+
+  <header class="site-header">
+    <div class="logo-wrap">
+      <div class="logo-brand">◈ XPLAINCRAFT'S ARCADE ◈</div>
+      <div class="logo-glitch">HELLVERSE</div>
+      <div class="logo-sub">◆ GAMING HUB ◆</div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-icon">🕐</span>
+        <span class="stat-label">SESSION</span>
+        <span class="stat-value" id="timer">00:00:00</span>
+      </div>
+      <span class="stat-divider">|</span>
+      <div class="stat-item">
+        <span class="stat-icon">🏆</span>
+        <span class="stat-label">WINS</span>
+        <span class="stat-value win-color" id="wins">0</span>
+      </div>
+      <span class="stat-divider">|</span>
+      <div class="stat-item">
+        <span class="stat-icon">💀</span>
+        <span class="stat-label">LOSSES</span>
+        <span class="stat-value loss-color" id="losses">0</span>
+      </div>
+      <span class="stat-divider">|</span>
+      <div class="stat-item">
+        <span class="stat-icon">⚡</span>
+        <span class="stat-label">XP</span>
+        <span class="stat-value xp-color" id="xp">0</span>
+      </div>
+      <span class="stat-divider">|</span>
+      <div class="stat-item">
+        <span class="stat-icon">🎮</span>
+        <span class="stat-label">PLAYER</span>
+        <span class="stat-value player-color" id="headerPlayer">---</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- PLAYER ENTRY -->
+  <section class="player-entry" id="playerEntry">
+    <div class="entry-card">
+      <div class="entry-label">◈ INITIALIZE PLAYER ◈</div>
+      <div class="entry-row">
+        <div class="input-wrap">
+          <input type="text" id="playerName" class="player-input" placeholder="ENTER YOUR CALLSIGN..." maxlength="18" autocomplete="off"/>
+        </div>
+        <button class="enter-btn" onclick="setPlayer()"><span>ENTER</span></button>
+      </div>
+      <div class="entry-hint" id="entryHint"></div>
+    </div>
+  </section>
+
+  <!-- GENRE SELECT -->
+  <section class="section-wrap">
+    <div class="section-header">
+      <div class="section-line"></div>
+      <span class="section-title">◆ SELECT GENRE ◆</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="genre-grid">
+
+      <!-- HORROR -->
+      <div class="genre-card" onclick="goGenre('horror')">
+        <div class="gbg gbg-horror"></div>
+        <div class="gcard-inner">
+          <div class="gcard-icon">☠</div>
+          <div class="gcard-num">01</div>
+          <div class="gcard-title">HORROR</div>
+          <div class="gcard-sub">GAMES</div>
+          <div class="gcard-desc">Face your darkest fears. Navigate Hell Maze, survive the House, complete your Observation shift, and don't open the wrong door.</div>
+          <div class="gcard-tags">
+            <span class="gtag">MAZE</span><span class="gtag">STEALTH</span><span class="gtag">JUMPSCARE</span><span class="gtag">4 GAMES</span>
+          </div>
+          <div class="gcard-footer">
+            <span class="gcard-play">▶ ENTER HORROR</span>
+            <span class="gcard-rating">☠☠☠☠☠</span>
+          </div>
+        </div>
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+      </div>
+
+      <!-- FUN -->
+      <div class="genre-card genre-fun" onclick="goGenre('fun')">
+        <div class="gbg gbg-fun"></div>
+        <div class="gcard-inner">
+          <div class="gcard-icon">🎯</div>
+          <div class="gcard-num">02</div>
+          <div class="gcard-title">FUN</div>
+          <div class="gcard-sub">GAMES</div>
+          <div class="gcard-desc">Flap, paddle, mine and run. Flappy Bird, Pong, Pixel Miner, Endless Runner, and more arcade classics reimagined.</div>
+          <div class="gcard-tags">
+            <span class="gtag">ARCADE</span><span class="gtag">ACTION</span><span class="gtag">SCORE</span><span class="gtag">5 GAMES</span>
+          </div>
+          <div class="gcard-footer">
+            <span class="gcard-play">▶ ENTER FUN ZONE</span>
+            <span class="gcard-rating">★★★★★</span>
+          </div>
+        </div>
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+      </div>
+
+      <!-- MIND -->
+      <div class="genre-card genre-mind" onclick="goGenre('mind')">
+        <div class="gbg gbg-mind"></div>
+        <div class="gcard-inner">
+          <div class="gcard-icon">🧠</div>
+          <div class="gcard-num">03</div>
+          <div class="gcard-title">MIND</div>
+          <div class="gcard-sub">GAMES</div>
+          <div class="gcard-desc">Wordle, Chess, Tic Tac Toe, Number Puzzle, and Atlas — your brain is the only weapon here.</div>
+          <div class="gcard-tags">
+            <span class="gtag">PUZZLE</span><span class="gtag">STRATEGY</span><span class="gtag">IQ</span><span class="gtag">5 GAMES</span>
+          </div>
+          <div class="gcard-footer">
+            <span class="gcard-play">▶ TRAIN YOUR MIND</span>
+            <span class="gcard-rating">🧠🧠🧠🧠🧠</span>
+          </div>
+        </div>
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+      </div>
+
+      <!-- RELAX -->
+      <div class="genre-card genre-relax" onclick="goGenre('relax')">
+        <div class="gbg gbg-relax"></div>
+        <div class="gcard-inner">
+          <div class="gcard-icon">🌊</div>
+          <div class="gcard-num">04</div>
+          <div class="gcard-title">RELAXING</div>
+          <div class="gcard-sub">GAMES</div>
+          <div class="gcard-desc">Candy Crush-style Match 3, Battleship, Word Connect, and a cozy text-based mystery adventure.</div>
+          <div class="gcard-tags">
+            <span class="gtag">CHILL</span><span class="gtag">MATCH-3</span><span class="gtag">WORDS</span><span class="gtag">4 GAMES</span>
+          </div>
+          <div class="gcard-footer">
+            <span class="gcard-play">▶ UNWIND</span>
+            <span class="gcard-rating">✦✦✦✦✦</span>
+          </div>
+        </div>
+        <div class="card-corner tl"></div><div class="card-corner tr"></div>
+        <div class="card-corner bl"></div><div class="card-corner br"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PRACTICE SECTION -->
+  <section class="section-wrap" style="padding-bottom:0;">
+    <div class="section-header">
+      <div class="section-line"></div>
+      <span class="section-title">◆ PRACTICE LAB ◆</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="practice-grid">
+      <div class="pcard" onclick="openPractice('aim')">
+        <div class="pcard-icon">🎯</div>
+        <div class="pcard-name">AIM TRAINER</div>
+        <div class="pcard-desc">Click the targets as fast as possible. Sharpen your mouse precision.</div>
+        <div class="pcard-score">BEST: <span id="bestAim">-</span></div>
+      </div>
+      <div class="pcard" onclick="openPractice('reaction')">
+        <div class="pcard-icon">⚡</div>
+        <div class="pcard-name">REACTION TEST</div>
+        <div class="pcard-desc">Test your reflex speed. Click when the screen turns green.</div>
+        <div class="pcard-score">BEST: <span id="bestReact">-</span></div>
+      </div>
+      <div class="pcard" onclick="openPractice('colour')">
+        <div class="pcard-icon">🎨</div>
+        <div class="pcard-name">COLOUR QUIZ</div>
+        <div class="pcard-desc">Name the colour you see on screen. Test your visual intuition.</div>
+        <div class="pcard-score">BEST: <span id="bestColour">-</span></div>
+      </div>
+      <div class="pcard" onclick="openPractice('memory')">
+        <div class="pcard-icon">🔢</div>
+        <div class="pcard-name">SEQUENCE MEMORY</div>
+        <div class="pcard-desc">Watch the pattern. Repeat it back. How long can you go?</div>
+        <div class="pcard-score">BEST: <span id="bestMemory">-</span></div>
+      </div>
+      <div class="pcard" onclick="openPractice('typing')">
+        <div class="pcard-icon">⌨️</div>
+        <div class="pcard-name">TYPING SPEED</div>
+        <div class="pcard-desc">Race the clock. Type the passage accurately as fast as you can.</div>
+        <div class="pcard-score">BEST: <span id="bestTyping">-</span> WPM</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRACTICE OVERLAYS -->
+  <!-- AIM TRAINER -->
+  <div class="practice-overlay" id="aimOverlay">
+    <div class="practice-box">
+      <div class="pb-close" onclick="closePractice('aim')">✕</div>
+      <div class="pb-title">🎯 AIM TRAINER</div>
+      <div class="pb-score">SCORE: <span id="aimScore">0</span> | TIME: <span id="aimTime">30</span>s | BEST: <span id="aimBestDisp">-</span></div>
+      <div id="aimTarget"></div>
+      <div style="margin-top:14px;display:flex;gap:12px;">
+        <button onclick="startAim()" style="font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;padding:10px 20px;background:none;border:1px solid var(--red);color:var(--red);cursor:pointer;">▶ START</button>
+        <button onclick="closePractice('aim')" style="font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;padding:10px 20px;background:none;border:1px solid rgba(255,34,68,0.3);color:rgba(255,34,68,0.5);cursor:pointer;">◄ CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REACTION TEST -->
+  <div class="practice-overlay" id="reactionOverlay">
+    <div class="practice-box">
+      <div class="pb-close" onclick="closePractice('reaction')">✕</div>
+      <div class="pb-title">⚡ REACTION TEST</div>
+      <div class="pb-score">LAST: <span id="reactLast">-</span>ms | BEST: <span id="reactBest">-</span>ms</div>
+      <div class="reaction-box waiting" id="reactBox" onclick="reactClick()">CLICK TO START</div>
+      <div id="reactMsg" style="font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;color:rgba(255,34,68,0.5);margin-top:12px;min-height:1.5em;"></div>
+    </div>
+  </div>
+
+  <!-- COLOUR QUIZ -->
+  <div class="practice-overlay" id="colourOverlay">
+    <div class="practice-box">
+      <div class="pb-close" onclick="closePractice('colour')">✕</div>
+      <div class="pb-title">🎨 COLOUR QUIZ</div>
+      <div class="pb-score">SCORE: <span id="colScore">0</span>/10 | BEST: <span id="colBest">-</span></div>
+      <div style="font-family:var(--font-hud);font-size:0.65rem;letter-spacing:2px;color:rgba(255,34,68,0.5);margin-bottom:10px;">WHAT COLOUR IS THIS?</div>
+      <div class="colour-swatch" id="colSwatch"></div>
+      <div class="colour-options" id="colOptions"></div>
+      <div class="colour-result" id="colResult"></div>
+    </div>
+  </div>
+
+  <!-- SEQUENCE MEMORY -->
+  <div class="practice-overlay" id="memoryOverlay">
+    <div class="practice-box">
+      <div class="pb-close" onclick="closePractice('memory')">✕</div>
+      <div class="pb-title">🔢 SEQUENCE MEMORY</div>
+      <div class="pb-score">LEVEL: <span id="seqLevel">1</span> | BEST: <span id="seqBest">-</span></div>
+      <div id="seqStatus" style="font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;color:rgba(255,34,68,0.5);margin-bottom:14px;">WATCH THE PATTERN</div>
+      <div class="seq-grid" id="seqGrid"></div>
+      <button onclick="startSeq()" id="seqStartBtn" style="margin-top:16px;font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;padding:10px 20px;background:none;border:1px solid var(--red);color:var(--red);cursor:pointer;">▶ START</button>
+    </div>
+  </div>
+
+  <!-- TYPING SPEED -->
+  <div class="practice-overlay" id="typingOverlay">
+    <div class="practice-box">
+      <div class="pb-close" onclick="closePractice('typing')">✕</div>
+      <div class="pb-title">⌨️ TYPING SPEED</div>
+      <div class="pb-score">WPM: <span id="typeWPM">0</span> | TIME: <span id="typeTime">60</span>s | BEST: <span id="typeBest">-</span> WPM</div>
+      <div class="type-prompt" id="typePrompt"></div>
+      <input type="text" class="type-input" id="typeInput" placeholder="START TYPING..." autocomplete="off" oninput="typeCheck()"/>
+      <button onclick="startTyping()" style="margin-top:12px;font-family:var(--font-hud);font-size:0.7rem;letter-spacing:2px;padding:10px 20px;background:none;border:1px solid var(--red);color:var(--red);cursor:pointer;">▶ RESET</button>
+    </div>
+  </div>
+
+  <!-- MUSIC -->
+  <div class="music-control">
+    <button class="music-btn" onclick="toggleMusic()">
+      <span id="musicIcon">🔇</span>
+      <span class="music-label">BGM</span>
+    </button>
+    <div class="music-wave" id="musicWave">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-line"></div>
+    <div class="footer-text">
+      <span class="footer-logo">XPLAINCRAFT'S ARCADE</span>
+      <span class="footer-ver">v2.0.0</span>
+      <span class="footer-warn">⚠ WARNING: CONTAINS HORROR CONTENT ⚠</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+// ══ LOADING SCREEN ══════════════════════════════════════════
+const loadMsgs = [
+  'INITIALIZING CORE...','LOADING HORROR ENGINE...','SPAWNING ENTITIES...',
+  'COMPILING JUMP SCARES...','CALIBRATING PHYSICS...','LOADING FUN ZONE...',
+  'RENDERING GAME WORLDS...','SYNCING LEADERBOARDS...','TUNING AUDIO ENGINE...',
+  'PREPARING MIND GAMES...','LOADING RELAXING WORLDS...','ALMOST READY...',
+  'SYSTEMS ONLINE ✓'
+];
+let loadPct = 0;
+const loadInterval = setInterval(() => {
+  loadPct += Math.random() * 7 + 2;
+  if (loadPct >= 100) { loadPct = 100; clearInterval(loadInterval); showStartBtn(); }
+  document.getElementById('loadBar').style.width = loadPct + '%';
+  document.getElementById('loadPct').textContent = Math.floor(loadPct) + '%';
+  const msgIdx = Math.min(Math.floor(loadPct / 8), loadMsgs.length - 1);
+  document.getElementById('loadStatus').textContent = loadMsgs[msgIdx];
+  const coinIdx = Math.floor(loadPct / 12.5);
+  document.querySelectorAll('.load-coin').forEach((c, i) => { if (i < coinIdx) c.classList.add('lit'); });
+}, 120);
+
+function showStartBtn() {
+  const btn = document.getElementById('pressStartBtn');
+  btn.style.display = 'block';
+  btn.style.animation = 'btnPulse 1.5s infinite';
+}
+
+function enterHub() {
+  document.getElementById('loadScreen').classList.add('fade-out');
+  setTimeout(() => {
+    document.getElementById('loadScreen').style.display = 'none';
+    document.getElementById('mainHub').classList.add('show');
+    initHub();
+  }, 1000);
+}
+
+// ══ HUB INIT ═══════════════════════════════════════════════
+function initHub() {
+  // Particles
+  const c = document.getElementById('particles');
+  for (let i = 0; i < 55; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*8}s;animation-duration:${4+Math.random()*6}s;width:${1+Math.random()*2.5}px;height:${1+Math.random()*2.5}px;opacity:${0.2+Math.random()*0.5}`;
+    c.appendChild(p);
+  }
+  // Timer
+  const start = Date.now();
+  setInterval(() => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+    const sec = String(s%60).padStart(2,'0');
+    document.getElementById('timer').textContent = `${h}:${m}:${sec}`;
+  }, 1000);
+  // Load stored data
+  const pn = localStorage.getItem('hvPlayer') || '';
+  if (pn) {
+    document.getElementById('playerName').value = pn;
+    document.getElementById('headerPlayer').textContent = pn;
+    document.getElementById('entryHint').textContent = `✔ WELCOME BACK, ${pn}`;
+    document.getElementById('entryHint').style.color = '#00ff9d';
+    document.getElementById('playerEntry').classList.add('player-set');
+  }
+  document.getElementById('wins').textContent   = localStorage.getItem('hvWins') || '0';
+  document.getElementById('losses').textContent = localStorage.getItem('hvLosses') || '0';
+  document.getElementById('xp').textContent     = localStorage.getItem('hvXP') || '0';
+  // Practice bests
+  document.querySelectorAll('[id^="best"]').forEach(el => {
+    const key = 'pb_' + el.id;
+    const v = localStorage.getItem(key);
+    if (v) el.textContent = v;
+  });
+  document.getElementById('aimBestDisp').textContent  = localStorage.getItem('pb_bestAim') || '-';
+  document.getElementById('reactBest').textContent    = localStorage.getItem('pb_bestReact') || '-';
+  document.getElementById('colBest').textContent      = localStorage.getItem('pb_bestColour') || '-';
+  document.getElementById('seqBest').textContent      = localStorage.getItem('pb_bestMemory') || '-';
+  document.getElementById('typeBest').textContent     = localStorage.getItem('pb_bestTyping') || '-';
+}
+
+function setPlayer() {
+  const val = document.getElementById('playerName').value.trim().toUpperCase();
+  if (!val) { document.getElementById('entryHint').textContent = '⚠ ENTER A VALID CALLSIGN'; document.getElementById('entryHint').style.color='#ff2244'; return; }
+  localStorage.setItem('hvPlayer', val);
+  document.getElementById('headerPlayer').textContent = val;
+  document.getElementById('entryHint').textContent = `✔ WELCOME, ${val}! XP: ${localStorage.getItem('hvXP')||0}`;
+  document.getElementById('entryHint').style.color = '#00ff9d';
+  document.getElementById('playerEntry').classList.add('player-set');
+  addXP(10);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const pi = document.getElementById('playerName');
+  if (pi) pi.addEventListener('keydown', e => { if(e.key==='Enter') setPlayer(); });
+});
+
+function addXP(n) {
+  let xp = parseInt(localStorage.getItem('hvXP')||'0') + n;
+  localStorage.setItem('hvXP', xp);
+  document.getElementById('xp').textContent = xp;
+}
+
+function goGenre(g) {
+  const pn = localStorage.getItem('hvPlayer');
+  if (!pn) { alert('⚠ SET YOUR CALLSIGN FIRST!'); document.getElementById('playerName').focus(); return; }
+  const map = { horror:'horror-hub.html', fun:'fun-hub.html', mind:'mind-hub.html', relax:'relax-hub.html' };
+  if (map[g]) window.location.href = map[g];
+}
+
+// ══ MUSIC ═══════════════════════════════════════════════════
+let musicOn = false;
+function toggleMusic() {
+  musicOn = !musicOn;
+  document.getElementById('musicIcon').textContent = musicOn ? '🔊' : '🔇';
+  document.getElementById('musicWave').classList.toggle('active', musicOn);
+}
+
+// ══ PRACTICE: AIM TRAINER ═══════════════════════════════════
+let aimInterval, aimTimer, aimActive = false, aimScoreVal = 0;
+function openPractice(type) {
+  document.getElementById(type + 'Overlay').classList.add('open');
+  if (type === 'colour') startColour();
+  if (type === 'memory') initSeqGrid();
+  if (type === 'typing') startTyping();
+  if (type === 'reaction') resetReaction();
+}
+function closePractice(type) {
+  document.getElementById(type + 'Overlay').classList.remove('open');
+  if (type === 'aim') { clearInterval(aimInterval); clearInterval(aimTimer); aimActive = false; document.getElementById('aimTarget').innerHTML = ''; }
+}
+
+function startAim() {
+  aimActive = true; aimScoreVal = 0;
+  let timeLeft = 30;
+  document.getElementById('aimScore').textContent = '0';
+  document.getElementById('aimTime').textContent = '30';
+  const t = document.getElementById('aimTarget');
+  t.innerHTML = '';
+  function spawnDot() {
+    t.innerHTML = '';
+    if (!aimActive) return;
+    const size = Math.random() * 28 + 16;
+    const d = document.createElement('div');
+    d.className = 'aim-dot';
+    d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*(t.offsetWidth-size)}px;top:${Math.random()*(t.offsetHeight-size)}px`;
+    d.onclick = (e) => {
+      e.stopPropagation();
+      aimScoreVal++;
+      document.getElementById('aimScore').textContent = aimScoreVal;
+      addXP(2);
+      const h = document.createElement('div');
+      h.className = 'aim-hit';
+      h.style.cssText = `width:${size}px;height:${size}px;left:${d.offsetLeft}px;top:${d.offsetTop}px`;
+      t.appendChild(h);
+      setTimeout(() => h.remove(), 400);
+      spawnDot();
+    };
+    t.appendChild(d);
+  }
+  spawnDot();
+  clearInterval(aimTimer);
+  aimTimer = setInterval(() => {
+    timeLeft--;
+    document.getElementById('aimTime').textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(aimTimer); aimActive = false;
+      document.getElementById('aimTarget').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:var(--font-head);color:var(--green);font-size:1.2rem;letter-spacing:4px;">SCORE: ${aimScoreVal}</div>`;
+      const best = parseInt(localStorage.getItem('pb_bestAim')||'0');
+      if (aimScoreVal > best) {
+        localStorage.setItem('pb_bestAim', aimScoreVal);
+        document.getElementById('bestAim').textContent = aimScoreVal;
+        document.getElementById('aimBestDisp').textContent = aimScoreVal;
+      }
+    }
+  }, 1000);
+}
+
+// ══ REACTION TEST ═══════════════════════════════════════════
+let reactState = 'idle', reactStart, reactTimeout;
+function resetReaction() {
+  reactState = 'idle';
+  const b = document.getElementById('reactBox');
+  b.className = 'reaction-box waiting';
+  b.textContent = 'CLICK TO START';
+  document.getElementById('reactMsg').textContent = '';
+}
+function reactClick() {
+  if (reactState === 'idle') {
+    reactState = 'waiting';
+    document.getElementById('reactBox').className = 'reaction-box waiting';
+    document.getElementById('reactBox').textContent = 'WAIT FOR GREEN...';
+    document.getElementById('reactMsg').textContent = '';
+    const delay = 1500 + Math.random() * 3000;
+    clearTimeout(reactTimeout);
+    reactTimeout = setTimeout(() => {
+      reactState = 'go'; reactStart = Date.now();
+      document.getElementById('reactBox').className = 'reaction-box ready';
+      document.getElementById('reactBox').textContent = 'CLICK NOW!';
+    }, delay);
+  } else if (reactState === 'waiting') {
+    clearTimeout(reactTimeout);
+    reactState = 'idle';
+    document.getElementById('reactMsg').textContent = '⚠ TOO EARLY! TRY AGAIN.';
+    document.getElementById('reactBox').className = 'reaction-box clicked';
+    document.getElementById('reactBox').textContent = 'TOO EARLY!';
+    setTimeout(resetReaction, 1500);
+  } else if (reactState === 'go') {
+    const ms = Date.now() - reactStart;
+    reactState = 'idle';
+    document.getElementById('reactLast').textContent = ms;
+    document.getElementById('reactBox').className = 'reaction-box clicked';
+    document.getElementById('reactBox').textContent = `${ms}ms`;
+    const best = parseInt(localStorage.getItem('pb_bestReact')||'99999');
+    if (ms < best) {
+      localStorage.setItem('pb_bestReact', ms);
+      document.getElementById('reactBest').textContent = ms;
+      document.getElementById('bestReact').textContent = ms;
+      document.getElementById('reactMsg').textContent = '🏆 NEW BEST!';
+    } else {
+      document.getElementById('reactMsg').textContent = ms < 250 ? '⚡ EXCELLENT!' : ms < 350 ? '✓ GOOD' : 'KEEP PRACTICING';
+    }
+    addXP(1);
+    setTimeout(resetReaction, 2000);
+  }
+}
+
+// ══ COLOUR QUIZ ══════════════════════════════════════════════
+const colours = [
+  {name:'RED',   hex:'#ff2244'},{name:'BLUE',    hex:'#0066ff'},
+  {name:'GREEN', hex:'#00cc44'},{name:'YELLOW',  hex:'#ffe500'},
+  {name:'PURPLE',hex:'#cc00ff'},{name:'ORANGE',  hex:'#ff7700'},
+  {name:'CYAN',  hex:'#00cccc'},{name:'PINK',    hex:'#ff44aa'},
+  {name:'WHITE', hex:'#ffffff'},{name:'LIME',    hex:'#88ff00'},
+];
+let colQ = 0, colScoreVal = 0, curColour;
+function startColour() { colQ = 0; colScoreVal = 0; document.getElementById('colScore').textContent = '0'; nextColour(); }
+function nextColour() {
+  if (colQ >= 10) {
+    document.getElementById('colResult').textContent = `FINAL SCORE: ${colScoreVal}/10`;
+    const best = parseInt(localStorage.getItem('pb_bestColour')||'0');
+    if (colScoreVal > best) {
+      localStorage.setItem('pb_bestColour', colScoreVal);
+      document.getElementById('bestColour').textContent = colScoreVal;
+      document.getElementById('colBest').textContent = colScoreVal;
+    }
+    return;
+  }
+  curColour = colours[Math.floor(Math.random() * colours.length)];
+  document.getElementById('colSwatch').style.background = curColour.hex;
+  document.getElementById('colResult').textContent = '';
+  // 4 options: 1 correct + 3 random
+  let opts = [curColour];
+  while (opts.length < 4) {
+    const c = colours[Math.floor(Math.random() * colours.length)];
+    if (!opts.find(o => o.name === c.name)) opts.push(c);
+  }
+  opts = opts.sort(() => Math.random() - 0.5);
+  const g = document.getElementById('colOptions');
+  g.innerHTML = '';
+  opts.forEach(o => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `height:44px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,34,68,0.3);color:var(--text);font-family:var(--font-hud);font-size:0.6rem;letter-spacing:2px;cursor:pointer;border-radius:2px;transition:all .2s;`;
+    btn.textContent = o.name;
+    btn.onclick = () => {
+      colQ++;
+      if (o.name === curColour.name) {
+        colScoreVal++;
+        document.getElementById('colScore').textContent = colScoreVal;
+        document.getElementById('colResult').textContent = '✓ CORRECT!';
+        document.getElementById('colResult').style.color = 'var(--green)';
+        addXP(3);
+      } else {
+        document.getElementById('colResult').textContent = `✗ WRONG — IT WAS ${curColour.name}`;
+        document.getElementById('colResult').style.color = 'var(--red)';
+      }
+      setTimeout(nextColour, 900);
+    };
+    g.appendChild(btn);
+  });
+}
+
+// ══ SEQUENCE MEMORY ══════════════════════════════════════════
+const seqEmojis = ['🔴','🟡','🔵','🟢','🟣','🟠','⚪','🔸'];
+let seqSequence = [], seqUserInput = [], seqLevel = 1, seqInputting = false;
+function initSeqGrid() {
+  seqLevel = 1; seqSequence = []; seqUserInput = [];
+  document.getElementById('seqLevel').textContent = '1';
+  const g = document.getElementById('seqGrid');
+  g.innerHTML = '';
+  seqEmojis.forEach((e, i) => {
+    const b = document.createElement('button');
+    b.className = 'seq-btn';
+    b.textContent = e;
+    b.dataset.idx = i;
+    b.onclick = () => seqPlayerClick(i);
+    g.appendChild(b);
+  });
+}
+function startSeq() {
+  document.getElementById('seqStartBtn').style.display = 'none';
+  seqSequence.push(Math.floor(Math.random() * 8));
+  seqUserInput = [];
+  document.getElementById('seqStatus').textContent = 'WATCH...';
+  playSeq();
+}
+function playSeq() {
+  seqInputting = false;
+  let i = 0;
+  const btns = document.querySelectorAll('.seq-btn');
+  const interval = setInterval(() => {
+    if (i > 0) btns[seqSequence[i-1]].classList.remove('lit');
+    if (i < seqSequence.length) { btns[seqSequence[i]].classList.add('lit'); i++; }
+    else {
+      clearInterval(interval);
+      setTimeout(() => {
+        btns.forEach(b => b.classList.remove('lit'));
+        document.getElementById('seqStatus').textContent = 'YOUR TURN! REPEAT THE PATTERN';
+        seqInputting = true; seqUserInput = [];
+      }, 500);
+    }
+  }, 700);
+}
+function seqPlayerClick(idx) {
+  if (!seqInputting) return;
+  const btns = document.querySelectorAll('.seq-btn');
+  btns[idx].classList.add('lit');
+  setTimeout(() => btns[idx].classList.remove('lit'), 200);
+  seqUserInput.push(idx);
+  const pos = seqUserInput.length - 1;
+  if (seqUserInput[pos] !== seqSequence[pos]) {
+    document.getElementById('seqStatus').textContent = `FAILED! LEVEL ${seqLevel}`;
+    seqInputting = false;
+    const best = parseInt(localStorage.getItem('pb_bestMemory')||'0');
+    if (seqLevel > best) {
+      localStorage.setItem('pb_bestMemory', seqLevel);
+      document.getElementById('bestMemory').textContent = seqLevel;
+      document.getElementById('seqBest').textContent = seqLevel;
+    }
+    setTimeout(() => {
+      seqLevel = 1; seqSequence = [];
+      document.getElementById('seqLevel').textContent = '1';
+      document.getElementById('seqStartBtn').style.display = 'block';
+      document.getElementById('seqStartBtn').textContent = '▶ TRY AGAIN';
+    }, 1500);
+    return;
+  }
+  if (seqUserInput.length === seqSequence.length) {
+    seqLevel++;
+    document.getElementById('seqLevel').textContent = seqLevel;
+    document.getElementById('seqStatus').textContent = `✓ LEVEL ${seqLevel}! WATCH...`;
+    seqSequence.push(Math.floor(Math.random() * 8));
+    addXP(5);
+    setTimeout(playSeq, 1000);
+  }
+}
+
+// ══ TYPING SPEED ═════════════════════════════════════════════
+const typingTexts = [
+  'the quick brown fox jumps over the lazy dog and then runs back to do it all over again',
+  'gaming requires fast reflexes sharp eyes and an even sharper mind to conquer every challenge',
+  'in the dark corridors of the haunted house every footstep echoes like a thunderclap',
+  'the pixel warrior dodged every obstacle and collected every coin on the path to victory',
+  'speed and accuracy are the hallmarks of a true arcade champion who never gives up',
+];
+let typingActive = false, typingTimer, typingTimeLeft = 60, typingWordCount = 0;
+function startTyping() {
+  typingActive = false; clearInterval(typingTimer); typingTimeLeft = 60;
+  const text = typingTexts[Math.floor(Math.random() * typingTexts.length)];
+  document.getElementById('typePrompt').dataset.text = text;
+  document.getElementById('typePrompt').innerHTML = text.split('').map(c => `<span>${c}</span>`).join('');
+  document.getElementById('typeInput').value = '';
+  document.getElementById('typeWPM').textContent = '0';
+  document.getElementById('typeTime').textContent = '60';
+}
+function typeCheck() {
+  const inp = document.getElementById('typeInput');
+  if (!typingActive) {
+    typingActive = true;
+    typingTimer = setInterval(() => {
+      typingTimeLeft--;
+      document.getElementById('typeTime').textContent = typingTimeLeft;
+      if (typingTimeLeft <= 0) {
+        clearInterval(typingTimer); typingActive = false;
+        const wpm = parseInt(document.getElementById('typeWPM').textContent);
+        const best = parseInt(localStorage.getItem('pb_bestTyping')||'0');
+        if (wpm > best) {
+          localStorage.setItem('pb_bestTyping', wpm);
+          document.getElementById('bestTyping').textContent = wpm;
+          document.getElementById('typeBest').textContent = wpm;
+        }
+        addXP(wpm);
+      }
+    }, 1000);
+  }
+  const typed = inp.value;
+  const text = document.getElementById('typePrompt').dataset.text;
+  const spans = document.getElementById('typePrompt').querySelectorAll('span');
+  spans.forEach((s, i) => {
+    s.className = i < typed.length ? (typed[i] === text[i] ? 'typed-ok' : 'typed-err') : '';
+  });
+  const words = typed.trim().split(/\s+/).filter(w=>w).length;
+  const elapsed = (60 - typingTimeLeft) || 1;
+  const wpm = Math.round(words / (elapsed / 60));
+  document.getElementById('typeWPM').textContent = wpm;
+}
+</script>
+</body>
+</html>

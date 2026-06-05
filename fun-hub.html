@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FUN ZONE — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; overflow-x: hidden; }
+    .hub-header { position: relative; z-index: 10; text-align: center; padding: 60px 20px 0; }
+    .hub-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(2rem,8vw,5rem); letter-spacing: 8px; color: #00c8ff; text-shadow: 0 0 30px #00c8ff,0 0 60px rgba(0,200,255,0.3); }
+    .hub-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 7px; color: #004466; margin-top: 10px; }
+    /* Override card colors for fun zone */
+    .hgame-card { border-color: rgba(0,200,255,0.18); }
+    .hgame-card:hover { box-shadow: 0 24px 60px rgba(0,200,255,0.2); border-color: rgba(0,200,255,0.6); }
+    .card-name { color: #00c8ff !important; }
+    .card-tagline { color: #004466 !important; }
+    .ctag { border-color: rgba(0,200,255,0.25) !important; color: #005588 !important; }
+    .card-footer-row { border-top-color: rgba(0,200,255,0.1) !important; }
+    .play-label { color: #00c8ff !important; }
+    .blood-drip { background: linear-gradient(90deg, transparent, #00c8ff, transparent) !important; }
+    .cc { border-color: #00c8ff !important; }
+    .diff-badge { color: #00c8ff !important; border-color: rgba(0,200,255,0.4) !important; }
+    .bg-grid { background-image: linear-gradient(rgba(0,200,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,0.05) 1px,transparent 1px) !important; }
+    .particle { background: #00c8ff !important; box-shadow: 0 0 6px #00c8ff !important; }
+    .stats-bottom { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: rgba(0,0,0,0.9); border-top: 1px solid rgba(0,200,255,0.2); display: flex; align-items: center; justify-content: center; gap: 30px; padding: 10px 20px; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div><div class="noise-overlay"></div>
+<div class="bg-grid"></div>
+<div class="bg-particles" id="particles"></div>
+<a href="index.html" class="back-home" style="border-color:rgba(0,200,255,0.4);color:#00c8ff;">◄ MAIN HUB</a>
+
+<header class="hub-header">
+  <div style="font-size:3.5rem;margin-bottom:12px;">🎮</div>
+  <div class="hub-title">FUN ZONE</div>
+  <div class="hub-sub">◈ CHOOSE YOUR GAME ◈</div>
+</header>
+
+<div class="games-grid">
+
+  <a href="fun-flappy.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#001a33 0%,#000 65%);opacity:0.5;animation:bgPulse 3s ease-in-out infinite;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ EASY</div>
+    <div class="card-content">
+      <div class="card-icon-big">🐦</div>
+      <div class="card-num">GAME 01</div>
+      <div class="card-name">FLAPPY BIRD</div>
+      <div class="card-tagline">▸ TAP TO SURVIVE ◂</div>
+      <div class="card-desc">One tap to flap, one mistake to die. Navigate through endless pipes in this deceptively simple arcade classic with a neon cyberpunk twist. How far can you go?</div>
+      <div class="card-tags"><span class="ctag">ONE-BUTTON</span><span class="ctag">ENDLESS</span><span class="ctag">HIGHSCORE</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ TAP TO PLAY</span><span class="scare-level">★★☆☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="fun-pong.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#002233 0%,#000 65%);opacity:0.5;animation:bgPulse 4s ease-in-out infinite 0.5s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ CLASSIC</div>
+    <div class="card-content">
+      <div class="card-icon-big">🏓</div>
+      <div class="card-num">GAME 02</div>
+      <div class="card-name">NEON PONG</div>
+      <div class="card-tagline">▸ DEFEND YOUR SIDE ◂</div>
+      <div class="card-desc">The original arcade game reinvented with neon lighting, increasing ball speed, and AI opponent that gets smarter every round. First to 10 wins.</div>
+      <div class="card-tags"><span class="ctag">VS AI</span><span class="ctag">2-PLAYER</span><span class="ctag">CLASSIC</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY PONG</span><span class="scare-level">★★★☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="fun-miner.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#001a11 0%,#000 65%);opacity:0.5;animation:bgPulse 3.5s ease-in-out infinite 1s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ MEDIUM</div>
+    <div class="card-content">
+      <div class="card-icon-big">⛏️</div>
+      <div class="card-num">GAME 03</div>
+      <div class="card-name">PIXEL MINER</div>
+      <div class="card-tagline">▸ DIG DEEP, MINE RICH ◂</div>
+      <div class="card-desc">Mine through pixel blocks, gather ores, craft tools, build upward. A Minecraft-inspired idle mining adventure. Diamonds await at the deepest levels.</div>
+      <div class="card-tags"><span class="ctag">MINING</span><span class="ctag">CRAFTING</span><span class="ctag">IDLE</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ START MINING</span><span class="scare-level">★★★★☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="fun-runner.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#1a0033 0%,#000 65%);opacity:0.5;animation:bgPulse 2.5s ease-in-out infinite 1.5s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ HARD</div>
+    <div class="card-content">
+      <div class="card-icon-big">🏃</div>
+      <div class="card-num">GAME 04</div>
+      <div class="card-name">NEON RUNNER</div>
+      <div class="card-tagline">▸ RUN. JUMP. SLIDE. SURVIVE. ◂</div>
+      <div class="card-desc">Temple Run meets Subway Surfers in this endless neon runner. Jump over obstacles, slide under barriers, collect coins. The track gets faster every 10 seconds.</div>
+      <div class="card-tags"><span class="ctag">ENDLESS</span><span class="ctag">FAST</span><span class="ctag">OBSTACLES</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ START RUNNING</span><span class="scare-level">★★★★★</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="fun-breakout.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#1a1100 0%,#000 65%);opacity:0.5;animation:bgPulse 4s ease-in-out infinite 2s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ CLASSIC</div>
+    <div class="card-content">
+      <div class="card-icon-big">🧱</div>
+      <div class="card-num">GAME 05</div>
+      <div class="card-name">NEON BREAKOUT</div>
+      <div class="card-tagline">▸ SMASH EVERY BLOCK ◂</div>
+      <div class="card-desc">Classic Breakout reimagined in neon. Paddle a glowing ball to destroy bricks. Power-ups drop: multi-ball, laser, wide paddle. Clear all bricks to advance.</div>
+      <div class="card-tags"><span class="ctag">ARCADE</span><span class="ctag">POWERUPS</span><span class="ctag">LEVELS</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ SMASH BRICKS</span><span class="scare-level">★★★☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+</div>
+
+<div class="stats-bottom">
+  <span style="color:#004466;">🏆 WINS <span style="color:#00c8ff;" id="sw">0</span></span>
+  <span style="color:#004466;">⚡ XP <span style="color:#ffe500;" id="sxp">0</span></span>
+  <span style="color:#004466;">🎮 <span style="color:#00c8ff;" id="sp">---</span></span>
+</div>
+
+<script>
+  document.getElementById('sw').textContent = localStorage.getItem('hvWins')||'0';
+  document.getElementById('sxp').textContent = localStorage.getItem('hvXP')||'0';
+  document.getElementById('sp').textContent = localStorage.getItem('hvPlayer')||'---';
+  const c = document.getElementById('particles');
+  for(let i=0;i<50;i++){const p=document.createElement('div');p.className='particle';p.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*8}s;animation-duration:${4+Math.random()*6}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;opacity:${0.2+Math.random()*0.4}`;c.appendChild(p);}
+</script>
+</body>
+</html>

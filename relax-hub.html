@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RELAX ZONE — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height: 100vh; overflow-x: hidden; }
+    .hub-header { position: relative; z-index: 10; text-align: center; padding: 60px 20px 0; }
+    .hub-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(2rem,8vw,5rem); letter-spacing: 8px; color: #00ff9d; text-shadow: 0 0 30px #00ff9d,0 0 60px rgba(0,255,157,0.3); }
+    .hub-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 7px; color: #004433; margin-top: 10px; }
+    .hgame-card { border-color: rgba(0,255,157,0.18) !important; }
+    .hgame-card:hover { box-shadow: 0 24px 60px rgba(0,255,157,0.2) !important; border-color: rgba(0,255,157,0.6) !important; }
+    .card-name { color: #00ff9d !important; }
+    .card-tagline { color: #004433 !important; }
+    .ctag { border-color: rgba(0,255,157,0.25) !important; color: #006644 !important; }
+    .card-footer-row { border-top-color: rgba(0,255,157,0.1) !important; }
+    .play-label { color: #00ff9d !important; }
+    .blood-drip { background: linear-gradient(90deg,transparent,#00ff9d,transparent) !important; }
+    .cc { border-color: #00ff9d !important; }
+    .diff-badge { color: #00ff9d !important; border-color: rgba(0,255,157,0.4) !important; }
+    .bg-grid { background-image: linear-gradient(rgba(0,255,157,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,157,0.04) 1px,transparent 1px) !important; }
+    .particle { background: #00ff9d !important; box-shadow: 0 0 6px #00ff9d !important; }
+    .stats-bottom { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: rgba(0,0,0,0.9); border-top: 1px solid rgba(0,255,157,0.2); display: flex; align-items: center; justify-content: center; gap: 30px; padding: 10px 20px; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+<div class="scanlines"></div><div class="noise-overlay"></div>
+<div class="bg-grid"></div>
+<div class="bg-particles" id="particles"></div>
+<a href="index.html" class="back-home" style="border-color:rgba(0,255,157,0.4);color:#00ff9d;">◄ MAIN HUB</a>
+
+<header class="hub-header">
+  <div style="font-size:3.5rem;margin-bottom:12px;">🌊</div>
+  <div class="hub-title">RELAX ZONE</div>
+  <div class="hub-sub">◈ UNWIND & CHILL ◈</div>
+</header>
+
+<div class="games-grid">
+
+  <a href="relax-match3.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#001a11 0%,#000 65%);opacity:0.5;animation:bgPulse 3s ease-in-out infinite;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ CHILL</div>
+    <div class="card-content">
+      <div class="card-icon-big">🍬</div>
+      <div class="card-num">GAME 01</div>
+      <div class="card-name">CANDY MATCH</div>
+      <div class="card-tagline">▸ MATCH 3 OR MORE ◂</div>
+      <div class="card-desc">Swap colourful gems to match 3 or more in a row. Combos trigger chain reactions. Clear all targets before you run out of moves. Deeply satisfying.</div>
+      <div class="card-tags"><span class="ctag">MATCH-3</span><span class="ctag">COMBOS</span><span class="ctag">LEVELS</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ PLAY NOW</span><span class="scare-level">✦☆☆☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="relax-battleship.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#001122 0%,#000 65%);opacity:0.5;animation:bgPulse 4s ease-in-out infinite 1s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ CLASSIC</div>
+    <div class="card-content">
+      <div class="card-icon-big">🚢</div>
+      <div class="card-num">GAME 02</div>
+      <div class="card-name">BATTLESHIP</div>
+      <div class="card-tagline">▸ SINK THE FLEET ◂</div>
+      <div class="card-desc">Place your fleet on a 10×10 grid and hunt down the enemy's ships. Classic naval warfare strategy. Fire carefully — every shot counts.</div>
+      <div class="card-tags"><span class="ctag">STRATEGY</span><span class="ctag">NAVAL</span><span class="ctag">VS AI</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ DEPLOY FLEET</span><span class="scare-level">✦✦✦☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="relax-wordconnect.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#002211 0%,#000 65%);opacity:0.5;animation:bgPulse 3.5s ease-in-out infinite 0.5s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ WORDS</div>
+    <div class="card-content">
+      <div class="card-icon-big">🔤</div>
+      <div class="card-num">GAME 03</div>
+      <div class="card-name">WORD CONNECT</div>
+      <div class="card-tagline">▸ SWIPE LETTERS TO FORM WORDS ◂</div>
+      <div class="card-desc">A grid of scrambled letters hides hidden words. Swipe to connect letters and spell them out. Find all the words to unlock the next puzzle.</div>
+      <div class="card-tags"><span class="ctag">WORDS</span><span class="ctag">SWIPE</span><span class="ctag">PUZZLE</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ FIND WORDS</span><span class="scare-level">✦✦☆☆☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+  <a href="relax-mystery.html" class="hgame-card">
+    <div class="card-anim-bg" style="background:radial-gradient(ellipse at 50% 0%,#001a0a 0%,#000 65%);opacity:0.5;animation:bgPulse 2.5s ease-in-out infinite 1.5s;"></div>
+    <div class="blood-drip"></div>
+    <div class="diff-badge">◈ STORY</div>
+    <div class="card-content">
+      <div class="card-icon-big">🔍</div>
+      <div class="card-num">GAME 04</div>
+      <div class="card-name">MYSTERY CAFÉ</div>
+      <div class="card-tagline">▸ TEXT-BASED DETECTIVE STORY ◂</div>
+      <div class="card-desc">A cozy text-based mystery set in a café. Someone stole the recipe. Interview suspects, examine clues, and deduce the culprit before closing time.</div>
+      <div class="card-tags"><span class="ctag">STORY</span><span class="ctag">DETECTIVE</span><span class="ctag">CHOICES</span></div>
+      <div class="card-footer-row"><span class="play-label">▶ INVESTIGATE</span><span class="scare-level">✦✦✦✦☆</span></div>
+    </div>
+    <div class="cc tl"></div><div class="cc tr"></div><div class="cc bl"></div><div class="cc br"></div>
+  </a>
+
+</div>
+
+<div class="stats-bottom">
+  <span style="color:#004433;">🏆 WINS <span style="color:#00ff9d;" id="sw">0</span></span>
+  <span style="color:#004433;">⚡ XP <span style="color:#ffe500;" id="sxp">0</span></span>
+  <span style="color:#004433;">🎮 <span style="color:#00ff9d;" id="sp">---</span></span>
+</div>
+<script>
+  document.getElementById('sw').textContent = localStorage.getItem('hvWins')||'0';
+  document.getElementById('sxp').textContent = localStorage.getItem('hvXP')||'0';
+  document.getElementById('sp').textContent = localStorage.getItem('hvPlayer')||'---';
+  const c = document.getElementById('particles');
+  for(let i=0;i<50;i++){const p=document.createElement('div');p.className='particle';p.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*8}s;animation-duration:${4+Math.random()*6}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;opacity:${0.15+Math.random()*0.4}`;c.appendChild(p);}
+</script>
+</body>
+</html>
