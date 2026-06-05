@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WORD CONNECT — XplainCraft's Arcade</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { min-height:100vh; display:flex; flex-direction:column; align-items:center; background:#000c08; font-family:'Share Tech Mono',monospace; }
+    .hud { width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:rgba(0,0,0,0.9); border-bottom:1px solid rgba(0,255,157,0.2); }
+    .hud-val { color:#00ff9d; font-size:0.8rem; letter-spacing:2px; }
+    .game-title { font-family:'Orbitron',sans-serif; font-weight:900; font-size:1.8rem; letter-spacing:5px; color:#00ff9d; text-shadow:0 0 20px #00ff9d; text-align:center; margin:20px 0 4px; }
+    .score-row { display:flex; gap:16px; justify-content:center; margin-bottom:14px; }
+    .score-box { background:rgba(0,0,0,0.7); border:1px solid rgba(0,255,157,0.2); padding:8px 14px; text-align:center; }
+    .score-label { font-size:0.52rem; letter-spacing:2px; color:#004433; }
+    .score-val { font-family:'Orbitron',sans-serif; font-size:1.2rem; font-weight:900; color:#00ff9d; }
+    .word-targets { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width:500px; margin:0 auto 16px; }
+    .wtarget { font-size:0.75rem; letter-spacing:3px; padding:6px 12px; border:1px solid rgba(0,255,157,0.2); color:#004433; transition:all .3s; }
+    .wtarget.found { border-color:#00ff9d; color:#00ff9d; background:rgba(0,255,157,0.1); text-decoration:line-through; }
+    .current-word { font-family:'Orbitron',sans-serif; font-size:1.5rem; font-weight:900; letter-spacing:6px; color:#00ff9d; text-align:center; min-height:2em; display:flex; align-items:center; justify-content:center; margin-bottom:14px; text-shadow:0 0 15px #00ff9d; }
+    .letter-grid { display:grid; gap:10px; margin:0 auto 16px; max-width:340px; padding:16px; background:rgba(0,20,14,0.5); border:1px solid rgba(0,255,157,0.15); box-shadow:0 0 20px rgba(0,255,157,0.08); }
+    .letter-btn { width:64px; height:64px; display:flex; align-items:center; justify-content:center; font-family:'Orbitron',sans-serif; font-size:1.4rem; font-weight:900; cursor:pointer; border:2px solid rgba(0,255,157,0.2); background:rgba(0,10,6,0.8); color:#00ff9d; transition:all .15s; user-select:none; border-radius:4px; }
+    .letter-btn:hover:not(.used) { background:rgba(0,255,157,0.15); border-color:#00ff9d; transform:scale(1.08); }
+    .letter-btn.selected { background:rgba(0,255,157,0.25); border-color:#00ff9d; box-shadow:0 0 12px rgba(0,255,157,0.5); transform:scale(1.12); }
+    .letter-btn.used { opacity:0.25; cursor:default; }
+    .ctrl-row { display:flex; gap:12px; justify-content:center; margin-bottom:14px; }
+    .ctrl-btn { font-size:0.65rem; letter-spacing:2px; padding:10px 18px; background:none; border:1px solid rgba(0,255,157,0.3); color:#00ff9d; cursor:pointer; transition:all .2s; }
+    .ctrl-btn:hover { background:rgba(0,255,157,0.1); }
+    .ctrl-btn.submit { border-color:#00ff9d; background:rgba(0,255,157,0.15); }
+    .msg { font-size:0.75rem; letter-spacing:2px; text-align:center; min-height:1.5em; margin-bottom:8px; transition:color .2s; }
+    .overlay { position:fixed; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,10,6,0.95); font-family:'Orbitron',sans-serif; }
+    .overlay.hidden { display:none; }
+    .ov-title { font-size:clamp(1.8rem,5vw,3rem); font-weight:900; letter-spacing:5px; margin-bottom:12px; text-shadow:0 0 25px currentColor; }
+    .ov-sub { font-family:'Share Tech Mono',monospace; font-size:0.7rem; letter-spacing:4px; color:#004433; margin-bottom:20px; }
+    .ov-btn { background:linear-gradient(135deg,#004433,#008844); border:none; color:#000; font-family:'Orbitron',sans-serif; font-size:0.85rem; font-weight:700; letter-spacing:3px; padding:14px 32px; cursor:pointer; clip-path:polygon(8px 0,100% 0,calc(100% - 8px)100%,0 100%); }
+    .ov-btn:hover { box-shadow:0 0 25px #00ff9d; }
+    @media(max-width:380px){.letter-btn{width:52px;height:52px;font-size:1.1rem;}}
+  </style>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="hud">
+  <a href="relax-hub.html" style="color:#00ff9d;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(0,255,157,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
+  <div class="hud-val">🔤 WORD CONNECT</div>
+  <div class="hud-val">BEST: <span id="hudBest">0</span></div>
+</div>
+
+<div class="game-title">WORD CONNECT</div>
+<div class="score-row">
+  <div class="score-box"><div class="score-label">SCORE</div><div class="score-val" id="scoreVal">0</div></div>
+  <div class="score-box"><div class="score-label">PUZZLE</div><div class="score-val" id="puzzleNum">1</div></div>
+  <div class="score-box"><div class="score-label">FOUND</div><div class="score-val" id="foundCount">0/<span id="totalCount">0</span></div></div>
+</div>
+<div class="word-targets" id="wordTargets"></div>
+<div class="current-word" id="currentWord">_</div>
+<div class="letter-grid" id="letterGrid"></div>
+<div class="ctrl-row">
+  <button class="ctrl-btn" onclick="clearWord()">✕ CLEAR</button>
+  <button class="ctrl-btn submit" onclick="submitWord()">✓ SUBMIT</button>
+  <button class="ctrl-btn" onclick="shuffleLetters()">↻ SHUFFLE</button>
+</div>
+<div class="msg" id="msg"></div>
+
+<div class="overlay hidden" id="winOv">
+  <div style="font-size:4rem;margin-bottom:14px;" id="winIcon">🏆</div>
+  <div class="ov-title" id="winTitle" style="color:#00ff9d;">PUZZLE SOLVED!</div>
+  <div class="ov-sub" id="winSub"></div>
+  <button class="ov-btn" onclick="nextPuzzle()">▶ NEXT PUZZLE</button>
+  <a href="relax-hub.html" style="margin-top:14px;color:rgba(0,255,157,0.5);font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;text-decoration:none;">◄ BACK</a>
+</div>
+
+<script>
+const PUZZLES = [
+  { letters:['C','A','T','S','B','R','O','U','N','I'], words:['CAT','CATS','BRAIN','COAST','COINS','CAN','ARC','ORCA','RAN','TAN','BAN','ROT','SUN','BON','NIT'] },
+  { letters:['F','L','O','W','E','R','S','P','I','N'], words:['FLOW','FLOWER','FLOWN','SLOW','LOWER','PINE','SPIN','WIPE','RILE','LINER','SWIPE','WIRE','WREN','SNORE','LORE'] },
+  { letters:['G','R','A','P','E','S','T','U','M','B'], words:['GRAPE','GRAPES','RAMP','STRAP','STEAM','BEST','BUST','GEMS','TRAM','BRAT','PATS','SEAM','BURG','TERM','GAME'] },
+  { letters:['D','R','A','G','O','N','S','H','I','P'], words:['DRAG','DRAGON','DRAIN','GROIN','PRONG','SHIP','HAND','DROP','SNAP','RIND','SING','NODS','HORN','POND','SPAN'] },
+  { letters:['M','U','S','I','C','A','L','T','O','N'], words:['MUSIC','SONIC','TONAL','SLUM','LOAN','MINT','COST','MIST','SAIL','COIN','MICA','TAIL','SNOT','COMA','LOIN'] },
+  { letters:['B','R','I','G','H','T','S','T','A','R'], words:['BRIGHT','STAR','SHIRT','RIGHT','GRIST','BRAT','GRID','HAIRS','STING','GRAIN','AIRS','BRIG','GRIT','STAR','BARS'] },
+  { letters:['C','R','Y','S','T','A','L','W','O','E'], words:['CRYSTAL','STRAY','LAYER','CLOT','STORY','CROW','WARY','CRAW','LOWER','TORC','STAY','WAOL','OATS','CREST','LACY'] },
+  { letters:['P','H','O','T','O','N','I','C','S','E'], words:['PHOTO','SONIC','STONE','COINS','THOSE','ECHO','POET','NOSE','TONE','SHIP','CHIN','CITE','PINE','ICON','TOPS'] },
+];
+
+let puzzle, selectedIdx, selectedLetters, foundWords, score, puzzleNum, best;
+best = parseInt(localStorage.getItem('wc_best')||'0');
+document.getElementById('hudBest').textContent = best;
+puzzleNum = 1;
+score = 0;
+
+function startPuzzle(p) {
+  puzzle = JSON.parse(JSON.stringify(p));
+  puzzle.letters = [...p.letters].sort(()=>Math.random()-0.5);
+  // Pick 6 target words of varying length
+  const allWords = p.words.slice().sort((a,b)=>b.length-a.length);
+  puzzle.targets = allWords.slice(0,6);
+  selectedIdx = []; selectedLetters = []; foundWords = new Set();
+  renderTargets(); renderGrid(); updateCurrentWord();
+  document.getElementById('winOv').classList.add('hidden');
+  document.getElementById('foundCount').innerHTML = `0/<span id="totalCount">${puzzle.targets.length}</span>`;
+  document.getElementById('puzzleNum').textContent = puzzleNum;
+}
+
+function renderTargets() {
+  const el = document.getElementById('wordTargets'); el.innerHTML='';
+  puzzle.targets.forEach(w => {
+    const d = document.createElement('div');
+    d.className = 'wtarget' + (foundWords.has(w)?' found':'');
+    d.id = 'wt_'+w;
+    d.textContent = foundWords.has(w) ? w : '_ '.repeat(w.length).trim();
+    el.appendChild(d);
+  });
+}
+
+function renderGrid() {
+  const el = document.getElementById('letterGrid');
+  const cols = Math.ceil(Math.sqrt(puzzle.letters.length));
+  el.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  el.innerHTML='';
+  puzzle.letters.forEach((l,i) => {
+    const btn = document.createElement('div');
+    btn.className = 'letter-btn' + (selectedIdx.includes(i)?' selected':'');
+    btn.textContent = l;
+    btn.onclick = () => toggleLetter(i);
+    el.appendChild(btn);
+  });
+}
+
+function toggleLetter(i) {
+  if(selectedIdx.includes(i)) {
+    selectedIdx = selectedIdx.filter(x=>x!==i);
+  } else {
+    selectedIdx.push(i);
+  }
+  selectedLetters = selectedIdx.map(i=>puzzle.letters[i]);
+  renderGrid();
+  updateCurrentWord();
+}
+
+function updateCurrentWord() {
+  const w = selectedLetters.join('');
+  document.getElementById('currentWord').textContent = w || '_';
+}
+
+function clearWord() { selectedIdx=[]; selectedLetters=[]; renderGrid(); updateCurrentWord(); }
+
+function submitWord() {
+  const word = selectedLetters.join('');
+  if(word.length < 3) { setMsg('⚠ MINIMUM 3 LETTERS', '#ff7700'); clearWord(); return; }
+  if(foundWords.has(word)) { setMsg('⚠ ALREADY FOUND!', '#ff7700'); clearWord(); return; }
+  // Check if it's a target
+  if(puzzle.targets.includes(word)) {
+    foundWords.add(word);
+    score += word.length * 10;
+    document.getElementById('scoreVal').textContent = score;
+    document.getElementById('foundCount').innerHTML = `${foundWords.size}/<span id="totalCount">${puzzle.targets.length}</span>`;
+    document.getElementById('wt_'+word).className = 'wtarget found';
+    document.getElementById('wt_'+word).textContent = word;
+    setMsg(`✓ +${word.length*10} POINTS!`, '#00ff9d');
+    let xp=parseInt(localStorage.getItem('hvXP')||'0')+word.length*5; localStorage.setItem('hvXP',xp);
+    if(foundWords.size === puzzle.targets.length) setTimeout(puzzleSolved, 600);
+  } else if(PUZZLES.some(p=>p.words.includes(word))) {
+    // Bonus word
+    score += word.length * 5;
+    document.getElementById('scoreVal').textContent = score;
+    setMsg(`⭐ BONUS WORD! +${word.length*5}`, '#ffe500');
+  } else {
+    setMsg('✗ NOT A VALID WORD', '#ff2244');
+  }
+  clearWord();
+}
+
+function shuffleLetters() {
+  puzzle.letters = [...puzzle.letters].sort(()=>Math.random()-0.5);
+  clearWord();
+  renderGrid();
+}
+
+function puzzleSolved() {
+  if(score > best) { best=score; localStorage.setItem('wc_best',best); document.getElementById('hudBest').textContent=best; }
+  let wins=parseInt(localStorage.getItem('hvWins')||'0')+1; localStorage.setItem('hvWins',wins);
+  document.getElementById('winIcon').textContent='🏆';
+  document.getElementById('winTitle').textContent='PUZZLE SOLVED!';
+  document.getElementById('winTitle').style.color='#00ff9d';
+  document.getElementById('winSub').textContent=`◈ ALL ${puzzle.targets.length} WORDS FOUND ◈`;
+  document.getElementById('winOv').classList.remove('hidden');
+}
+
+function nextPuzzle() {
+  puzzleNum++;
+  startPuzzle(PUZZLES[(puzzleNum-1) % PUZZLES.length]);
+}
+
+let msgTimer;
+function setMsg(m, col='#00ff9d') {
+  const el=document.getElementById('msg'); el.textContent=m; el.style.color=col;
+  clearTimeout(msgTimer); msgTimer=setTimeout(()=>el.textContent='',1500);
+}
+
+// Start
+startPuzzle(PUZZLES[0]);
+</script>
+</body>
+</html>
