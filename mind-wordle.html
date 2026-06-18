@@ -77,7 +77,30 @@ const WORDS = [
   'LIMBO','METRO','NOBLE','ORBIT','PLAZA','QUEEN','RALLY','SQUAD','THORN','UDDER',
   'VERGE','WHEAT','XERIC','YIELD','ZIPPY','CIVIC','BLAZE','CAMEL','DRAFT','EMBER',
   'FROTH','GROAN','HASTE','IVORY','JOKER','KNEEL','LUSTY','MERCY','NUDGE','OLDIE',
-  'PEARL','QUIRP','RELIC','SUGAR','TANGY','USHER','VAULT','WRING','OXIDE','YUMMY'
+  'PEARL','QUIRP','RELIC','SUGAR','TANGY','USHER','VAULT','WRING','OXIDE','YUMMY',
+  'APPLE','BEACH','BERRY','CANDY','DANCE','EAGLE','FRUIT','GRAPE','HAPPY','LIGHT',
+  'MONKEY','NIGHT','PAPER','PIZZA','RULER','SHARK','SMILE','TRAIN','VOICE','WORLD',
+  'ABOUT','ABOVE','ADULT','AGENT','ANGER','AWARD','BASIC','BIRTH','BOARD','BREAD',
+  'BREAK','BROWN','BRUSH','BUYER','CABLE','CHIEF','CHILD','CHURCH','CLOCK','CLOTH',
+  'COAST','COURT','COVER','CREAM','CROWD','CROWN','CYCLE','DEPTH','DIRTY','DRESS',
+  'DRINK','DRIVE','EARTH','ENEMY','ENTRY','FAITH','FIELD','FIFTH','FIGHT','FINAL',
+  'FLOOR','FOCUS','FORCE','FRAME','FRESH','FRONT','GLASS','GRANT','GRASS','GREEN',
+  'GROUP','GUIDE','HEART','HENRY','HORSE','HOTEL','IMAGE','INPUT','IRONI','JUDGE',
+  'LAUGH','LAYER','LEAD','LEGAL','LEVEL','LOCAL','LOGIC','LOOSE','LOWER','LUNCH',
+  'MATCH','METAL','MODEL','MONEY','MONTH','MOUTH','MUSIC','NOISE','NORTH','NURSE',
+  'OFFER','ORDER','OTHER','OWNER','PANEL','PARTY','PEACE','PHASE','PHONE','PHOTO',
+  'PIECE','PITCH','PLACE','PLAIN','PLANE','PLANT','PLATE','POINT','POUND','POWER',
+  'PRESS','PRICE','PRIDE','PRIZE','PROOF','PROUD','RADIO','RANGE','RATIO','REPLY',
+  'RIGHT','RIVER','ROUGH','ROUND','ROUTE','ROYAL','SCALE','SCENE','SCORE','SENSE',
+  'SHAPE','SHARE','SHIRT','SHOCK','SHOOT','SHORT','SIGHT','SKILL','SLEEP','SMALL',
+  'SMART','SMOKE','SOLID','SOUND','SOUTH','SPACE','SPARE','SPEAK','SPEED','SPEND',
+  'SPITE','SPLIT','SPORT','STAGE','STAIR','STAKE','STAND','START','STATE','STEAM',
+  'STEEL','STICK','STILL','STOCK','STONE','STORE','STORM','STORY','STRIP','STUCK',
+  'STUDY','STUFF','STYLE','SUITE','SUPER','SWEET','TABLE','TASTE','THEME','THERE',
+  'THICK','THING','THINK','THIRD','THREE','THROW','TIGHT','TITLE','TOTAL','TOUCH',
+  'TOWER','TRACK','TRADE','TREND','TRIAL','TRUST','TRUTH','TWICE','UNDER','UNION',
+  'UNITY','VALUE','VIDEO','VISIT','WASTE','WATER','WHILE','WHITE','WHOLE','WOMAN',
+  'YOUTH'
 ];
 
 let secret, guesses, currentGuess, gameOver;
@@ -171,14 +194,12 @@ function submitGuess() {
   const result = evaluate(currentGuess);
   const row = guesses.length;
   guesses.push(currentGuess);
-  // Animate tiles
   result.forEach((r, c) => {
     setTimeout(() => {
       const t = document.getElementById(`tile_${row}_${c}`);
       t.classList.add('flip');
       t.classList.add(r);
       setTimeout(() => t.classList.remove('flip'), 500);
-      // Update keyboard
       const kb = document.querySelector(`.kb-key[data-key="${currentGuess[c]}"]`);
       if (kb) {
         if (r === 'correct') kb.className = 'kb-key correct';
@@ -218,9 +239,7 @@ function evaluate(guess) {
   const result = Array(5).fill('absent');
   const secretArr = secret.split('');
   const guessArr = guess.split('');
-  // First pass: correct
   guessArr.forEach((l,i) => { if(l === secretArr[i]) { result[i] = 'correct'; secretArr[i] = null; guessArr[i] = null; } });
-  // Second pass: present
   guessArr.forEach((l,i) => {
     if (!l) return;
     const idx = secretArr.indexOf(l);
