@@ -40,7 +40,7 @@
 <div class="scanlines"></div>
 <div class="hud">
   <a href="mind-hub.html" style="color:#bb00ff;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;border:1px solid rgba(180,0,255,0.4);padding:6px 14px;text-decoration:none;">◄ BACK</a>
-  <div class="hud-val">♟ CHESS</div>
+  <div class="hud-val">♟ CHESS (ELIMINATION MODE)</div>
   <div class="hud-val">WINS: <span id="hudWins">0</span></div>
 </div>
 
@@ -77,7 +77,7 @@ const PIECES = {
   wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',
   bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'
 };
-const PIECE_VALUES = { P:1, N:3, B:3, R:5, Q:9, K:0 };
+const PIECE_VALUES = { P:1, N:3, B:3, R:5, Q:9, K:10 };
 let board, selected, turn, aiDiff, gameOver, history, capW, capB, lastMove;
 const hudWins = document.getElementById('hudWins');
 hudWins.textContent = localStorage.getItem('hvWins')||'0';
@@ -112,7 +112,7 @@ function initBoard() {
 function renderBoard() {
   const el = document.getElementById('board');
   el.innerHTML='';
-  const possible = selected ? getPossibleMoves(selected[0], selected[1]) : [];
+  const possible = selected ? getFinalMovesForPiece(selected[0], selected[1]) : [];
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
       const sq=document.createElement('div');
@@ -121,7 +121,6 @@ function renderBoard() {
       if(selected && selected[0]===r && selected[1]===c) sq.classList.add('selected');
       if(possible.some(m=>m[0]===r&&m[1]===c)) sq.classList.add('possible');
       if(lastMove && ((lastMove[0]===r&&lastMove[1]===c)||(lastMove[2]===r&&lastMove[3]===c))) sq.classList.add('last-move');
-      // Check highlight
       if(board[r][c] && board[r][c]==='wK' && isInCheck('w')) sq.classList.add('check');
       if(board[r][c] && board[r][c]==='bK' && isInCheck('b')) sq.classList.add('check');
       const piece=board[r][c];
@@ -136,7 +135,7 @@ function handleClick(r,c) {
   if(gameOver||turn!=='w') return;
   const piece=board[r][c];
   if(selected) {
-    const moves=getPossibleMoves(selected[0],selected[1]);
+    const moves=getFinalMovesForPiece(selected[0],selected[1]);
     const move=moves.find(m=>m[0]===r&&m[1]===c);
     if(move) {
       doMove(selected[0],selected[1],r,c,'w');
@@ -157,23 +156,22 @@ function doMove(fr,fc,tr,tc,color) {
   board[tr][tc]=board[fr][fc];
   board[fr][fc]=null;
   lastMove=[fr,fc,tr,tc];
-  // Pawn promotion
   if(board[tr][tc]==='wP'&&tr===0) board[tr][tc]='wQ';
   if(board[tr][tc]==='bP'&&tr===7) board[tr][tc]='bQ';
   addMoveLog(fr,fc,tr,tc,color);
   renderBoard();
-  // Check for checkmate/stalemate
+  
   const opp=color==='w'?'b':'w';
-  if(isCheckmate(opp)){
+  if(!hasPieces(opp)){
     gameOver=true;
     if(opp==='b'){
-      setStatus('🏆 CHECKMATE! YOU WIN!','#00ff9d');
+      setStatus('🏆 ALL AI PIECES ELIMINATED! YOU WIN!','#00ff9d');
       let wins=parseInt(localStorage.getItem('hvWins')||'0')+1;
       localStorage.setItem('hvWins',wins); hudWins.textContent=wins;
       let xp=parseInt(localStorage.getItem('hvXP')||'0')+100;
       localStorage.setItem('hvXP',xp);
     } else {
-      setStatus('💀 CHECKMATE — AI WINS!','#ff2244');
+      setStatus('💀 ALL YOUR PIECES ELIMINATED — AI WINS!','#ff2244');
       let l=parseInt(localStorage.getItem('hvLosses')||'0')+1; localStorage.setItem('hvLosses',l);
     }
   } else if(isInCheck(opp)) {
@@ -229,7 +227,7 @@ function getAllMoves(color) {
   const moves=[];
   for(let r=0;r<8;r++) for(let c=0;c<8;c++)
     if(board[r][c]&&board[r][c][0]===color)
-      getPossibleMoves(r,c).forEach(m=>moves.push([r,c,...m]));
+      getFinalMovesForPiece(r,c).forEach(m=>moves.push([r,c,...m]));
   return moves.sort(()=>Math.random()-0.5);
 }
 
@@ -243,24 +241,56 @@ function getPossibleMoves(r,c) {
     moves.push([tr,tc]);
     return !board[tr][tc];
   };
-  const slide=(drs,dcs)=>{for(let dr of drs)for(let dc of dcs){let tr=r+dr,tc=c+dc;while(add(tr,tc)){tr+=dr;tc+=dc;}}};
   if(type==='P'){
     const dir=color==='w'?-1:1,start=color==='w'?6:1;
     if(!board[r+dir]?.[c]) add(r+dir,c);
     if(r===start&&!board[r+dir]?.[c]&&!board[r+dir*2]?.[c]) add(r+dir*2,c);
     [[r+dir,c-1],[r+dir,c+1]].forEach(([tr,tc])=>{if(board[tr]?.[tc]&&board[tr][tc][0]!==color)moves.push([tr,tc]);});
-  } else if(type==='R') slide([-1,0,1,0],[0,1,0,-1].map((v,i)=>i<2?v:v));
-  if(type==='R'){const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
-  if(type==='B'){const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
-  if(type==='Q'){const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
+  }
+  if(type==='R'||type==='Q'){const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
+  if(type==='B'||type==='Q'){const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];for(const[dr,dc]of dirs){let tr=r+dr,tc=c+dc;while(tr>=0&&tr<8&&tc>=0&&tc<8){if(!add(tr,tc))break;tr+=dr;tc+=dc;}}}
   if(type==='N'){[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc])=>add(r+dr,c+dc));}
   if(type==='K'){[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>add(r+dr,c+dc));}
   return moves;
 }
 
+function getAllStrictLegalMoves(color) {
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c] && board[r][c][0] === color) {
+        const raw = getPossibleMoves(r, c);
+        const strict = raw.filter(m => {
+          const save = board.map(row => [...row]);
+          board[m[0]][m[1]] = board[r][c];
+          board[r][c] = null;
+          const check = isInCheck(color);
+          board = save;
+          return !check;
+        });
+        strict.forEach(m => moves.push([r, c, m[0], m[1]]));
+      }
+    }
+  }
+  return moves;
+}
+
+function getFinalMovesForPiece(r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const color = piece[0];
+  const strictMoves = getAllStrictLegalMoves(color);
+  if (strictMoves.length > 0) {
+    return strictMoves.filter(m => m[0] === r && m[1] === c).map(m => [m[2], m[3]]);
+  } else {
+    return getPossibleMoves(r, c);
+  }
+}
+
 function isInCheck(color) {
   let kr=-1,kc=-1;
   for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(board[r][c]===(color+'K')){kr=r;kc=c;}
+  if(kr === -1) return false;
   const opp=color==='w'?'b':'w';
   for(let r=0;r<8;r++) for(let c=0;c<8;c++)
     if(board[r][c]&&board[r][c][0]===opp)
@@ -268,18 +298,16 @@ function isInCheck(color) {
   return false;
 }
 
-function isCheckmate(color) {
-  return !getAllMoves(color).length;
+function hasPieces(color) {
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(board[r][c]&&board[r][c][0]===color) return true;
+  return false;
 }
 
 function undoMove() {
   if(!history.length||turn!=='w') return;
-  // Undo AI move
   if(history.length>1){
-    const h=history.pop();
-    board=h.board;
-    const h2=history.pop();
-    board=h2.board;
+    const h=history.pop(); board=h.board;
+    const h2=history.pop(); board=h2.board;
   } else {
     board=history.pop().board;
   }
