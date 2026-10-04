@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Runner</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"neon-runner","n":4,"title":"NEON RUNNER","genre":"fun","desc":"Run the rooftops of a neon city. Jump the barriers, slide under the lasers, double-jump the gaps and grab the coins. It never stops getting faster.","controls":"Space / ↑ / tap = jump (twice = double jump) · ↓ / S = slide","scoreLabel":"METRES","tasks":[{"stat":"score","target":800,"text":"Run 800 m in Neon Runner"},{"stat":"coins","target":40,"text":"Grab 40 coins in one Neon Runner run"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GY = 420, PX = 180;
+function spawn(s) {
+  const r = Math.random(), x = 1000;
+  if (r < 0.35) s.obs.push({ k: 'box', x, w: 40, h: 46 });
+  else if (r < 0.6) s.obs.push({ k: 'laser', x, w: 30, y: GY - 98, h: 54 });
+  else if (r < 0.8) s.obs.push({ k: 'gap', x, w: 130 + Math.min(70, s.dist / 40) });
+  else s.obs.push({ k: 'tall', x, w: 34, h: 90 });
+  const cy = r < 0.6 ? GY - 140 : GY - 60;
+  for (let i = 0; i < 5; i++) s.coins.push({ x: x + 60 + i * 34, y: cy - Math.sin(i / 4 * Math.PI) * 30 });
+}
+K.game({
+  bg: '#05030f',
+  init(s) {
+    s.p = { y: GY, vy: 0, jumps: 0, slide: 0 }; s.obs = []; s.coins = []; s.dist = 0; s.speed = 340; s.next = 1.2; s.got = 0; s.t = 0;
+    s.sky = Array.from({ length: 40 }, () => ({ x: K.rand(0, 960), y: K.rand(0, 300), r: K.rand(0.5, 1.8) }));
+    s.bld = Array.from({ length: 14 }, (_, i) => ({ x: i * 80, h: K.rand(80, 260), c: K.pick(['#ff2bd6', '#22e6ff', '#8b5cf6']) }));
+  },
+  update(s, dt) {
+    s.t += dt; const p = s.p;
+    s.speed = Math.min(820, 340 + s.dist * 0.18);
+    s.dist += (s.speed * dt) / 20;
+    if ((K.tap('Space', 'ArrowUp', 'KeyW') || K.mouse.clicked) && p.jumps < 2) { p.vy = p.jumps ? -560 : -640; p.jumps++; p.slide = 0; K.sfx('jump'); }
+    if (K.down('ArrowDown', 'KeyS')) { if (p.y >= GY) p.slide = 0.12; else p.vy += 2400 * dt; }
+    p.slide -= dt;
+    const overGap = s.obs.some((o) => o.k === 'gap' && PX > o.x + 8 && PX < o.x + o.w - 8);
+    p.vy += 1700 * dt; p.y += p.vy * dt;
+    if (!overGap && p.y >= GY && p.y < GY + 34) { p.y = GY; p.vy = 0; p.jumps = 0; }
+    if (p.y > GY + 110) { K.sfx('lose'); return K.end(s, { score: Math.floor(s.dist), won: null, title: 'FELL', stats: { coins: s.got }, text: `${s.got} coins` }); }
+    s.next -= dt;
+    if (s.next <= 0) { spawn(s); s.next = K.rand(0.75, 1.5) * (520 / s.speed) + 0.25; }
+    const sliding = p.slide > 0 && p.y >= GY;
+    const ph = sliding ? 26 : 56, top = p.y - ph;
+    for (const o of s.obs) {
+      o.x -= s.speed * dt;
+      if (o.k === 'gap' || PX + 14 < o.x || PX - 14 > o.x + o.w) continue;
+      const hit = o.k === 'laser' ? top < o.y + o.h && p.y > o.y : p.y > GY - o.h + 4;
+      if (hit) { K.sfx('hit'); K.shake(14); K.flash('#ff3355', 0.25); return K.end(s, { score: Math.floor(s.dist), won: null, title: 'WIPEOUT', stats: { coins: s.got }, text: `${s.got} coins` }); }
+    }
+    for (const c of s.coins) { c.x -= s.speed * dt; if (!c.got && Math.abs(c.x - PX) < 22 && Math.abs(c.y - (p.y - 28)) < 34) { c.got = true; s.got++; s.dist += 5; K.sfx('coin'); } }
+    s.obs = s.obs.filter((o) => o.x + o.w > -50); s.coins = s.coins.filter((c) => c.x > -30 && !c.got);
+    for (const b of s.bld) { b.x -= s.speed * 0.2 * dt; if (b.x < -80) b.x += 1120; }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#1a0630', '#05030f']));
+    for (const st of s.sky) K.circle(st.x, st.y, st.r, '#ffffff88');
+    for (const b of s.bld) { K.rect(b.x, GY - b.h, 70, b.h, '#0c0a22'); K.rect(b.x, GY - b.h, 70, 3, b.c + '99'); }
+    const gaps = s.obs.filter((o) => o.k === 'gap');
+    let x0 = 0;
+    const ground = (a, b) => { if (b > a) { K.rect(a, GY, b - a, 120, '#120f2e'); K.glow('#22e6ff', 12); K.rect(a, GY, b - a, 4, '#22e6ff'); K.noGlow(); } };
+    gaps.sort((a, b) => a.x - b.x).forEach((g) => { ground(x0, g.x); x0 = g.x + g.w; });
+    ground(x0, 960);
+    for (let i = 0; i < 12; i++) { const lx = ((i * 90 - s.dist * 20) % 1080 + 1080) % 1080 - 60; K.rect(lx, GY + 30, 40, 3, '#22e6ff33'); }
+    for (const o of s.obs) {
+      if (o.k === 'box' || o.k === 'tall') { K.glow('#ff8a3a', 12); K.rect(o.x, GY - o.h, o.w, o.h, '#2a1206', 4); K.stroke(o.x, GY - o.h, o.w, o.h, '#ff8a3a', 3, 4); K.noGlow(); }
+      if (o.k === 'laser') { K.rect(o.x + 10, 0, 10, o.y, '#333'); K.glow('#ff3355', 22); K.rect(o.x - 30, o.y + 20, o.w + 60, 6, '#ff3355'); K.noGlow(); K.rect(o.x + 5, o.y, 20, o.h - 20, '#222'); }
+    }
+    for (const c of s.coins) { K.glow('#ffd93a', 10); K.circle(c.x, c.y, 9 * Math.abs(Math.cos(s.t * 5 + c.x / 50)) + 2, '#ffd93a'); K.noGlow(); }
+    const p = s.p, sliding = p.slide > 0 && p.y >= GY, run = s.t * 14;
+    K.glow('#3dffa0', 16);
+    if (sliding) { K.rect(PX - 24, p.y - 26, 48, 22, '#3dffa0', 10); K.circle(PX + 18, p.y - 22, 9, '#b6ffd9'); }
+    else {
+      K.rect(PX - 11, p.y - 48, 22, 30, '#3dffa0', 8); K.circle(PX + 2, p.y - 54, 10, '#b6ffd9');
+      K.line(PX - 4, p.y - 20, PX - 4 + Math.sin(run) * 12, p.y, '#3dffa0', 6);
+      K.line(PX + 4, p.y - 20, PX + 4 - Math.sin(run) * 12, p.y, '#3dffa0', 6);
+    }
+    K.noGlow();
+    K.text(`${Math.floor(s.dist)} m`, 20, 26, 24, '#fff', 'left', 'd');
+    K.text(`● ${s.got}`, 940, 26, 22, '#ffd93a', 'right', 'd');
+  },
+  ai(s) {
+    const o = s.obs.find((q) => q.x + q.w > 150 && q.x < 330);
+    if (!o) return;
+    const lead = o.x - PX;
+    if (o.k === 'laser') { if (lead < 120) K.vhold('ArrowDown', true); else K.vhold('ArrowDown', false); return; }
+    K.vhold('ArrowDown', false);
+    if (lead < (o.k === 'gap' ? 70 : 95) && s.p.jumps === 0) K.vtap('Space');
+    if (o.k === 'gap' && s.p.jumps === 1 && s.p.vy > 50) K.vtap('Space');
+  },
+});
+</script></body></html>

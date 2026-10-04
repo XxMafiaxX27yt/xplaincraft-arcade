@@ -1,0 +1,120 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Match-3</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"match-3","n":1,"title":"MATCH-3","genre":"relax","desc":"Swap neighbouring gems to line up three or more. Four in a row makes a line-blaster, five makes a colour bomb. 30 calm moves, no timer.","controls":"Click a gem then a neighbour, or drag / swipe","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in Match-3"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 8, T = 58, BX = 480 - (N * T) / 2 + 60, BY = 38;
+const GEM = ['#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff'];
+const shape = (c, x, y, r) => {
+  const k = GEM.indexOf(c);
+  if (k === 0) K.circle(x, y, r, c);
+  else if (k === 1) K.poly([[x, y - r], [x + r, y], [x, y + r], [x - r, y]], c);
+  else if (k === 2) K.poly([[x, y - r], [x + r * 0.95, y + r * 0.8], [x - r * 0.95, y + r * 0.8]], c);
+  else if (k === 3) K.rect(x - r * 0.8, y - r * 0.8, r * 1.6, r * 1.6, c, 5);
+  else if (k === 4) K.poly(Array.from({ length: 6 }, (_, i) => [x + Math.cos(i / 6 * 6.283) * r, y + Math.sin(i / 6 * 6.283) * r]), c);
+  else K.poly(Array.from({ length: 10 }, (_, i) => [x + Math.cos(i / 10 * 6.283 - 1.57) * r * (i % 2 ? 0.5 : 1), y + Math.sin(i / 10 * 6.283 - 1.57) * r * (i % 2 ? 0.5 : 1)]), c);
+};
+const mk = (c, sp) => ({ c: c ?? K.irand(0, 5), sp: sp || null, y: 0, dy: 0 });
+function fill(s) { s.g = []; for (let y = 0; y < N; y++) { s.g.push([]); for (let x = 0; x < N; x++) { let g; do { g = mk(); } while ((x > 1 && s.g[y][x - 1].c === g.c && s.g[y][x - 2].c === g.c) || (y > 1 && s.g[y - 1][x].c === g.c && s.g[y - 2][x].c === g.c)); s.g[y].push(g); } } }
+function findRuns(s) {
+  const runs = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N;) { let e = x; while (e + 1 < N && s.g[y][e + 1] && s.g[y][x] && s.g[y][e + 1].c === s.g[y][x].c && s.g[y][x].c >= 0) e++; if (e - x >= 2) runs.push({ cells: Array.from({ length: e - x + 1 }, (_, i) => [x + i, y]), dir: 'h' }); x = e + 1; }
+  for (let x = 0; x < N; x++) for (let y = 0; y < N;) { let e = y; while (e + 1 < N && s.g[e + 1][x] && s.g[y][x] && s.g[e + 1][x].c === s.g[y][x].c && s.g[y][x].c >= 0) e++; if (e - y >= 2) runs.push({ cells: Array.from({ length: e - y + 1 }, (_, i) => [x, y + i]), dir: 'v' }); y = e + 1; }
+  return runs;
+}
+function clear(s, focus) {
+  const runs = findRuns(s);
+  if (!runs.length) return false;
+  const kill = new Set(), spawn = [];
+  runs.forEach((r) => {
+    r.cells.forEach(([x, y]) => kill.add(y * N + x));
+    if (r.cells.length >= 4) { const at = r.cells.find(([x, y]) => focus && focus.some(([fx, fy]) => fx === x && fy === y)) || r.cells[1]; spawn.push({ at, c: s.g[at[1]][at[0]].c, sp: r.cells.length >= 5 ? 'bomb' : r.dir }); }
+  });
+  // specials explode
+  let changed = true;
+  while (changed) {
+    changed = false;
+    [...kill].forEach((i) => {
+      const x = i % N, y = Math.floor(i / N), g = s.g[y][x];
+      if (!g || !g.sp || g.used) return; g.used = true;
+      const add = (xx, yy) => { if (xx >= 0 && yy >= 0 && xx < N && yy < N && !kill.has(yy * N + xx)) { kill.add(yy * N + xx); changed = true; } };
+      if (g.sp === 'h') for (let k = 0; k < N; k++) add(k, y);
+      if (g.sp === 'v') for (let k = 0; k < N; k++) add(x, k);
+      if (g.sp === 'bomb') for (let yy = 0; yy < N; yy++) for (let xx = 0; xx < N; xx++) if (s.g[yy][xx].c === g.c) add(xx, yy);
+      K.sfx('boom'); K.shake(6);
+    });
+  }
+  s.combo++;
+  const pts = kill.size * 10 * s.combo;
+  s.score += pts;
+  kill.forEach((i) => { const x = i % N, y = Math.floor(i / N); K.burst(BX + x * T + T / 2, BY + y * T + T / 2, GEM[s.g[y][x].c], 5, 160, 0.4); s.g[y][x] = null; });
+  spawn.forEach((sp) => (s.g[sp.at[1]][sp.at[0]] = mk(sp.c, sp.sp)));
+  K.tone(500 + s.combo * 90, 0.12, 'triangle', 0.06);
+  if (s.combo > 1) K.floatText(`×${s.combo}`, 120, 300, '#ffd93a', 26);
+  // gravity
+  for (let x = 0; x < N; x++) {
+    let w = N - 1;
+    for (let y = N - 1; y >= 0; y--) if (s.g[y][x]) { const g = s.g[y][x]; s.g[y][x] = null; s.g[w][x] = g; g.dy = Math.max(g.dy, (w - y) * T); w--; }
+    for (let y = w; y >= 0; y--) { s.g[y][x] = mk(); s.g[y][x].dy = (w + 1) * T + 40; }
+  }
+  s.settle = 0.28;
+  return true;
+}
+function hasMove(s) {
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    const x2 = x + dx, y2 = y + dy; if (x2 >= N || y2 >= N) continue;
+    [s.g[y][x], s.g[y2][x2]] = [s.g[y2][x2], s.g[y][x]]; const ok = findRuns(s).length > 0; [s.g[y][x], s.g[y2][x2]] = [s.g[y2][x2], s.g[y][x]];
+    if (ok) return [x, y, x2, y2];
+  }
+  return null;
+}
+function trySwap(s, a, b) {
+  const [x1, y1] = a, [x2, y2] = b;
+  if (Math.abs(x1 - x2) + Math.abs(y1 - y2) !== 1) return;
+  [s.g[y1][x1], s.g[y2][x2]] = [s.g[y2][x2], s.g[y1][x1]];
+  s.combo = 0;
+  if (!findRuns(s).length) { [s.g[y1][x1], s.g[y2][x2]] = [s.g[y2][x2], s.g[y1][x1]]; K.sfx('wrong'); s.wiggle = { a, b, t: 0.3 }; return; }
+  s.moves--; s.focus = [a, b];
+  clear(s, s.focus);
+}
+K.game({
+  bg: '#0b0a1d',
+  init(s) { fill(s); s.score = 0; s.moves = 30; s.sel = null; s.combo = 0; s.settle = 0; s.drag = null; s.wiggle = null; },
+  update(s, dt) {
+    for (const row of s.g) for (const g of row) if (g) g.dy = Math.max(0, g.dy - dt * 900);
+    if (s.wiggle) { s.wiggle.t -= dt; if (s.wiggle.t <= 0) s.wiggle = null; }
+    if (s.settle > 0) { s.settle -= dt; if (s.settle <= 0 && !clear(s)) { if (!hasMove(s)) { fill(s); K.sfx('whoosh'); } if (s.moves <= 0) K.end(s, { score: s.score, won: null, title: 'OUT OF MOVES', text: 'Lovely session.' }); } return; }
+    const cell = (mx, my) => { const x = Math.floor((mx - BX) / T), y = Math.floor((my - BY) / T); return x >= 0 && y >= 0 && x < N && y < N ? [x, y] : null; };
+    if (K.mouse.clicked) {
+      const c = cell(K.mouse.x, K.mouse.y);
+      if (c && s.sel && Math.abs(c[0] - s.sel[0]) + Math.abs(c[1] - s.sel[1]) === 1) { trySwap(s, s.sel, c); s.sel = null; }
+      else { s.sel = c; s.drag = c ? { c, x: K.mouse.x, y: K.mouse.y } : null; if (c) K.sfx('tick'); }
+    }
+    if (s.drag && K.mouse.down) {
+      const dx = K.mouse.x - s.drag.x, dy = K.mouse.y - s.drag.y;
+      if (Math.hypot(dx, dy) > T * 0.45) { const d = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]; const t = [s.drag.c[0] + d[0], s.drag.c[1] + d[1]]; if (t[0] >= 0 && t[1] >= 0 && t[0] < N && t[1] < N) trySwap(s, s.drag.c, t); s.drag = null; s.sel = null; }
+    }
+    if (!K.mouse.down) s.drag = null;
+  },
+  draw(s) {
+    K.rect(BX - 10, BY - 10, N * T + 20, N * T + 20, '#15132e', 16);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if ((x + y) % 2) K.rect(BX + x * T, BY + y * T, T, T, '#1b1838');
+      const g = s.g[y][x]; if (!g) continue;
+      let px = BX + x * T + T / 2, py = BY + y * T + T / 2 - g.dy;
+      if (s.wiggle && s.wiggle.a[0] === x && s.wiggle.a[1] === y) px += Math.sin(s.wiggle.t * 60) * 5;
+      const sel = s.sel && s.sel[0] === x && s.sel[1] === y;
+      if (sel) K.rect(BX + x * T + 3, BY + y * T + 3, T - 6, T - 6, '#ffffff22', 10);
+      K.glow(GEM[g.c], g.sp ? 22 : 8); shape(GEM[g.c], px, py, sel ? 22 + Math.sin(K.time() * 10) * 2 : 20); K.noGlow();
+      if (g.sp === 'h') K.rect(px - 18, py - 3, 36, 6, '#fff', 3);
+      if (g.sp === 'v') K.rect(px - 3, py - 18, 6, 36, '#fff', 3);
+      if (g.sp === 'bomb') { K.circle(px, py, 9, '#fff'); K.circle(px, py, 5, GEM[g.c]); }
+      K.alpha(0.35); K.circle(px - 6, py - 7, 5, '#fff'); K.alpha(1);
+    }
+    K.text('SCORE', 120, 120, 16, '#8e88b8', 'center', 'm'); K.text(String(s.score), 120, 152, 34, '#ffd93a', 'center', 'd');
+    K.text('MOVES', 120, 220, 16, '#8e88b8', 'center', 'm'); K.text(String(s.moves), 120, 252, 34, s.moves <= 5 ? '#ff3355' : '#22e6ff', 'center', 'd');
+  },
+  ai(s) { if (s.settle > 0) return; s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0) { const m = hasMove(s); if (m) trySwap(s, [m[0], m[1]], [m[2], m[3]]); } },
+});
+</script></body></html>

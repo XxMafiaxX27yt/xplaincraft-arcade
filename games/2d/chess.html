@@ -1,0 +1,163 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chess</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"chess","n":3,"title":"CHESS","genre":"mind","desc":"Full chess against the CPU: castling, en passant, promotion, check and mate. Pick EASY, MEDIUM or HARD. Beating HARD is worth the most.","controls":"Click / tap a piece, then a highlighted square","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Beat the CPU at Chess"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// board: 64 cells, piece = 'wP' style or null. index = r*8+c, r 0 = black's back rank (top)
+const SQ = 60, BX = 480 - SQ * 4, BY = 30;
+const VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 0 };
+const PST = {
+  P: [0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5, 5, 10, 25, 25, 10, 5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, -5, -10, 0, 0, -10, -5, 5, 5, 10, 10, -20, -20, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0],
+  N: [-50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 0, 0, -20, -40, -30, 0, 10, 15, 15, 10, 0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10, 5, -30, -40, -20, 0, 5, 5, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50],
+  B: [-20, -10, -10, -10, -10, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 10, 10, 5, 0, -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 10, 10, 10, 10, 10, 10, -10, -10, 5, 0, 0, 0, 0, 5, -10, -20, -10, -10, -10, -10, -10, -10, -20],
+  R: [0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, 10, 10, 10, 10, 5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 0, 0, 0, 5, 5, 0, 0, 0],
+  Q: [-20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10, -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0, 0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20],
+  K: [-30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30, -20, -10, -20, -20, -20, -20, -20, -20, -10, 20, 20, 0, 0, 0, 0, 20, 20, 20, 30, 10, 0, 0, 10, 30, 20],
+};
+const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
+function startPos() {
+  const b = Array(64).fill(null), back = 'RNBQKBNR';
+  for (let c = 0; c < 8; c++) { b[c] = 'b' + back[c]; b[8 + c] = 'bP'; b[48 + c] = 'wP'; b[56 + c] = 'w' + back[c]; }
+  return { b, turn: 'w', cast: { wK: true, wQ: true, bK: true, bQ: true }, ep: -1 };
+}
+const rc = (i) => [i >> 3, i & 7];
+const on = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+function attacked(p, sq, by) {
+  const [r, c] = rc(sq), b = p.b;
+  const dir = by === 'w' ? 1 : -1;
+  for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (on(rr, cc) && b[rr * 8 + cc] === by + 'P') return true; }
+  for (const [dr, dc] of [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]]) { const rr = r + dr, cc = c + dc; if (on(rr, cc) && b[rr * 8 + cc] === by + 'N') return true; }
+  for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    let rr = r + dr, cc = c + dc, d = 1;
+    while (on(rr, cc)) {
+      const x = b[rr * 8 + cc];
+      if (x) { if (x[0] === by) { const t = x[1], diag = dr && dc; if (t === 'Q' || (diag && t === 'B') || (!diag && t === 'R') || (d === 1 && t === 'K')) return true; } break; }
+      rr += dr; cc += dc; d++;
+    }
+  }
+  return false;
+}
+function pseudo(p) {
+  const out = [], b = p.b, me = p.turn, op = me === 'w' ? 'b' : 'w';
+  for (let i = 0; i < 64; i++) {
+    const x = b[i]; if (!x || x[0] !== me) continue;
+    const [r, c] = rc(i), t = x[1];
+    const add = (j, extra = {}) => out.push({ f: i, t: j, ...extra });
+    if (t === 'P') {
+      const d = me === 'w' ? -1 : 1, r1 = r + d;
+      if (on(r1, c) && !b[r1 * 8 + c]) { add(r1 * 8 + c, { promo: r1 === 0 || r1 === 7 }); const sr = me === 'w' ? 6 : 1; if (r === sr && !b[(r + 2 * d) * 8 + c]) add((r + 2 * d) * 8 + c, { dbl: true }); }
+      for (const dc of [-1, 1]) { const cc = c + dc; if (!on(r1, cc)) continue; const j = r1 * 8 + cc; if (b[j] && b[j][0] === op) add(j, { promo: r1 === 0 || r1 === 7 }); else if (j === p.ep) add(j, { ep: true }); }
+    } else if (t === 'N' || t === 'K') {
+      const D = t === 'N' ? [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+      for (const [dr, dc] of D) { const rr = r + dr, cc = c + dc; if (on(rr, cc) && (!b[rr * 8 + cc] || b[rr * 8 + cc][0] === op)) add(rr * 8 + cc); }
+      if (t === 'K' && !attacked(p, i, op)) {
+        const row = me === 'w' ? 56 : 0;
+        if (p.cast[me + 'K'] && !b[row + 5] && !b[row + 6] && b[row + 7] === me + 'R' && !attacked(p, row + 5, op) && !attacked(p, row + 6, op)) add(row + 6, { castle: 'K' });
+        if (p.cast[me + 'Q'] && !b[row + 1] && !b[row + 2] && !b[row + 3] && b[row] === me + 'R' && !attacked(p, row + 3, op) && !attacked(p, row + 2, op)) add(row + 2, { castle: 'Q' });
+      }
+    } else {
+      const D = t === 'B' ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : t === 'R' ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+      for (const [dr, dc] of D) { let rr = r + dr, cc = c + dc; while (on(rr, cc)) { const j = rr * 8 + cc; if (b[j]) { if (b[j][0] === op) add(j); break; } add(j); rr += dr; cc += dc; } }
+    }
+  }
+  return out;
+}
+function make(p, m) {
+  const b = p.b.slice(), me = p.turn, x = b[m.f], cast = { ...p.cast };
+  b[m.t] = m.promo ? me + 'Q' : x; b[m.f] = null;
+  if (m.ep) b[m.t + (me === 'w' ? 8 : -8)] = null;
+  if (m.castle) { const row = me === 'w' ? 56 : 0; if (m.castle === 'K') { b[row + 5] = b[row + 7]; b[row + 7] = null; } else { b[row + 3] = b[row]; b[row] = null; } }
+  if (x[1] === 'K') { cast[me + 'K'] = false; cast[me + 'Q'] = false; }
+  [[56, 'wQ'], [63, 'wK'], [0, 'bQ'], [7, 'bK']].forEach(([sq, k]) => { if (m.f === sq || m.t === sq) cast[k] = false; });
+  return { b, turn: me === 'w' ? 'b' : 'w', cast, ep: m.dbl ? (m.f + m.t) / 2 : -1 };
+}
+const kingSq = (p, col) => p.b.indexOf(col + 'K');
+function legal(p) { return pseudo(p).filter((m) => { const n = make(p, m); return !attacked(n, kingSq(n, p.turn), n.turn); }); }
+function evaluate(p) {
+  let s = 0;
+  for (let i = 0; i < 64; i++) { const x = p.b[i]; if (!x) continue; const t = x[1], v = VAL[t] + PST[t][x[0] === 'w' ? i : (7 - (i >> 3)) * 8 + (i & 7)]; s += x[0] === 'w' ? v : -v; }
+  return p.turn === 'w' ? s : -s;
+}
+function search(p, depth, a, bt) {
+  if (depth === 0) return evaluate(p);
+  const ms = legal(p);
+  if (!ms.length) return attacked(p, kingSq(p, p.turn), p.turn === 'w' ? 'b' : 'w') ? -99999 - depth : 0;
+  ms.sort((x, y) => (p.b[y.t] ? VAL[p.b[y.t][1]] : 0) - (p.b[x.t] ? VAL[p.b[x.t][1]] : 0));
+  for (const m of ms) { const v = -search(make(p, m), depth - 1, -bt, -a); if (v >= bt) return bt; if (v > a) a = v; }
+  return a;
+}
+function bestMove(p, depth, noise) {
+  const ms = K.shuffle(legal(p)); let best = null, bv = -1e9;
+  for (const m of ms) { const v = -search(make(p, m), depth - 1, -1e9, 1e9) + K.rand(0, noise); if (v > bv) { bv = v; best = m; } }
+  return best;
+}
+K.game({
+  bg: '#0d0b18', touch: { stick: false, buttons: [] },
+  init(s) { s.p = startPos(); s.sel = -1; s.moves = []; s.level = 0; s.phase = 'pick'; s.last = null; s.think = 0; s.captured = { w: [], b: [] }; s.status = ''; },
+  update(s, dt) {
+    if (s.phase === 'pick') {
+      ['EASY', 'MEDIUM', 'HARD'].forEach((n, i) => { if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 })) { s.level = i + 1; s.phase = 'play'; K.sfx('select'); } });
+      if (K.tap('Digit1')) { s.level = 1; s.phase = 'play'; } if (K.tap('Digit2')) { s.level = 2; s.phase = 'play'; } if (K.tap('Digit3')) { s.level = 3; s.phase = 'play'; }
+      return;
+    }
+    if (s.phase === 'over') return;
+    const p = s.p;
+    const finishCheck = () => {
+      const ms = legal(s.p), chk = attacked(s.p, kingSq(s.p, s.p.turn), s.p.turn === 'w' ? 'b' : 'w');
+      s.status = chk ? 'CHECK' : '';
+      if (!ms.length) {
+        s.phase = 'over';
+        const youWin = chk && s.p.turn === 'b', draw = !chk;
+        K.sfx(youWin ? 'win' : draw ? 'wrong' : 'lose');
+        setTimeout(() => K.end(s, { score: youWin ? s.level * 100 : draw ? 30 : 0, won: youWin ? true : draw ? null : false, stats: { won: youWin ? 1 : 0 }, title: youWin ? 'CHECKMATE!' : draw ? 'STALEMATE' : 'CHECKMATED', text: ['', 'Easy', 'Medium', 'Hard'][s.level] + ' CPU' }), 900);
+      } else if (chk) K.sfx('knock');
+    };
+    const doMove = (m) => { const cap = m.ep ? (p.turn === 'w' ? 'bP' : 'wP') : p.b[m.t]; if (cap) s.captured[p.turn].push(cap); s.p = make(p, m); s.last = m; K.sfx(cap ? 'hit' : 'click'); finishCheck(); };
+    if (p.turn === 'b') {
+      s.think += dt;
+      if (s.think > 0.45) { s.think = 0; const m = bestMove(p, [0, 1, 2, 3][s.level], [0, 140, 30, 0][s.level]); if (m) doMove(m); }
+      return;
+    }
+    if (!K.mouse.clicked) return;
+    const c = Math.floor((K.mouse.x - BX) / SQ), r = Math.floor((K.mouse.y - BY) / SQ);
+    if (!on(r, c)) { s.sel = -1; return; }
+    const i = r * 8 + c, mv = s.moves.find((m) => m.t === i);
+    if (s.sel >= 0 && mv) { s.sel = -1; s.moves = []; doMove(mv); return; }
+    if (p.b[i] && p.b[i][0] === 'w') { s.sel = i; s.moves = legal(p).filter((m) => m.f === i); K.sfx('tick'); } else { s.sel = -1; s.moves = []; }
+  },
+  draw(s) {
+    const p = s.p;
+    for (let i = 0; i < 64; i++) {
+      const [r, c] = rc(i), x = BX + c * SQ, y = BY + r * SQ;
+      K.rect(x, y, SQ, SQ, (r + c) % 2 ? '#3a2f6e' : '#a99be0');
+      if (s.last && (s.last.f === i || s.last.t === i)) K.rect(x, y, SQ, SQ, '#ffd93a55');
+      if (i === s.sel) K.rect(x, y, SQ, SQ, '#22e6ff77');
+      const x2 = p.b[i];
+      if (x2) {
+        const chk = x2[1] === 'K' && s.status && x2[0] === p.turn;
+        if (chk) { K.glow('#ff3355', 20); K.circle(x + 30, y + 30, 26, '#ff335588'); K.noGlow(); }
+        K.text(GLYPH[x2[1]], x + 30, y + 33, 46, x2[0] === 'w' ? '#ffffff' : '#120a22', 'center', "'Segoe UI Symbol', 'Noto Sans Symbols 2', serif");
+        if (x2[0] === 'w') { K.ctx().strokeStyle = '#120a22'; K.ctx().lineWidth = 1; K.ctx().strokeText(GLYPH[x2[1]], x + 30, y + 33); }
+      }
+    }
+    s.moves.forEach((m) => { const [r, c] = rc(m.t); K.circle(BX + c * SQ + 30, BY + r * SQ + 30, p.b[m.t] ? 26 : 9, p.b[m.t] ? '#ff2bd655' : '#22e6ffaa'); });
+    K.stroke(BX, BY, SQ * 8, SQ * 8, '#8b5cf6', 3);
+    for (let c = 0; c < 8; c++) K.text('abcdefgh'[c], BX + c * SQ + 30, BY + SQ * 8 + 12, 12, '#8e88b8', 'center', 'm');
+    K.text(p.turn === 'w' ? 'YOUR MOVE' : 'CPU THINKING…', 110, 60, 18, p.turn === 'w' ? '#22e6ff' : '#ff2bd6', 'center', 'd');
+    if (s.status) K.text(s.status, 110, 100, 26, '#ff3355', 'center', 'd', 12);
+    K.text(['', 'EASY', 'MEDIUM', 'HARD'][s.level], 850, 60, 18, '#ffd93a', 'center', 'd');
+    s.captured.w.forEach((x, i) => K.text(GLYPH[x[1]], 800 + (i % 6) * 20, 110 + Math.floor(i / 6) * 26, 22, '#120a22', 'center', 'serif'));
+    s.captured.b.forEach((x, i) => K.text(GLYPH[x[1]], 30 + (i % 6) * 20, 160 + Math.floor(i / 6) * 26, 22, '#fff', 'center', 'serif'));
+    if (s.phase === 'pick') {
+      K.rect(0, 0, 960, 540, 'rgba(5,4,12,.85)');
+      K.text('CHOOSE THE CPU', 480, 140, 34, '#fff', 'center', 'd', 12);
+      ['EASY', 'MEDIUM', 'HARD'].forEach((n, i) => K.button(330, 200 + i * 70, 300, 54, `${i + 1}  ${n}`, { color: ['#3dffa0', '#ffd93a', '#ff3355'][i] }));
+    }
+  },
+  ai(s) {
+    if (s.phase === 'pick') { s.level = 1; s.phase = 'play'; }
+    if (s.p.turn === 'w' && s.phase === 'play') { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0) { const m = bestMove(s.p, 1, 60); if (m) { s.p = make(s.p, m); s.last = m; } } }
+  },
+});
+</script></body></html>

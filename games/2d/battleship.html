@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Battleship</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"battleship","n":4,"title":"BATTLESHIP","genre":"relax","desc":"Sink the CPU fleet before it sinks yours. Your ships are placed for you (R to shuffle before the first shot). The CPU hunts smartly once it finds you.","controls":"Click / tap the enemy sea to fire · R = shuffle your fleet before you start","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Battleship"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 10, T = 36, LX = 60, RX = 540, BY = 80, SHIPS = [5, 4, 3, 3, 2];
+function place() {
+  const g = Array(N * N).fill(-1), ships = [];
+  SHIPS.forEach((len, id) => {
+    for (;;) {
+      const h = Math.random() < 0.5, x = K.irand(0, h ? N - len : N - 1), y = K.irand(0, h ? N - 1 : N - len);
+      const cells = Array.from({ length: len }, (_, i) => (y + (h ? 0 : i)) * N + x + (h ? i : 0));
+      if (cells.some((c) => g[c] >= 0)) continue;
+      cells.forEach((c) => (g[c] = id)); ships.push({ cells, hits: 0, len }); break;
+    }
+  });
+  return { g, ships, shot: Array(N * N).fill(0) };
+}
+function cpuShot(s) {
+  const b = s.me;
+  let target = -1;
+  // target mode: next to an unsunk hit
+  const hits = []; for (let i = 0; i < N * N; i++) if (b.shot[i] === 2 && b.ships[b.g[i]].hits < b.ships[b.g[i]].len) hits.push(i);
+  if (hits.length) {
+    const opts = [];
+    hits.forEach((i) => { const x = i % N, y = Math.floor(i / N); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && !b.shot[yy * N + xx]) { let w = 1; if (hits.includes((y - dy) * N + (x - dx))) w = 3; opts.push([yy * N + xx, w]); } }); });
+    if (opts.length) { opts.sort((a, c) => c[1] - a[1]); target = opts[0][1] > 1 ? opts[0][0] : K.pick(opts)[0]; }
+  }
+  if (target < 0) { const free = []; for (let i = 0; i < N * N; i++) if (!b.shot[i] && ((i % N) + Math.floor(i / N)) % 2 === 0) free.push(i); target = free.length ? K.pick(free) : b.shot.findIndex((v) => !v); }
+  return fire(s, b, target, 'cpu');
+}
+function fire(s, b, i, who) {
+  if (b.shot[i]) return null;
+  const id = b.g[i];
+  if (id < 0) { b.shot[i] = 1; K.sfx('splash'); return 'miss'; }
+  b.shot[i] = 2; b.ships[id].hits++;
+  const sunk = b.ships[id].hits === b.ships[id].len;
+  K.sfx(sunk ? 'boom' : 'hit'); if (sunk) K.shake(8);
+  s.msg = `${who === 'you' ? 'YOU' : 'CPU'} ${sunk ? 'SANK A SHIP' : 'HIT'}`; s.msgT = 1.2;
+  return sunk ? 'sunk' : 'hit';
+}
+const allSunk = (b) => b.ships.every((sh) => sh.hits === sh.len);
+K.game({
+  bg: '#04121e', touch: { stick: false, buttons: [] },
+  init(s) { s.me = place(); s.cpu = place(); s.turn = 'you'; s.wait = 0; s.started = false; s.shots = 0; s.msg = ''; s.msgT = 0; s.t = 0; },
+  update(s, dt) {
+    s.msgT -= dt; s.t += dt;
+    if (K.tap('KeyR') && !s.started) { s.me = place(); K.sfx('whoosh'); }
+    if (s.turn === 'cpu') {
+      s.wait -= dt;
+      if (s.wait <= 0) {
+        const r = cpuShot(s);
+        if (allSunk(s.me)) return K.end(s, { score: 0, won: false, stats: { won: 0 }, title: 'FLEET LOST', text: `You sank ${s.cpu.ships.filter((x) => x.hits === x.len).length} of 5 ships.` });
+        if (r === 'miss') s.turn = 'you'; else s.wait = 0.7;
+      }
+      return;
+    }
+    if (!K.mouse.clicked) return;
+    const x = Math.floor((K.mouse.x - RX) / T), y = Math.floor((K.mouse.y - BY) / T);
+    if (x < 0 || y < 0 || x >= N || y >= N) return;
+    const r = fire(s, s.cpu, y * N + x, 'you');
+    if (!r) return;
+    s.started = true; s.shots++;
+    if (allSunk(s.cpu)) { const score = Math.max(10, 200 - s.shots * 2); return K.end(s, { score, won: true, stats: { won: 1 }, title: 'VICTORY AT SEA', text: `Sunk the fleet in ${s.shots} shots.` }); }
+    if (r === 'miss') { s.turn = 'cpu'; s.wait = 0.8; }
+  },
+  draw(s) {
+    const grid = (ox, b, mine) => {
+      for (let i = 0; i < N * N; i++) {
+        const x = ox + (i % N) * T, y = BY + Math.floor(i / N) * T;
+        K.rect(x + 1, y + 1, T - 2, T - 2, `rgba(34,130,200,${0.18 + Math.sin(s.t * 1.5 + i * 0.37) * 0.04})`, 3);
+        if (mine && b.g[i] >= 0) K.rect(x + 4, y + 4, T - 8, T - 8, b.ships[b.g[i]].hits === b.ships[b.g[i]].len ? '#552' : '#8a93a8', 5);
+        if (!mine && b.g[i] >= 0 && b.ships[b.g[i]].hits === b.ships[b.g[i]].len) K.rect(x + 4, y + 4, T - 8, T - 8, '#5a2a2a', 5);
+        if (b.shot[i] === 1) K.circle(x + T / 2, y + T / 2, 5, '#bfe6ff');
+        if (b.shot[i] === 2) { K.glow('#ff8a3a', 14); K.circle(x + T / 2, y + T / 2, 10, '#ff4a1a'); K.noGlow(); }
+      }
+      K.stroke(ox - 2, BY - 2, N * T + 4, N * T + 4, mine ? '#3dffa0' : '#ff2bd6', 2, 6);
+    };
+    grid(LX, s.me, true); grid(RX, s.cpu, false);
+    K.text('YOUR FLEET', LX + N * T / 2, 50, 18, '#3dffa0', 'center', 'd');
+    K.text('ENEMY WATERS', RX + N * T / 2, 50, 18, '#ff2bd6', 'center', 'd');
+    if (s.turn === 'you') { const x = Math.floor((K.mouse.x - RX) / T), y = Math.floor((K.mouse.y - BY) / T); if (x >= 0 && y >= 0 && x < N && y < N) K.stroke(RX + x * T, BY + y * T, T, T, '#ffd93a', 2, 4); }
+    K.text(s.turn === 'you' ? 'YOUR SHOT' : 'CPU AIMING…', 480, 470, 20, s.turn === 'you' ? '#22e6ff' : '#ff2bd6', 'center', 'd');
+    if (!s.started) K.text('R = shuffle your ships', 480, 505, 14, '#8e88b8', 'center', 'm');
+    const left = s.cpu.ships.filter((x) => x.hits < x.len).length;
+    K.text(`ENEMY SHIPS LEFT ${left}`, RX + N * T / 2, BY + N * T + 22, 14, '#8e88b8', 'center', 'm');
+    if (s.msgT > 0) K.text(s.msg, 480, 440, 22, '#ffd93a', 'center', 'd', 10);
+  },
+  ai(s) { if (s.turn === 'you') { s.aw = (s.aw || 0) + 1; if (s.aw % 25 === 0) { const free = []; for (let i = 0; i < N * N; i++) if (!s.cpu.shot[i]) free.push(i); const i = K.pick(free); K.vmouse(RX + (i % N) * T + 18, BY + Math.floor(i / N) * T + 18, true); } } },
+});
+</script></body></html>

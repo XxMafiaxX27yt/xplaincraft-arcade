@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flappy</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"flappy","n":2,"title":"FLAPPY","genre":"fun","desc":"Tap to flap through the neon pipes. Gaps shrink, pipes start to slide, and every 10 points the city changes colour.","controls":"Space / click / tap to flap","scoreLabel":"PIPES","tasks":[{"stat":"score","target":15,"text":"Fly through 15 pipes in Flappy"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SKY = [['#120a2e', '#ff2bd6'], ['#04182a', '#22e6ff'], ['#1a0b06', '#ff8a3a'], ['#06200f', '#3dffa0'], ['#1c0618', '#c45cff']];
+function pipe(s, x) {
+  const gap = Math.max(130, 190 - s.score * 2.2);
+  const y = K.rand(110, 430);
+  s.pipes.push({ x, y, gap, moving: s.score >= 8 && Math.random() < 0.45, ph: K.rand(0, 6), passed: false });
+}
+K.game({
+  bg: '#06040f',
+  init(s) {
+    s.b = { y: 260, vy: 0, rot: 0 }; s.pipes = []; s.score = 0; s.t = 0; s.dead = false; s.started = false;
+    s.city = Array.from({ length: 30 }, (_, i) => ({ x: i * 40, h: K.rand(40, 170), w: K.rand(26, 40) }));
+    for (let i = 0; i < 4; i++) pipe(s, 700 + i * 270);
+  },
+  update(s, dt) {
+    s.t += dt;
+    const b = s.b;
+    if (K.action() && !s.dead) { b.vy = -330; s.started = true; K.sfx('jump'); K.burst(210, b.y + 10, '#fff', 4, 80, 0.3, 2); }
+    if (!s.started) { b.y = 260 + Math.sin(s.t * 4) * 8; return; }
+    b.vy += 980 * dt; b.y += b.vy * dt; b.rot = K.clamp(b.vy / 600, -0.6, 1.2);
+    const speed = 180 + Math.min(120, s.score * 4);
+    for (const c of s.city) { c.x -= speed * 0.25 * dt; if (c.x < -50) c.x += 1200; }
+    for (const p of s.pipes) {
+      p.x -= speed * dt;
+      if (p.moving) p.y = K.clamp(p.y + Math.sin(s.t * 1.8 + p.ph) * 55 * dt, 110, 430);
+      if (!p.passed && p.x + 40 < 200) { p.passed = true; s.score++; K.sfx('coin'); if (s.score % 10 === 0) { K.flash(SKY[(s.score / 10) % SKY.length][1], 0.2); K.sfx('power'); } }
+      const hitX = 200 + 16 > p.x && 200 - 16 < p.x + 70;
+      if (hitX && (b.y - 13 < p.y - p.gap / 2 || b.y + 13 > p.y + p.gap / 2)) s.dead = true;
+    }
+    if (s.pipes[0].x < -90) { s.pipes.shift(); pipe(s, s.pipes[s.pipes.length - 1].x + 270); }
+    if (b.y > 520 || b.y < -40) s.dead = true;
+    if (s.dead) { K.sfx('hit'); K.shake(12); K.burst(200, b.y, ['#ffd93a', '#ff2bd6'], 24); K.end(s, { score: s.score, won: null, title: 'CRASHED', text: `${s.score} pipe${s.score === 1 ? '' : 's'}.` }); }
+  },
+  draw(s) {
+    const [sky, neon] = SKY[Math.floor(s.score / 10) % SKY.length];
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, [sky, '#05040c']));
+    K.alpha(0.5); K.circle(780, 120, 60, neon + '55'); K.alpha(1);
+    for (const c of s.city) { K.rect(c.x, 540 - c.h, c.w, c.h, '#0b0920'); K.rect(c.x + 4, 540 - c.h + 8, 4, 4, neon + '88'); K.rect(c.x + c.w - 9, 540 - c.h + 20, 4, 4, neon + '55'); }
+    for (const p of s.pipes) {
+      K.glow(neon, 16);
+      K.rect(p.x, -10, 70, p.y - p.gap / 2 + 10, '#0d0b1f'); K.stroke(p.x, -10, 70, p.y - p.gap / 2 + 10, neon, 3);
+      K.rect(p.x, p.y + p.gap / 2, 70, 560, '#0d0b1f'); K.stroke(p.x, p.y + p.gap / 2, 70, 560, neon, 3);
+      K.noGlow();
+      K.rect(p.x - 6, p.y - p.gap / 2 - 18, 82, 18, neon); K.rect(p.x - 6, p.y + p.gap / 2, 82, 18, neon);
+    }
+    const c = K.ctx(), b = s.b;
+    c.save(); c.translate(200, b.y); c.rotate(b.rot);
+    K.glow('#ffd93a', 18); K.circle(0, 0, 16, '#ffd93a'); K.noGlow();
+    K.circle(6, -5, 5, '#fff'); K.circle(8, -5, 2.5, '#05040c');
+    K.poly([[12, 2], [24, 6], [12, 10]], '#ff8a3a');
+    K.poly([[-10, 2], [-2, -6 + Math.sin(s.t * 30) * 6], [2, 4]], '#ffb43a');
+    c.restore();
+    K.text(String(s.score), 480, 60, 54, '#fff', 'center', 'd', 16);
+    if (!s.started && !K.attract) K.text('TAP / SPACE TO FLAP', 480, 330, 22, neon, 'center', 'd');
+  },
+  ai(s) {
+    const p = s.pipes.find((q) => q.x + 70 > 180) || s.pipes[0];
+    if ((s.b.y > p.y + 18 && s.b.vy > -40) || s.b.y > 470) K.vtap('Space');
+  },
+});
+</script></body></html>

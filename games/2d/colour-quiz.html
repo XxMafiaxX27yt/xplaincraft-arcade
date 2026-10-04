@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Colour Quiz</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"colour-quiz","n":8,"title":"COLOUR QUIZ","genre":"mind","desc":"One tile is a slightly different shade. Find it before the timer runs out. The grid grows and the difference shrinks every round.","controls":"Click / tap the odd tile","scoreLabel":"ROUNDS","tasks":[{"stat":"score","target":15,"text":"Reach round 15 in Colour Quiz"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function round(s) {
+  s.n = Math.min(8, 2 + Math.floor(s.score / 3));
+  s.h = K.rand(0, 360); s.sat = K.rand(55, 85); s.l = K.rand(40, 62);
+  s.diff = Math.max(3, 22 - s.score * 0.9);
+  s.odd = K.irand(0, s.n * s.n - 1); s.t = Math.max(3, 8 - s.score * 0.12); s.max = s.t; s.flash = 0;
+}
+const hsl = (h, sa, l) => `hsl(${h},${sa}%,${l}%)`;
+K.game({
+  bg: '#0c0a14',
+  init(s) { s.score = 0; s.lives = 3; round(s); },
+  update(s, dt) {
+    s.t -= dt; s.flash -= dt;
+    const size = 420, cell = size / s.n, X = 480 - size / 2, Y = 80;
+    if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: X, y: Y, w: size, h: size })) {
+      const i = Math.floor((K.mouse.y - Y) / cell) * s.n + Math.floor((K.mouse.x - X) / cell);
+      if (i === s.odd) { s.score++; K.sfx('coin'); K.burst(K.mouse.x, K.mouse.y, hsl(s.h, s.sat, s.l), 12); round(s); }
+      else { s.lives--; s.flash = 0.6; K.sfx('wrong'); K.shake(6); if (s.lives <= 0) return K.end(s, { score: s.score, won: null, text: `The difference was ${Math.round(s.diff)}% lightness.` }); }
+    }
+    if (s.t <= 0) { s.lives--; K.sfx('wrong'); if (s.lives <= 0) return K.end(s, { score: s.score, won: null, title: 'TIME', text: `Round ${s.score + 1}` }); round(s); }
+  },
+  draw(s) {
+    const size = 420, cell = size / s.n, X = 480 - size / 2, Y = 80;
+    for (let i = 0; i < s.n * s.n; i++) {
+      const x = X + (i % s.n) * cell, y = Y + Math.floor(i / s.n) * cell;
+      const show = s.flash > 0 && i === s.odd;
+      K.rect(x + 3, y + 3, cell - 6, cell - 6, hsl(s.h, s.sat, s.l + (i === s.odd ? s.diff : 0)), Math.min(12, cell / 6));
+      if (show) K.stroke(x + 3, y + 3, cell - 6, cell - 6, '#fff', 4, 10);
+    }
+    K.rect(X, 520, size, 8, '#222', 4); K.rect(X, 520, size * Math.max(0, s.t / s.max), 8, s.t < 2 ? '#ff3355' : '#22e6ff', 4);
+    K.text(`ROUND ${s.score + 1}`, 120, 120, 26, '#fff', 'center', 'd');
+    K.text('♥'.repeat(s.lives), 120, 170, 28, '#ff3355');
+    K.text(`${s.n}×${s.n}`, 840, 120, 26, '#22e6ff', 'center', 'd');
+    K.text(`Δ ${Math.round(s.diff)}%`, 840, 170, 18, '#8e88b8', 'center', 'm');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 50 === 0) { const size = 420, cell = size / s.n; K.vmouse(480 - size / 2 + (s.odd % s.n + 0.5) * cell, 80 + (Math.floor(s.odd / s.n) + 0.5) * cell, true); } },
+});
+</script></body></html>

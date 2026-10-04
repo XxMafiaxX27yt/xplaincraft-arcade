@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wordle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"wordle","n":5,"title":"WORDLE","genre":"mind","desc":"Guess the 5-letter word in 6 tries. Green = right letter, right spot. Yellow = in the word, wrong spot. Grey = not in the word. Solve as many words in a row as you can.","controls":"Type or tap the keyboard · Enter to guess","scoreLabel":"WORDS","tasks":[{"stat":"score","target":3,"text":"Solve 3 words in a row in Wordle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+const G = '#2f9e5a', Y = '#c9a227', X = '#3a3a4a';
+function word(s) { s.answer = WORDS.pick(5).toUpperCase(); s.rows = []; s.cur = ''; s.keys = {}; s.msg = ''; s.msgT = 0; s.reveal = 0; s.done = 0; }
+function grade(guess, ans) {
+  const res = Array(5).fill(X), left = ans.split('');
+  for (let i = 0; i < 5; i++) if (guess[i] === ans[i]) { res[i] = G; left[i] = null; }
+  for (let i = 0; i < 5; i++) if (res[i] !== G) { const j = left.indexOf(guess[i]); if (j >= 0) { res[i] = Y; left[j] = null; } }
+  return res;
+}
+K.game({
+  bg: '#0e0d17', touch: { stick: false, buttons: [] },
+  init(s) { s.score = 0; s.shake = 0; word(s); },
+  update(s, dt) {
+    s.msgT -= dt; s.shake = Math.max(0, s.shake - dt); s.reveal += dt;
+    if (s.done) { s.done -= dt; if (s.done <= 0) { if (s.solved) word(s); else return K.end(s, { score: s.score, won: null, title: 'OUT OF TRIES', text: `The word was ${s.answer}. Streak: ${s.score}.` }); } return; }
+    const kk = K.keyboard(255, 384, 450, s.keys, { h: 42 });
+    if (!kk) return;
+    if (kk === 'BACK') s.cur = s.cur.slice(0, -1);
+    else if (kk === 'ENTER') {
+      if (s.cur.length < 5) { s.msg = 'NOT ENOUGH LETTERS'; s.msgT = 1.2; s.shake = 0.3; K.sfx('wrong'); return; }
+      const g = grade(s.cur, s.answer);
+      s.rows.push({ w: s.cur, g }); s.reveal = 0;
+      for (let i = 0; i < 5; i++) { const c = s.cur[i], old = s.keys[c]; if (old !== G) s.keys[c] = g[i] === G ? G : old === Y || g[i] === Y ? Y : X; }
+      K.sfx('click');
+      if (s.cur === s.answer) { s.score++; s.solved = true; s.done = 1.8; s.msg = ['GENIUS', 'MAGNIFICENT', 'IMPRESSIVE', 'SPLENDID', 'GREAT', 'PHEW'][s.rows.length - 1]; s.msgT = 1.8; K.sfx('win'); }
+      else if (s.rows.length >= 6) { s.solved = false; s.done = 2.4; s.msg = s.answer; s.msgT = 2.4; K.sfx('lose'); }
+      s.cur = '';
+    } else if (s.cur.length < 5) { s.cur += kk; K.sfx('tick'); }
+  },
+  draw(s) {
+    const T = 52, gp = 6, x0 = 480 - (5 * T + 4 * gp) / 2, y0 = 22;
+    for (let r = 0; r < 6; r++) {
+      const row = s.rows[r], live = r === s.rows.length, off = live && s.shake ? Math.sin(s.shake * 60) * 6 : 0;
+      for (let i = 0; i < 5; i++) {
+        const x = x0 + i * (T + gp) + off, y = y0 + r * (T + gp);
+        let col = 'transparent', ch = '';
+        if (row) { const shown = r < s.rows.length - 1 || s.reveal > i * 0.18; col = shown ? row.g[i] : '#24203f'; ch = row.w[i]; }
+        else if (live) ch = s.cur[i] || '';
+        if (col !== 'transparent') K.rect(x, y, T, T, col, 6); else K.stroke(x, y, T, T, ch ? '#8e88b8' : '#2e2a48', 2, 6);
+        if (ch) K.text(ch, x + T / 2, y + T / 2 + 2, 28, '#fff', 'center', 'd');
+      }
+    }
+    K.keyboard(255, 384, 450, s.keys, { h: 42 });
+    K.text(`STREAK ${s.score}`, 110, 50, 22, '#3dffa0', 'center', 'd');
+    if (s.msgT > 0) { K.rect(480 - 150, 180, 300, 50, 'rgba(255,255,255,.92)', 8); K.text(s.msg, 480, 206, 22, '#111', 'center', 'd'); }
+  },
+  ai(s) {
+    if (s.done) return;
+    s.aw = (s.aw || 0) + 1;
+    if (s.aw % 5) return;
+    if (!s.plan) s.plan = (s.rows.length >= 2 ? s.answer : WORDS.pick(5).toUpperCase());
+    if (s.cur.length < 5) K.vtap('Key' + s.plan[s.cur.length]); else { K.vtap('Enter'); s.plan = null; }
+  },
+});
+</script></body></html>

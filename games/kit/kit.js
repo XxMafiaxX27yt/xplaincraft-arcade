@@ -107,7 +107,7 @@
   K.vhold = (code, on = true) => (on ? vkeys.add(code) : vkeys.delete(code));
   K.vtap = (code) => vtapped.add(code);
   K.vmouse = (x, y, click = false, down = click) => { mouse.x = x; mouse.y = y; mouse.down = down; if (click) mouse.clicked = true; };
-  K.typed = () => [...tapped].filter((c) => /^Key[A-Z]$/.test(c)).map((c) => c[3]);
+  K.typed = () => [...tapped, ...vtapped].filter((c) => /^Key[A-Z]$/.test(c)).map((c) => c[3]);
 
   // ---------- math ----------
   K.rand = (a = 1, b) => (b === undefined ? Math.random() * a : a + Math.random() * (b - a));
@@ -173,6 +173,38 @@
     K.stroke(x, y, w, h, col, 2, 8);
     K.text(label, x + w / 2, y + h / 2 + 1, opt.size || 18, hover ? '#05040c' : col, 'center', opt.font || 'd');
     return hover && mouse.clicked;
+  };
+
+
+  // on-screen keyboard for word games (works with mouse + touch). Returns 'A'..'Z', 'ENTER', 'BACK' or null.
+  // colors: optional { A: '#color', ... } to tint keys (Wordle-style)
+  K.keyboard = (x, y, w, colors = {}, opt = {}) => {
+    const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+    const kw = w / 10, kh = opt.h || 44, gap = 5;
+    let out = null;
+    rows.forEach((r, ri) => {
+      const extra = ri === 2 ? 1.5 : 0;
+      const rowW = r.length * kw + extra * 2 * kw;
+      let cx = x + (w - rowW) / 2;
+      const ky = y + ri * (kh + gap);
+      const key = (label, val, kwid) => {
+        const hov = K.inRect(mouse.x, mouse.y, { x: cx, y: ky, w: kwid - gap, h: kh });
+        const col = colors[val] || (hov ? '#3a3570' : '#24203f');
+        K.rect(cx, ky, kwid - gap, kh, col, 6);
+        K.text(label, cx + (kwid - gap) / 2, ky + kh / 2 + 1, label.length > 1 ? 13 : 18, '#fff', 'center', 'd');
+        if (hov && mouse.clicked) out = val;
+        cx += kwid;
+      };
+      if (ri === 2) key('ENTER', 'ENTER', kw * 1.5);
+      for (const ch of r) key(ch, ch, kw);
+      if (ri === 2) key('⌫', 'BACK', kw * 1.5);
+    });
+    if (!out) {
+      const t = K.typed(); if (t.length) out = t[0];
+      else if (K.tap('Enter', 'NumpadEnter')) out = 'ENTER';
+      else if (K.tap('Backspace')) out = 'BACK';
+    }
+    return out;
   };
 
   // ---------- fx ----------

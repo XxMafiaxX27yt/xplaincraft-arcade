@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Pong</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"neon-pong","n":5,"title":"NEON PONG","genre":"fun","desc":"Classic pong against a CPU that gets smarter every rally. Hit the ball with the edge of your paddle to curve it. First to 7.","controls":"Mouse / touch or ↑ ↓ (W S) to move","scoreLabel":"POINTS","tasks":[{"stat":"score","target":7,"text":"Win a match of Neon Pong"},{"stat":"rally","target":12,"text":"Make a 12-hit rally in Neon Pong"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PH = 96;
+function serve(s, dir) { s.ball = { x: 480, y: 270, vx: 360 * dir, vy: K.rand(-160, 160), spin: 0 }; s.serveT = 0.8; s.rally = 0; }
+K.game({
+  bg: '#04030c',
+  init(s) { s.py = 270; s.cy = 270; s.me = 0; s.cpu = 0; s.best = 0; s.trail = []; serve(s, Math.random() < 0.5 ? -1 : 1); },
+  update(s, dt) {
+    const d = K.dir();
+    if (K.mouse.moved && !d.y) s.py = K.mouse.y; K.mouse.moved = false;
+    s.py = K.clamp(s.py + d.y * 620 * dt, PH / 2, 540 - PH / 2);
+    const b = s.ball;
+    // CPU: reaction gets better with each rally and each point you score
+    const skill = Math.min(1, 0.45 + s.me * 0.06 + s.rally * 0.02);
+    const target = b.vx > 0 ? b.y + (b.vy * (880 - b.x)) / Math.max(200, b.vx) * skill * 0.6 : 270;
+    s.cy += K.clamp(target - s.cy, -1, 1) * Math.min(Math.abs(target - s.cy), (300 + skill * 300) * dt);
+    s.cy = K.clamp(s.cy, PH / 2, 540 - PH / 2);
+    if (s.serveT > 0) { s.serveT -= dt; return; }
+    b.vy += b.spin * dt; b.spin *= Math.pow(0.4, dt);
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    s.trail.push({ x: b.x, y: b.y }); if (s.trail.length > 14) s.trail.shift();
+    if (b.y < 10 || b.y > 530) { b.vy *= -1; b.y = K.clamp(b.y, 10, 530); K.sfx('click'); }
+    const hit = (px, py, side) => {
+      if (Math.abs(b.x - px) < 14 && Math.abs(b.y - py) < PH / 2 + 10 && Math.sign(b.vx) === side) {
+        const off = (b.y - py) / (PH / 2);
+        b.vx = -b.vx * 1.06; b.vx = K.clamp(b.vx, -980, 980); b.vy = off * 380; b.spin = off * (side < 0 ? 420 : 260);
+        b.x = px - side * 14; s.rally++; s.best = Math.max(s.best, s.rally);
+        K.sfx('blip'); K.burst(b.x, b.y, side < 0 ? '#22e6ff' : '#ff2bd6', 10, 220, 0.35);
+      }
+    };
+    hit(40, s.py, -1); hit(920, s.cy, 1);
+    if (b.x < -20 || b.x > 980) {
+      const mine = b.x > 980;
+      if (mine) { s.me++; K.sfx('coin'); K.flash('#22e6ff', 0.12); } else { s.cpu++; K.sfx('wrong'); K.shake(8); }
+      if (s.me >= 7 || s.cpu >= 7) return K.end(s, { score: s.me, won: s.me >= 7, stats: { rally: s.best }, text: `${s.me} - ${s.cpu}  ·  longest rally ${s.best}` });
+      serve(s, mine ? 1 : -1);
+    }
+  },
+  draw(s) {
+    for (let y = 10; y < 540; y += 30) K.rect(478, y, 4, 16, '#ffffff22');
+    K.text(String(s.me), 400, 70, 64, '#22e6ff', 'center', 'd', 18);
+    K.text(String(s.cpu), 560, 70, 64, '#ff2bd6', 'center', 'd', 18);
+    if (s.rally > 2) K.text(`RALLY ${s.rally}`, 480, 510, 16, '#8e88b8', 'center', 'd');
+    s.trail.forEach((t, i) => { K.alpha(i / s.trail.length * 0.5); K.circle(t.x, t.y, 4 + i * 0.4, '#ffd93a'); });
+    K.alpha(1);
+    K.glow('#22e6ff', 20); K.rect(30, s.py - PH / 2, 12, PH, '#22e6ff', 6);
+    K.glow('#ff2bd6', 20); K.rect(918, s.cy - PH / 2, 12, PH, '#ff2bd6', 6);
+    K.glow('#ffd93a', 22); K.circle(s.ball.x, s.ball.y, 10, '#fff'); K.noGlow();
+    if (s.serveT > 0) K.text('READY', 480, 300, 20, '#fff', 'center', 'd');
+  },
+  ai(s) { K.vhold('ArrowUp', s.ball.y < s.py - 12); K.vhold('ArrowDown', s.ball.y > s.py + 12); },
+});
+</script></body></html>

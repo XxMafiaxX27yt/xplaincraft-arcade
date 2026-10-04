@@ -1,0 +1,139 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pixel Miner</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pixel-miner","n":3,"title":"PIXEL MINER","genre":"fun","desc":"Drill down, fill your cargo with copper, silver, gold and gems, then fly back up to sell before the fuel runs out. Upgrade the drill, tank and cargo bay to go deeper. Watch out for lava.","controls":"← → ↓ to drill · hold ↑ to fly up · at the surface: 1 drill, 2 tank, 3 cargo upgrades","scoreLabel":"CASH EARNED","tasks":[{"stat":"score","target":600,"text":"Earn 600 cash in Pixel Miner"},{"stat":"depth","target":60,"text":"Reach 60 m deep in Pixel Miner"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 40, W = 24, H = 160, SURF = 4;
+// type: [name, colour, hardness, value]
+const CELL = [null, ['dirt', '#5a3a22', 0.22, 0], ['stone', '#4a4a58', 0.55, 0], ['copper', '#c8733a', 0.4, 12], ['silver', '#c9d2e0', 0.5, 30], ['gold', '#ffcc33', 0.6, 70], ['gem', '#ff2bd6', 0.8, 180], ['lava', '#ff4a1a', 0.2, 0], ['bedrock', '#151520', 99, 0]];
+function gen(s) {
+  s.g = [];
+  for (let y = 0; y < H; y++) {
+    const row = [];
+    for (let x = 0; x < W; x++) {
+      if (y < SURF) { row.push(0); continue; }
+      const d = y - SURF;
+      if (y === H - 1) { row.push(8); continue; }
+      let c = Math.random() < 0.2 + d / 260 ? 2 : 1;
+      const r = Math.random();
+      if (d > 3 && r < 0.035) c = 0;
+      else if (r < 0.12) c = d > 85 && Math.random() < 0.35 ? 6 : d > 45 && Math.random() < 0.4 ? 5 : d > 15 && Math.random() < 0.5 ? 4 : 3;
+      else if (d > 25 && r < 0.12 + Math.min(0.06, d / 2000)) c = 7;
+      row.push(c);
+    }
+    s.g.push(row);
+  }
+  s.g[SURF][6] = 1;
+}
+const solid = (s, x, y) => x < 0 || x >= W || y >= H || (y >= 0 && s.g[y][x] > 0);
+K.game({
+  bg: '#0b0710',
+  init(s) {
+    gen(s); s.p = { x: 6, y: SURF - 1, fx: 6, fy: SURF - 1 }; s.cash = 0; s.earned = 0; s.cargo = []; s.lv = { drill: 1, tank: 1, bay: 1 };
+    s.fuel = 30; s.hull = 100; s.dig = null; s.moveT = 0; s.deepest = 0; s.msg = ''; s.msgT = 0; s.camY = 0;
+  },
+  update(s, dt) {
+    const p = s.p, fuelMax = 30 + (s.lv.tank - 1) * 22, bay = 6 + (s.lv.bay - 1) * 5;
+    p.fx = K.lerp(p.fx, p.x, Math.min(1, dt * 16)); p.fy = K.lerp(p.fy, p.y, Math.min(1, dt * 16));
+    s.msgT -= dt;
+    const say = (m) => { s.msg = m; s.msgT = 2; };
+    const atSurface = p.y < SURF;
+    if (atSurface) {
+      if (s.cargo.length) { const v = s.cargo.reduce((a, c) => a + CELL[c][3], 0); s.cash += v; s.earned += v; K.sfx('coin'); say(`SOLD ${s.cargo.length} ORE FOR $${v}`); s.cargo = []; }
+      const need = Math.ceil(fuelMax - s.fuel);
+      if (need > 0 && s.cash > 0) { const buy = Math.min(need, s.cash); s.cash -= buy; s.fuel += buy; }
+      if (s.hull < 100 && s.cash > 0) { const fix = Math.min(100 - s.hull, s.cash); s.cash -= fix; s.hull += fix; }
+      const up = (k, key, base) => { const cost = Math.round(base * Math.pow(2.2, s.lv[k] - 1)); if (K.tap(key)) { if (s.cash >= cost) { s.cash -= cost; s.lv[k]++; K.sfx('power'); say(`${k.toUpperCase()} LEVEL ${s.lv[k]}`); } else { K.sfx('wrong'); say(`NEED $${cost}`); } } };
+      up('drill', 'Digit1', 60); up('tank', 'Digit2', 50); up('bay', 'Digit3', 45);
+    } else {
+      s.fuel -= dt * 0.8;
+    }
+    s.deepest = Math.max(s.deepest, p.y - SURF + 1);
+    if (s.fuel <= 0 && !atSurface) { K.sfx('lose'); return K.end(s, { score: s.earned, won: null, title: 'OUT OF FUEL', stats: { depth: s.deepest }, text: `Stranded ${p.y - SURF + 1} m down. Deepest: ${s.deepest} m.` }); }
+    if (s.hull <= 0) { K.sfx('boom'); return K.end(s, { score: s.earned, won: null, title: 'MELTED', stats: { depth: s.deepest }, text: `Lava got you. Deepest: ${s.deepest} m.` }); }
+    // drilling in progress
+    if (s.dig) {
+      const d = K.dir();
+      const still = (s.dig.dx && d.x === s.dig.dx) || (s.dig.dy && d.y === 1);
+      if (!still) { s.dig = null; return; }
+      s.dig.t += dt * (1 + (s.lv.drill - 1) * 0.6);
+      if (Math.random() < 0.3) K.particle({ x: (p.x + s.dig.dx * 0.5) * T + 20, y: (p.y + s.dig.dy * 0.5) * T + 20 - s.camY, vx: K.rand(-80, 80), vy: K.rand(-120, -20), g: 400, color: CELL[s.dig.c][1], life: 0.4, size: 4 });
+      if (s.dig.t >= CELL[s.dig.c][2]) {
+        const c = s.dig.c; s.g[s.dig.y][s.dig.x] = 0; s.fuel -= 0.35;
+        if (c === 7) { s.hull -= 34; K.sfx('hit'); K.shake(10); K.flash('#ff4a1a', 0.2); say('LAVA! HULL DAMAGED'); }
+        else if (CELL[c][3]) { if (s.cargo.length < bay) { s.cargo.push(c); K.sfx('coin'); K.floatText(CELL[c][0].toUpperCase(), s.dig.x * T + 20, s.dig.y * T - s.camY, CELL[c][1], 16); } else { say('CARGO FULL - FLY UP AND SELL'); K.sfx('wrong'); } }
+        else K.sfx('step');
+        s.dig = null;
+      }
+      return;
+    }
+    s.moveT -= dt;
+    if (s.moveT > 0) return;
+    const d = K.dir();
+    const below = solid(s, p.x, p.y + 1);
+    if (d.y < 0 && !solid(s, p.x, p.y - 1) && p.y > 0 && s.fuel > 0) { p.y--; s.fuel -= 0.25; s.moveT = 0.11; if (Math.random() < 0.5) K.particle({ x: p.x * T + 20, y: (p.y + 1) * T + 30 - s.camY, vx: K.rand(-30, 30), vy: 120, color: '#ff8a3a', life: 0.3, size: 5 }); return; }
+    if (!below) { p.y++; s.moveT = 0.07; return; }
+    if (d.x) {
+      const nx = p.x + d.x;
+      if (nx < 0 || nx >= W) return;
+      if (!solid(s, nx, p.y)) { p.x = nx; s.moveT = 0.1; }
+      else if (s.g[p.y]?.[nx] !== 8) s.dig = { x: nx, y: p.y, dx: d.x, dy: 0, c: s.g[p.y][nx], t: 0 };
+      return;
+    }
+    if (d.y > 0 && p.y + 1 < H && s.g[p.y + 1][p.x] !== 8) s.dig = { x: p.x, y: p.y + 1, dx: 0, dy: 1, c: s.g[p.y + 1][p.x], t: 0 };
+  },
+  draw(s) {
+    const p = s.p;
+    s.camY = K.clamp(p.fy * T - 250, -60, H * T - 540);
+    const cy = s.camY, depthK = K.clamp(p.fy / 60, 0, 1);
+    K.rect(0, -cy - 400, 960, 400 + SURF * T, K.grad(0, -cy - 400, 0, SURF * T - cy, ['#3a7bd5', '#ffb36b']));
+    K.rect(40, SURF * T - cy - 110, 120, 110, '#2a2240'); K.rect(40, SURF * T - cy - 124, 120, 16, '#ff2bd6');
+    K.text('SHOP', 100, SURF * T - cy - 116, 14, '#fff', 'center', 'd');
+    K.rect(60, SURF * T - cy - 70, 30, 70, '#151025');
+    K.rect(200, SURF * T - cy - 60, 40, 60, '#443');
+    const y0 = Math.max(0, Math.floor(cy / T)), y1 = Math.min(H - 1, y0 + 15);
+    for (let y = y0; y <= y1; y++) for (let x = 0; x < W; x++) {
+      const c = s.g[y][x], X = x * T, Y = y * T - cy;
+      if (y >= SURF && !c) K.rect(X, Y, T, T, `rgb(${18 - depthK * 8},${12 - depthK * 6},${16})`);
+      if (!c) continue;
+      const def = CELL[c];
+      const base = c >= 3 && c <= 6 ? (y - SURF > 40 ? '#3a3a48' : '#5a3a22') : def[1];
+      K.rect(X, Y, T, T, base); K.rect(X, Y, T, 4, 'rgba(255,255,255,.08)'); K.rect(X, Y + T - 4, T, 4, 'rgba(0,0,0,.25)');
+      if (c >= 3 && c <= 6) { K.glow(def[1], 10); K.circle(X + 12, Y + 14, 5, def[1]); K.circle(X + 26, Y + 24, 6, def[1]); K.circle(X + 16, Y + 30, 3, def[1]); K.noGlow(); }
+      if (c === 7) { K.glow('#ff4a1a', 16); K.rect(X + 2, Y + 2, T - 4, T - 4, `rgba(255,${80 + Math.sin(K.time() * 4 + x) * 40},20,1)`, 6); K.noGlow(); }
+      if (y === SURF && c !== 7) K.rect(X, Y, T, 6, '#3dbb4a');
+    }
+    const px = p.fx * T, py = p.fy * T - cy;
+    K.glow('#22e6ff', 12); K.rect(px + 6, py + 8, 28, 22, '#2a6fd8', 6); K.noGlow();
+    K.rect(px + 10, py + 12, 12, 8, '#bff6ff', 3);
+    K.circle(px + 12, py + 32, 5, '#222'); K.circle(px + 28, py + 32, 5, '#222');
+    const dd = s.dig;
+    const spin = Math.sin(K.time() * 60) * 2;
+    if (dd?.dx > 0) K.poly([[px + 34, py + 12 + spin], [px + 44, py + 19], [px + 34, py + 26 - spin]], '#ccc');
+    else if (dd?.dx < 0) K.poly([[px + 6, py + 12 + spin], [px - 4, py + 19], [px + 6, py + 26 - spin]], '#ccc');
+    else K.poly([[px + 13 + spin, py + 34], [px + 20, py + 44], [px + 27 - spin, py + 34]], '#ccc');
+    // darkness deeper down
+    if (depthK > 0.05) K.darkness([{ x: px + 20, y: py + 20, r: 260 - depthK * 110 }], Math.min(0.92, depthK * 1.1));
+    const fuelMax = 30 + (s.lv.tank - 1) * 22, bay = 6 + (s.lv.bay - 1) * 5;
+    K.rect(10, 10, 300, 74, 'rgba(5,4,12,.75)', 8);
+    K.text(`$${s.cash}`, 22, 28, 20, '#ffd93a', 'left', 'd');
+    K.text(`${Math.max(0, p.y - SURF + 1)} m`, 300, 28, 18, '#fff', 'right', 'd');
+    K.rect(22, 46, 180, 10, '#222', 5); K.rect(22, 46, 180 * K.clamp(s.fuel / fuelMax, 0, 1), 10, s.fuel / fuelMax < 0.25 ? '#ff3355' : '#ff8a3a', 5); K.text('FUEL', 210, 51, 12, '#ff8a3a', 'left', 'm');
+    K.rect(22, 64, 180, 10, '#222', 5); K.rect(22, 64, 180 * s.hull / 100, 10, '#3dffa0', 5); K.text('HULL', 210, 69, 12, '#3dffa0', 'left', 'm');
+    K.text(`CARGO ${s.cargo.length}/${bay}`, 950, 22, 16, s.cargo.length >= bay ? '#ff3355' : '#fff', 'right', 'd');
+    s.cargo.forEach((c, i) => K.circle(940 - i * 14, 44, 5, CELL[c][1]));
+    if (p.y < SURF) {
+      const cost = (k, b) => Math.round(b * Math.pow(2.2, s.lv[k] - 1));
+      K.rect(310, 100, 340, 40, 'rgba(5,4,12,.75)', 8);
+      K.text(`1 DRILL $${cost('drill', 60)}   2 TANK $${cost('tank', 50)}   3 CARGO $${cost('bay', 45)}`, 480, 120, 13, '#22e6ff', 'center', 'm');
+    }
+    if (s.msgT > 0) K.text(s.msg, 480, 500, 20, '#fff', 'center', 'd', 10);
+  },
+  ai(s) {
+    const low = s.fuel < 12 || s.cargo.length >= 6;
+    K.vhold('ArrowUp', low); K.vhold('ArrowDown', !low);
+    K.vhold('ArrowRight', false); K.vhold('ArrowLeft', false);
+  },
+});
+</script></body></html>

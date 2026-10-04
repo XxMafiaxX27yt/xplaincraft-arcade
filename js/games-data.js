@@ -461,5 +461,476 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/night-shift-store.png"
+},
+{
+"id": "breakout",
+"n": 1,
+"title": "BREAKOUT",
+"genre": "fun",
+"desc": "Smash every neon brick. Tough bricks take two hits, glowing ones drop power-ups: wide paddle, multiball, slow ball. Each wall comes back thicker.",
+"controls": "Mouse / touch or ← → to move · Space / click to launch",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 1500,
+"text": "Score 1500 in Breakout"
+},
+{
+"stat": "walls",
+"target": 2,
+"text": "Clear 2 walls in Breakout"
+}
+],
+"file": "games/2d/breakout.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/breakout.png"
+},
+{
+"id": "flappy",
+"n": 2,
+"title": "FLAPPY",
+"genre": "fun",
+"desc": "Tap to flap through the neon pipes. Gaps shrink, pipes start to slide, and every 10 points the city changes colour.",
+"controls": "Space / click / tap to flap",
+"scoreLabel": "PIPES",
+"tasks": [
+{
+"stat": "score",
+"target": 15,
+"text": "Fly through 15 pipes in Flappy"
+}
+],
+"file": "games/2d/flappy.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/flappy.png"
+},
+{
+"id": "pixel-miner",
+"n": 3,
+"title": "PIXEL MINER",
+"genre": "fun",
+"desc": "Drill down, fill your cargo with copper, silver, gold and gems, then fly back up to sell before the fuel runs out. Upgrade the drill, tank and cargo bay to go deeper. Watch out for lava.",
+"controls": "← → ↓ to drill · hold ↑ to fly up · at the surface: 1 drill, 2 tank, 3 cargo upgrades",
+"scoreLabel": "CASH EARNED",
+"tasks": [
+{
+"stat": "score",
+"target": 600,
+"text": "Earn 600 cash in Pixel Miner"
+},
+{
+"stat": "depth",
+"target": 60,
+"text": "Reach 60 m deep in Pixel Miner"
+}
+],
+"file": "games/2d/pixel-miner.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/pixel-miner.png"
+},
+{
+"id": "neon-runner",
+"n": 4,
+"title": "NEON RUNNER",
+"genre": "fun",
+"desc": "Run the rooftops of a neon city. Jump the barriers, slide under the lasers, double-jump the gaps and grab the coins. It never stops getting faster.",
+"controls": "Space / ↑ / tap = jump (twice = double jump) · ↓ / S = slide",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 800,
+"text": "Run 800 m in Neon Runner"
+},
+{
+"stat": "coins",
+"target": 40,
+"text": "Grab 40 coins in one Neon Runner run"
+}
+],
+"file": "games/2d/neon-runner.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/neon-runner.png"
+},
+{
+"id": "neon-pong",
+"n": 5,
+"title": "NEON PONG",
+"genre": "fun",
+"desc": "Classic pong against a CPU that gets smarter every rally. Hit the ball with the edge of your paddle to curve it. First to 7.",
+"controls": "Mouse / touch or ↑ ↓ (W S) to move",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 7,
+"text": "Win a match of Neon Pong"
+},
+{
+"stat": "rally",
+"target": 12,
+"text": "Make a 12-hit rally in Neon Pong"
+}
+],
+"file": "games/2d/neon-pong.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/neon-pong.png"
+},
+{
+"id": "neon-snake",
+"n": 6,
+"title": "NEON SNAKE",
+"genre": "fun",
+"desc": "Eat, grow, don't bite yourself. Gold fruit is worth 5 but vanishes fast, and every 10 fruit a wall block appears.",
+"controls": "Arrow keys / WASD or swipe",
+"scoreLabel": "FRUIT",
+"tasks": [
+{
+"stat": "score",
+"target": 25,
+"text": "Eat 25 fruit in Neon Snake"
+}
+],
+"file": "games/2d/neon-snake.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/neon-snake.png"
+},
+{
+"id": "2048",
+"n": 1,
+"title": "2048",
+"genre": "mind",
+"desc": "Slide the tiles, merge equal numbers, reach 2048. Keep going after that for a bigger score. One undo per game.",
+"controls": "Arrow keys / WASD or swipe · U = undo once",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in 2048"
+},
+{
+"stat": "tile",
+"target": 512,
+"text": "Make a 512 tile in 2048"
+}
+],
+"file": "games/2d/2048.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/2048.png"
+},
+{
+"id": "atlas",
+"n": 2,
+"title": "ATLAS",
+"genre": "mind",
+"desc": "The classic place-name chain against the CPU. Name a country that starts with the last letter of the one before. No repeats. 15 seconds a turn, and the CPU knows its geography.",
+"controls": "Type (or tap the keyboard) · Enter to answer",
+"scoreLabel": "COUNTRIES",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Name 8 countries in one Atlas game"
+}
+],
+"file": "games/2d/atlas.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/atlas.png"
+},
+{
+"id": "chess",
+"n": 3,
+"title": "CHESS",
+"genre": "mind",
+"desc": "Full chess against the CPU: castling, en passant, promotion, check and mate. Pick EASY, MEDIUM or HARD. Beating HARD is worth the most.",
+"controls": "Click / tap a piece, then a highlighted square",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Beat the CPU at Chess"
+}
+],
+"file": "games/2d/chess.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/chess.png"
+},
+{
+"id": "tic-tac-toe",
+"n": 4,
+"title": "TIC TAC TOE",
+"genre": "mind",
+"desc": "Best of 9 rounds against the CPU. It starts sloppy and gets sharper every round you win. Can you beat the perfect player at the end?",
+"controls": "Click / tap a square (or 1-9 on the number pad layout)",
+"scoreLabel": "WINS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Win 3 rounds of Tic Tac Toe in one match"
+}
+],
+"file": "games/2d/tic-tac-toe.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/tic-tac-toe.png"
+},
+{
+"id": "wordle",
+"n": 5,
+"title": "WORDLE",
+"genre": "mind",
+"desc": "Guess the 5-letter word in 6 tries. Green = right letter, right spot. Yellow = in the word, wrong spot. Grey = not in the word. Solve as many words in a row as you can.",
+"controls": "Type or tap the keyboard · Enter to guess",
+"scoreLabel": "WORDS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Solve 3 words in a row in Wordle"
+}
+],
+"file": "games/2d/wordle.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/wordle.png"
+},
+{
+"id": "aim-trainer",
+"n": 6,
+"title": "AIM TRAINER",
+"genre": "mind",
+"desc": "30 seconds. Targets shrink while they live, some drift, gold ones are worth triple. Misses cost points, so don't spray.",
+"controls": "Click / tap the targets",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Score 40 in Aim Trainer"
+},
+{
+"stat": "accuracy",
+"target": 90,
+"text": "Get 90% accuracy in Aim Trainer"
+}
+],
+"file": "games/2d/aim-trainer.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/aim-trainer.png"
+},
+{
+"id": "reaction-test",
+"n": 7,
+"title": "REACTION TEST",
+"genre": "mind",
+"desc": "Wait for green, then hit as fast as you can. Five tries, your average counts. Click on red and that try is a fail. Fake-out colours show up from try 3.",
+"controls": "Click / tap / Space when the screen turns GREEN",
+"scoreLabel": "MS AVG",
+"lowerIsBetter": true,
+"tasks": [
+{
+"stat": "best",
+"target": 1,
+"text": "Finish a Reaction Test with no early clicks"
+}
+],
+"file": "games/2d/reaction-test.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/reaction-test.png"
+},
+{
+"id": "colour-quiz",
+"n": 8,
+"title": "COLOUR QUIZ",
+"genre": "mind",
+"desc": "One tile is a slightly different shade. Find it before the timer runs out. The grid grows and the difference shrinks every round.",
+"controls": "Click / tap the odd tile",
+"scoreLabel": "ROUNDS",
+"tasks": [
+{
+"stat": "score",
+"target": 15,
+"text": "Reach round 15 in Colour Quiz"
+}
+],
+"file": "games/2d/colour-quiz.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/colour-quiz.png"
+},
+{
+"id": "sequence-memory",
+"n": 9,
+"title": "SEQUENCE MEMORY",
+"genre": "mind",
+"desc": "Squares light up one after another with a note each. Repeat the order. One more step every round, and it plays faster as you go.",
+"controls": "Click / tap the squares (or keys 1-9)",
+"scoreLabel": "STEPS",
+"tasks": [
+{
+"stat": "score",
+"target": 10,
+"text": "Remember 10 steps in Sequence Memory"
+}
+],
+"file": "games/2d/sequence-memory.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/sequence-memory.png"
+},
+{
+"id": "typing-speed",
+"n": 10,
+"title": "TYPING SPEED",
+"genre": "mind",
+"desc": "60 seconds, real words. Your words-per-minute counts only correct words, so speed without accuracy gets you nowhere.",
+"controls": "Type the highlighted word · Space moves to the next word",
+"scoreLabel": "WPM",
+"tasks": [
+{
+"stat": "score",
+"target": 35,
+"text": "Type 35 WPM in Typing Speed"
+}
+],
+"file": "games/2d/typing-speed.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/typing-speed.png"
+},
+{
+"id": "match-3",
+"n": 1,
+"title": "MATCH-3",
+"genre": "relax",
+"desc": "Swap neighbouring gems to line up three or more. Four in a row makes a line-blaster, five makes a colour bomb. 30 calm moves, no timer.",
+"controls": "Click a gem then a neighbour, or drag / swipe",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in Match-3"
+}
+],
+"file": "games/2d/match-3.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/match-3.png"
+},
+{
+"id": "word-connect",
+"n": 2,
+"title": "WORD CONNECT",
+"genre": "relax",
+"desc": "Swipe across the letter wheel to spell words and fill every slot. Extra real words count as bonus words. Ten calm levels, no timer.",
+"controls": "Drag across the letters (or type + Enter) · Shuffle button mixes the wheel",
+"scoreLabel": "WORDS",
+"tasks": [
+{
+"stat": "score",
+"target": 20,
+"text": "Find 20 words in Word Connect"
+}
+],
+"file": "games/2d/word-connect.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/word-connect.png"
+},
+{
+"id": "mystery-cafe",
+"n": 3,
+"title": "MYSTERY CAFÉ",
+"genre": "relax",
+"desc": "Run a cozy café for three days. Read what each guest wants and serve the right drink. Something goes missing every day, and the guests let slip clues. Close up and name who did it.",
+"controls": "Click / tap a drink to serve it · pick the culprit at closing time",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "solved",
+"target": 2,
+"text": "Solve 2 café mysteries in one game"
+}
+],
+"file": "games/2d/mystery-cafe.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mystery-cafe.png"
+},
+{
+"id": "battleship",
+"n": 4,
+"title": "BATTLESHIP",
+"genre": "relax",
+"desc": "Sink the CPU fleet before it sinks yours. Your ships are placed for you (R to shuffle before the first shot). The CPU hunts smartly once it finds you.",
+"controls": "Click / tap the enemy sea to fire · R = shuffle your fleet before you start",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Battleship"
+}
+],
+"file": "games/2d/battleship.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/battleship.png"
 }
 ];

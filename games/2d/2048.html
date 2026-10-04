@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>2048</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"2048","n":1,"title":"2048","genre":"mind","desc":"Slide the tiles, merge equal numbers, reach 2048. Keep going after that for a bigger score. One undo per game.","controls":"Arrow keys / WASD or swipe · U = undo once","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in 2048"},{"stat":"tile","target":512,"text":"Make a 512 tile in 2048"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 4, S = 104, G = 12, BX = 480 - (N * S + (N + 1) * G) / 2, BY = 70;
+const COL = { 2: '#2a2550', 4: '#3a2f6e', 8: '#ff8a3a', 16: '#ff6a3a', 32: '#ff3355', 64: '#ff2bd6', 128: '#c45cff', 256: '#8b5cf6', 512: '#4f8bff', 1024: '#22e6ff', 2048: '#3dffa0', 4096: '#ffd93a' };
+let uid = 0;
+function add(s) { const e = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!s.b[y][x]) e.push([x, y]); if (!e.length) return; const [x, y] = K.pick(e); s.b[y][x] = { v: Math.random() < 0.9 ? 2 : 4, id: uid++, x, y, px: x, py: y, born: 0 }; }
+function slide(s, dir) {
+  const D = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+  const snap = JSON.stringify(s.b);
+  let moved = false, gained = 0;
+  const xs = [...Array(N).keys()], ys = [...Array(N).keys()];
+  if (D[0] > 0) xs.reverse(); if (D[1] > 0) ys.reverse();
+  const merged = new Set();
+  for (const y of ys) for (const x of xs) {
+    const t = s.b[y][x]; if (!t) continue;
+    let cx = x, cy = y;
+    while (true) {
+      const nx = cx + D[0], ny = cy + D[1];
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) break;
+      const o = s.b[ny][nx];
+      if (!o) { s.b[ny][nx] = t; s.b[cy][cx] = null; cx = nx; cy = ny; moved = true; continue; }
+      if (o.v === t.v && !merged.has(o.id)) { o.v *= 2; o.pop = 0; merged.add(o.id); s.b[cy][cx] = null; gained += o.v; moved = true; s.best = Math.max(s.best, o.v); s.ghost.push({ v: t.v / 1, fx: t.px, fy: t.py, tx: nx, ty: ny, t: 0 }); }
+      break;
+    }
+    t.x = cx; t.y = cy;
+  }
+  if (!moved) return;
+  s.prev = { b: snap, score: s.score };
+  s.score += gained;
+  if (gained) { K.sfx(gained >= 128 ? 'power' : 'pop'); if (gained >= 64) K.floatText('+' + gained, 480, 50, '#ffd93a'); } else K.sfx('click');
+  add(s);
+  if (s.best >= 2048 && !s.won) { s.won = true; K.sfx('win'); K.flash('#3dffa0', 0.2); }
+}
+function stuck(s) {
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const t = s.b[y][x]; if (!t) return false; if (x < N - 1 && s.b[y][x + 1]?.v === t.v) return false; if (y < N - 1 && s.b[y + 1][x]?.v === t.v) return false; }
+  return true;
+}
+K.game({
+  bg: '#0a0818',
+  init(s) { s.b = Array.from({ length: N }, () => Array(N).fill(null)); s.score = 0; s.best = 2; s.prev = null; s.undo = 1; s.won = false; s.ghost = []; add(s); add(s); },
+  update(s, dt) {
+    for (const row of s.b) for (const t of row) if (t) { t.px = K.lerp(t.px, t.x, Math.min(1, dt * 18)); t.py = K.lerp(t.py, t.y, Math.min(1, dt * 18)); t.born = Math.min(1, t.born + dt * 6); if (t.pop != null) t.pop += dt * 5; }
+    s.ghost.forEach((g) => (g.t += dt * 9)); s.ghost = s.ghost.filter((g) => g.t < 1);
+    const d = K.tapDir();
+    if (d) slide(s, d);
+    if (K.tap('KeyU') && s.prev && s.undo > 0) { s.b = JSON.parse(s.prev.b); s.score = s.prev.score; s.prev = null; s.undo--; K.sfx('whoosh'); }
+    if (stuck(s)) K.end(s, { score: s.score, won: s.won, stats: { tile: s.best }, title: s.won ? 'YOU MADE 2048' : 'NO MOVES', text: `Biggest tile ${s.best}` });
+  },
+  draw(s) {
+    K.text('2048', 120, 70, 54, '#fff', 'center', 'd', 18);
+    K.text('SCORE', 120, 150, 14, '#8e88b8', 'center', 'm'); K.text(String(s.score), 120, 178, 30, '#ffd93a', 'center', 'd');
+    K.text('BEST TILE', 120, 230, 14, '#8e88b8', 'center', 'm'); K.text(String(s.best), 120, 258, 30, COL[s.best] || '#fff', 'center', 'd');
+    K.text(`UNDO (U) ×${s.undo}`, 120, 320, 14, s.undo ? '#22e6ff' : '#444', 'center', 'm');
+    const W = N * S + (N + 1) * G;
+    K.rect(BX, BY, W, W, '#151230', 14);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) K.rect(BX + G + x * (S + G), BY + G + y * (S + G), S, S, '#1d1940', 10);
+    const tile = (v, px, py, sc) => {
+      const c = COL[v] || '#ffd93a', X = BX + G + px * (S + G) + S / 2, Y = BY + G + py * (S + G) + S / 2, w = S * sc;
+      K.glow(c, v >= 8 ? 16 : 0); K.rect(X - w / 2, Y - w / 2, w, w, c, 10); K.noGlow();
+      K.text(String(v), X, Y + 2, (v >= 1024 ? 34 : v >= 128 ? 40 : 46) * sc, v <= 4 ? '#c9c3ff' : '#fff', 'center', 'd');
+    };
+    s.ghost.forEach((g) => tile(g.v, K.lerp(g.fx, g.tx, g.t), K.lerp(g.fy, g.ty, g.t), 1));
+    for (const row of s.b) for (const t of row) if (t) tile(t.v, t.px, t.py, t.born * (t.pop != null && t.pop < 1 ? 1 + Math.sin(t.pop * Math.PI) * 0.12 : 1));
+    if (s.won) K.text('2048! KEEP GOING', 820, 270, 18, '#3dffa0', 'center', 'd');
+  },
+  ai(s) { s.ai = (s.ai || 0) + 1; if (s.ai % 12 === 0) K.vtap(K.pick(['ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft'])); },
+});
+</script></body></html>

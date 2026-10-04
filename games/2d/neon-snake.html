@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Snake</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"neon-snake","n":6,"title":"NEON SNAKE","genre":"fun","desc":"Eat, grow, don't bite yourself. Gold fruit is worth 5 but vanishes fast, and every 10 fruit a wall block appears.","controls":"Arrow keys / WASD or swipe","scoreLabel":"FRUIT","tasks":[{"stat":"score","target":25,"text":"Eat 25 fruit in Neon Snake"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CW = 32, CH = 17, T = 28, OX = (960 - CW * T) / 2, OY = 46;
+const free = (s) => { let x, y, n = 0; do { x = K.irand(0, CW - 1); y = K.irand(0, CH - 1); n++; } while (n < 500 && (s.snake.some((p) => p.x === x && p.y === y) || s.walls.some((w) => w.x === x && w.y === y) || (s.food && s.food.x === x && s.food.y === y))); return { x, y }; };
+K.game({
+  bg: '#030a0a',
+  init(s) {
+    s.snake = [{ x: 8, y: 8 }, { x: 7, y: 8 }, { x: 6, y: 8 }]; s.dir = { x: 1, y: 0 }; s.queue = []; s.t = 0; s.score = 0; s.walls = []; s.food = null;
+    s.food = free(s); s.gold = null; s.goldT = 0; s.eaten = 0;
+  },
+  update(s, dt) {
+    const td = K.tapDir();
+    const D = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+    if (td && s.queue.length < 3) {
+      const last = s.queue[s.queue.length - 1] || s.dir, n = D[td];
+      if (n.x !== -last.x || n.y !== -last.y) s.queue.push(n);
+    }
+    s.goldT -= dt; if (s.gold && s.goldT <= 0) s.gold = null;
+    s.t += dt;
+    const step = Math.max(0.055, 0.12 - s.score * 0.0012);
+    if (s.t < step) return;
+    s.t = 0;
+    if (s.queue.length) s.dir = s.queue.shift();
+    const h = { x: s.snake[0].x + s.dir.x, y: s.snake[0].y + s.dir.y };
+    if (h.x < 0 || h.y < 0 || h.x >= CW || h.y >= CH || s.snake.some((p) => p.x === h.x && p.y === h.y) || s.walls.some((w) => w.x === h.x && w.y === h.y)) {
+      K.sfx('hit'); K.shake(10); K.burst(OX + h.x * T + 14, OY + h.y * T + 14, '#3dffa0', 20);
+      return K.end(s, { score: s.score, won: null, title: 'BITTEN', text: `Length ${s.snake.length}` });
+    }
+    s.snake.unshift(h);
+    let grow = 0;
+    if (h.x === s.food.x && h.y === s.food.y) {
+      grow = 1; s.score++; s.eaten++; K.sfx('pop'); K.burst(OX + h.x * T + 14, OY + h.y * T + 14, '#ff2bd6', 10, 160);
+      s.food = free(s);
+      if (s.eaten % 10 === 0) { s.walls.push(free(s)); K.sfx('knock'); }
+      if (!s.gold && Math.random() < 0.25) { s.gold = free(s); s.goldT = 5; }
+    }
+    if (s.gold && h.x === s.gold.x && h.y === s.gold.y) { grow = 3; s.score += 5; s.gold = null; K.sfx('coin'); K.floatText('+5', OX + h.x * T + 14, OY + h.y * T, '#ffd93a'); }
+    if (!grow) s.snake.pop(); else for (let i = 1; i < grow; i++) s.snake.push({ ...s.snake[s.snake.length - 1] });
+  },
+  draw(s) {
+    K.rect(OX - 4, OY - 4, CW * T + 8, CH * T + 8, '#071414', 6); K.stroke(OX - 4, OY - 4, CW * T + 8, CH * T + 8, '#3dffa055', 2, 6);
+    for (let x = 0; x < CW; x++) for (let y = 0; y < CH; y++) if ((x + y) % 2) K.rect(OX + x * T, OY + y * T, T, T, '#0a1a1a');
+    for (const w of s.walls) { K.rect(OX + w.x * T + 2, OY + w.y * T + 2, T - 4, T - 4, '#556', 4); K.stroke(OX + w.x * T + 2, OY + w.y * T + 2, T - 4, T - 4, '#99a', 2, 4); }
+    const pulse = 1 + Math.sin(K.time() * 8) * 0.12;
+    K.glow('#ff2bd6', 16); K.circle(OX + s.food.x * T + 14, OY + s.food.y * T + 14, 9 * pulse, '#ff2bd6'); K.noGlow();
+    if (s.gold) { K.alpha(s.goldT < 1.5 ? (Math.sin(K.time() * 20) > 0 ? 1 : 0.3) : 1); K.glow('#ffd93a', 20); K.circle(OX + s.gold.x * T + 14, OY + s.gold.y * T + 14, 11, '#ffd93a'); K.noGlow(); K.alpha(1); }
+    s.snake.forEach((p, i) => {
+      const k = 1 - i / (s.snake.length + 4);
+      K.glow('#3dffa0', i === 0 ? 18 : 6);
+      K.rect(OX + p.x * T + 2, OY + p.y * T + 2, T - 4, T - 4, i === 0 ? '#b6ffd9' : `rgba(61,255,160,${0.35 + k * 0.65})`, 7);
+    });
+    K.noGlow();
+    const h = s.snake[0];
+    K.circle(OX + h.x * T + 14 + s.dir.x * 5 - s.dir.y * 5, OY + h.y * T + 14 + s.dir.y * 5 - s.dir.x * 5, 3, '#05040c');
+    K.circle(OX + h.x * T + 14 + s.dir.x * 5 + s.dir.y * 5, OY + h.y * T + 14 + s.dir.y * 5 + s.dir.x * 5, 3, '#05040c');
+    K.text(`FRUIT ${s.score}`, 20, 22, 20, '#3dffa0', 'left', 'd');
+    K.text(`LENGTH ${s.snake.length}`, 940, 22, 16, '#8e88b8', 'right', 'd');
+  },
+  ai(s) {
+    const h = s.snake[0], tgt = s.gold || s.food;
+    const opts = [['right', 1, 0], ['left', -1, 0], ['down', 0, 1], ['up', 0, -1]].filter(([, x, y]) => {
+      const nx = h.x + x, ny = h.y + y;
+      return !(x === -s.dir.x && y === -s.dir.y) && nx >= 0 && ny >= 0 && nx < CW && ny < CH && !s.snake.some((p) => p.x === nx && p.y === ny) && !s.walls.some((w) => w.x === nx && w.y === ny);
+    }).sort((a, b) => Math.abs(h.x + a[1] - tgt.x) + Math.abs(h.y + a[2] - tgt.y) - (Math.abs(h.x + b[1] - tgt.x) + Math.abs(h.y + b[2] - tgt.y)));
+    if (opts[0] && s.t === 0) K.vtap({ right: 'ArrowRight', left: 'ArrowLeft', down: 'ArrowDown', up: 'ArrowUp' }[opts[0][0]]);
+  },
+});
+</script></body></html>

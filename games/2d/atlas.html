@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"atlas","n":2,"title":"ATLAS","genre":"mind","desc":"The classic place-name chain against the CPU. Name a country that starts with the last letter of the one before. No repeats. 15 seconds a turn, and the CPU knows its geography.","controls":"Type (or tap the keyboard) · Enter to answer","scoreLabel":"COUNTRIES","tasks":[{"stat":"score","target":8,"text":"Name 8 countries in one Atlas game"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const C = `Afghanistan Albania Algeria Andorra Angola Argentina Armenia Australia Austria Azerbaijan Bahamas Bahrain Bangladesh Barbados Belarus Belgium Belize Benin Bhutan Bolivia Bosnia Botswana Brazil Brunei Bulgaria Burkina-Faso Burundi Cambodia Cameroon Canada Cape-Verde Chad Chile China Colombia Comoros Congo Costa-Rica Croatia Cuba Cyprus Czechia Denmark Djibouti Dominica Ecuador Egypt El-Salvador England Eritrea Estonia Eswatini Ethiopia Fiji Finland France Gabon Gambia Georgia Germany Ghana Greece Grenada Guatemala Guinea Guyana Haiti Honduras Hungary Iceland India Indonesia Iran Iraq Ireland Israel Italy Ivory-Coast Jamaica Japan Jordan Kazakhstan Kenya Kiribati Kosovo Kuwait Kyrgyzstan Laos Latvia Lebanon Lesotho Liberia Libya Liechtenstein Lithuania Luxembourg Madagascar Malawi Malaysia Maldives Mali Malta Mauritania Mauritius Mexico Micronesia Moldova Monaco Mongolia Montenegro Morocco Mozambique Myanmar Namibia Nauru Nepal Netherlands New-Zealand Nicaragua Niger Nigeria North-Korea North-Macedonia Norway Oman Pakistan Palau Palestine Panama Paraguay Peru Philippines Poland Portugal Qatar Romania Russia Rwanda Samoa San-Marino Saudi-Arabia Scotland Senegal Serbia Seychelles Sierra-Leone Singapore Slovakia Slovenia Somalia South-Africa South-Korea South-Sudan Spain Sri-Lanka Sudan Suriname Sweden Switzerland Syria Taiwan Tajikistan Tanzania Thailand Togo Tonga Trinidad Tunisia Turkey Turkmenistan Tuvalu Uganda Ukraine Uruguay USA Uzbekistan Vanuatu Vatican Venezuela Vietnam Wales Yemen Zambia Zimbabwe`.split(' ').map((c) => c.replace(/-/g, ' '));
+const KEY = (n) => n.toUpperCase().replace(/[^A-Z]/g, '');
+const ALL = new Map(C.map((c) => [KEY(c), c]));
+['UNITEDSTATES', 'AMERICA', 'UNITEDKINGDOM', 'UK', 'HOLLAND', 'BURMA', 'CZECHREPUBLIC', 'COTEDIVOIRE', 'SWAZILAND', 'EASTTIMOR', 'TIMORLESTE', 'PAPUANEWGUINEA', 'SAOTOME', 'MARSHALLISLANDS', 'SOLOMONISLANDS', 'EQUATORIALGUINEA', 'GUINEABISSAU', 'CENTRALAFRICANREPUBLIC', 'DOMINICANREPUBLIC', 'SAINTLUCIA', 'SAINTKITTS', 'SAINTVINCENT', 'ANTIGUA', 'UAE', 'UNITEDARABEMIRATES', 'BOSNIAANDHERZEGOVINA'].forEach((k) => ALL.set(k, k.charAt(0) + k.slice(1).toLowerCase()));
+const last = (name) => KEY(name).slice(-1);
+function cpuPick(s) {
+  const opts = [...ALL.keys()].filter((k) => k[0] === s.need && !s.used.has(k) && C.some((c) => KEY(c) === k));
+  if (!opts.length || Math.random() < 0.02 * s.turns) return null;
+  // prefer answers that leave the player a hard letter
+  opts.sort((a, b) => [...ALL.keys()].filter((k) => k[0] === b.slice(-1)).length - [...ALL.keys()].filter((k) => k[0] === a.slice(-1)).length);
+  return Math.random() < 0.5 ? opts[0] : K.pick(opts);
+}
+K.game({
+  bg: '#07121a', touch: { stick: false, buttons: [] },
+  init(s) { s.used = new Set(); s.chain = []; s.cur = ''; s.score = 0; s.turns = 0; s.who = 'cpu'; s.t = 15; s.wait = 1; s.msg = ''; s.msgT = 0; s.need = K.pick('ABCGIKMNPST'.split('')); },
+  update(s, dt) {
+    s.msgT -= dt;
+    if (s.who === 'cpu') {
+      s.wait -= dt;
+      if (s.wait > 0) return;
+      const k = cpuPick(s);
+      if (!k) { s.score += 3; K.sfx('win'); return K.end(s, { score: s.score, won: true, title: 'CPU IS STUCK', text: `No country left starting with ${s.need}. You named ${s.score - 3} (+3 bonus).` }); }
+      s.used.add(k); s.chain.push({ name: ALL.get(k), who: 'cpu' }); s.need = last(k); s.who = 'you'; s.t = Math.max(8, 15 - s.score * 0.3); K.sfx('blip'); s.turns++;
+      return;
+    }
+    s.t -= dt;
+    if (s.t <= 0) { K.sfx('lose'); return K.end(s, { score: s.score, won: false, title: 'TIME UP', text: `You needed a country starting with ${s.need}.` }); }
+    const kk = K.keyboard(255, 390, 450, {}, { h: 40 });
+    if (!kk) return;
+    if (kk === 'BACK') s.cur = s.cur.slice(0, -1);
+    else if (kk === 'ENTER') {
+      const k = KEY(s.cur);
+      if (!k) return;
+      const say = (m) => { s.msg = m; s.msgT = 1.6; K.sfx('wrong'); };
+      if (k[0] !== s.need) say(`Must start with ${s.need}`);
+      else if (!ALL.has(k)) say(`"${s.cur}" is not a country I know`);
+      else if (s.used.has(k)) say('Already used');
+      else { s.used.add(k); s.chain.push({ name: ALL.get(k), who: 'you' }); s.need = last(k); s.score++; s.cur = ''; s.who = 'cpu'; s.wait = K.rand(0.8, 2); K.sfx('coin'); }
+    } else if (s.cur.length < 24) s.cur += kk;
+    if (K.tap('Space')) s.cur += ' ';
+  },
+  draw(s) {
+    K.text('ATLAS', 480, 34, 28, '#22e6ff', 'center', 'd', 10);
+    const shown = s.chain.slice(-6);
+    shown.forEach((c, i) => {
+      const y = 80 + i * 36, a = 0.35 + (i / shown.length) * 0.65;
+      K.alpha(a);
+      K.rect(c.who === 'you' ? 520 : 140, y - 15, 300, 30, c.who === 'you' ? '#22e6ff22' : '#ff2bd622', 15);
+      K.text(c.name, c.who === 'you' ? 670 : 290, y, 18, c.who === 'you' ? '#22e6ff' : '#ff2bd6', 'center', 'd');
+      K.alpha(1);
+    });
+    const yy = 316;
+    if (s.who === 'you') {
+      K.text(`A COUNTRY STARTING WITH`, 400, yy - 10, 16, '#8e88b8', 'right', 'd');
+      K.glow('#ffd93a', 16); K.text(s.need, 430, yy - 10, 40, '#ffd93a', 'center', 'd'); K.noGlow();
+      K.rect(470, yy - 30, 260, 40, '#0e1d28', 8); K.stroke(470, yy - 30, 260, 40, '#22e6ff', 2, 8);
+      K.text(s.cur + (Math.sin(K.time() * 8) > 0 ? '|' : ''), 484, yy - 10, 20, '#fff', 'left', 'd');
+      K.rect(270, yy + 22, 420, 6, '#222', 3); K.rect(270, yy + 22, 420 * Math.max(0, s.t / 15), 6, s.t < 4 ? '#ff3355' : '#3dffa0', 3);
+    } else K.text('CPU IS THINKING…', 480, yy, 20, '#ff2bd6', 'center', 'd');
+    K.keyboard(255, 390, 450, {}, { h: 40 });
+    K.text(`YOU ${s.score}`, 80, 34, 18, '#22e6ff', 'left', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 284 - 56, 18, '#ff8a3a', 'center', 'd');
+  },
+  ai(s) {
+    if (s.who !== 'you') return;
+    if (!s.plan) s.plan = [...ALL.keys()].find((k) => k[0] === s.need && !s.used.has(k) && C.some((c) => KEY(c) === k)) || 'X';
+    s.aw = (s.aw || 0) + 1;
+    if (s.aw % 6 === 0) { if (s.cur.length < s.plan.length) K.vtap('Key' + s.plan[s.cur.length]); else { K.vtap('Enter'); s.plan = null; } }
+  },
+});
+</script></body></html>

@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tic Tac Toe</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tic-tac-toe","n":4,"title":"TIC TAC TOE","genre":"mind","desc":"Best of 9 rounds against the CPU. It starts sloppy and gets sharper every round you win. Can you beat the perfect player at the end?","controls":"Click / tap a square (or 1-9 on the number pad layout)","scoreLabel":"WINS","tasks":[{"stat":"score","target":3,"text":"Win 3 rounds of Tic Tac Toe in one match"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const L = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+const CS = 130, BX = 480 - CS * 1.5, BY = 75;
+const win = (b) => { for (const l of L) if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[1]] === b[l[2]]) return l; return null; };
+function minimax(b, me, turn) {
+  const w = win(b); if (w) return b[w[0]] === me ? 10 : -10;
+  if (b.every(Boolean)) return 0;
+  const scores = [];
+  for (let i = 0; i < 9; i++) if (!b[i]) { b[i] = turn; scores.push(minimax(b, me, turn === 'X' ? 'O' : 'X') * 0.9); b[i] = null; }
+  return turn === me ? Math.max(...scores) : Math.min(...scores);
+}
+function cpuMove(s) {
+  const free = s.b.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
+  const mistake = Math.max(0, 0.55 - s.round * 0.08);
+  if (Math.random() < mistake) return K.pick(free);
+  let best = -99, pick = free[0];
+  for (const i of K.shuffle(free.slice())) { s.b[i] = 'O'; const v = minimax(s.b, 'O', 'X'); s.b[i] = null; if (v > best) { best = v; pick = i; } }
+  return pick;
+}
+function newRound(s) { s.b = Array(9).fill(null); s.turn = s.round % 2 ? 'O' : 'X'; s.line = null; s.wait = 0.5; s.over = 0; }
+K.game({
+  bg: '#08061a',
+  init(s) { s.round = 0; s.me = 0; s.cpu = 0; s.draws = 0; s.anim = Array(9).fill(0); newRound(s); },
+  update(s, dt) {
+    s.anim = s.anim.map((a, i) => (s.b[i] ? Math.min(1, a + dt * 5) : 0));
+    if (s.over > 0) {
+      s.over -= dt;
+      if (s.over <= 0) {
+        s.round++;
+        if (s.round >= 9 || s.me >= 5 || s.cpu >= 5) return K.end(s, { score: s.me, won: s.me > s.cpu, title: s.me > s.cpu ? 'YOU WIN THE MATCH' : s.me === s.cpu ? 'TIED MATCH' : 'CPU WINS', text: `${s.me} wins · ${s.cpu} losses · ${s.draws} draws` });
+        newRound(s);
+      }
+      return;
+    }
+    const finish = () => {
+      const w = win(s.b);
+      if (w) { s.line = w; if (s.b[w[0]] === 'X') { s.me++; K.sfx('win'); } else { s.cpu++; K.sfx('lose'); K.shake(6); } s.over = 1.4; }
+      else if (s.b.every(Boolean)) { s.draws++; K.sfx('wrong'); s.over = 1.1; }
+    };
+    if (s.turn === 'X') {
+      let pick = -1;
+      for (let i = 0; i < 9; i++) if (K.tap('Numpad' + (i + 1)) || K.tap('Digit' + (i + 1))) pick = [6, 7, 8, 3, 4, 5, 0, 1, 2][i];
+      if (K.mouse.clicked) { const cx = Math.floor((K.mouse.x - BX) / CS), cy = Math.floor((K.mouse.y - BY) / CS); if (cx >= 0 && cx < 3 && cy >= 0 && cy < 3) pick = cy * 3 + cx; }
+      if (pick >= 0 && !s.b[pick]) { s.b[pick] = 'X'; K.sfx('click'); s.turn = 'O'; s.wait = K.rand(0.35, 0.7); finish(); }
+    } else {
+      s.wait -= dt;
+      if (s.wait <= 0) { const i = cpuMove(s); s.b[i] = 'O'; K.sfx('blip'); s.turn = 'X'; finish(); }
+    }
+  },
+  draw(s) {
+    K.text(`ROUND ${Math.min(9, s.round + 1)} / 9`, 480, 38, 18, '#8e88b8', 'center', 'd');
+    K.text('YOU', 120, 200, 22, '#22e6ff', 'center', 'd'); K.text(String(s.me), 120, 250, 60, '#22e6ff', 'center', 'd', 16);
+    K.text('CPU', 840, 200, 22, '#ff2bd6', 'center', 'd'); K.text(String(s.cpu), 840, 250, 60, '#ff2bd6', 'center', 'd', 16);
+    K.text(`DRAWS ${s.draws}`, 480, 500, 14, '#8e88b8', 'center', 'm');
+    K.text(s.round >= 6 ? 'CPU: PERFECT' : s.round >= 3 ? 'CPU: SHARP' : 'CPU: SLOPPY', 840, 300, 13, '#8e88b8', 'center', 'm');
+    K.glow('#8b5cf6', 10);
+    for (let i = 1; i < 3; i++) { K.line(BX + i * CS, BY + 10, BX + i * CS, BY + CS * 3 - 10, '#8b5cf6', 4); K.line(BX + 10, BY + i * CS, BX + CS * 3 - 10, BY + i * CS, '#8b5cf6', 4); }
+    K.noGlow();
+    const hov = s.turn === 'X' && !s.over ? Math.floor((K.mouse.y - BY) / CS) * 3 + Math.floor((K.mouse.x - BX) / CS) : -1;
+    for (let i = 0; i < 9; i++) {
+      const x = BX + (i % 3) * CS + CS / 2, y = BY + Math.floor(i / 3) * CS + CS / 2, a = s.anim[i], r = 40;
+      if (!s.b[i] && i === hov && K.inRect(K.mouse.x, K.mouse.y, { x: BX, y: BY, w: CS * 3, h: CS * 3 })) K.rect(x - CS / 2 + 6, y - CS / 2 + 6, CS - 12, CS - 12, '#22e6ff11', 10);
+      if (s.b[i] === 'X') { K.glow('#22e6ff', 18); K.line(x - r * a, y - r * a, x + r * a, y + r * a, '#22e6ff', 10); K.line(x + r * a, y - r * a, x - r * a, y + r * a, '#22e6ff', 10); }
+      if (s.b[i] === 'O') { K.glow('#ff2bd6', 18); K.ctx().strokeStyle = '#ff2bd6'; K.ctx().lineWidth = 10; K.ctx().beginPath(); K.ctx().arc(x, y, r, 0, Math.PI * 2 * a); K.ctx().stroke(); }
+      K.noGlow();
+    }
+    if (s.line) { const p = (i) => [BX + (i % 3) * CS + CS / 2, BY + Math.floor(i / 3) * CS + CS / 2]; const [a, b] = [p(s.line[0]), p(s.line[2])]; K.glow('#ffd93a', 20); K.line(a[0], a[1], b[0], b[1], '#ffd93a', 8); K.noGlow(); }
+  },
+  ai(s) { if (s.turn === 'X' && !s.over) { s.aw = (s.aw || 0) + 1; if (s.aw % 30 === 0) { const f = s.b.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0); const i = K.pick(f); K.vmouse(BX + (i % 3) * CS + 65, BY + Math.floor(i / 3) * CS + 65, true); } } },
+});
+</script></body></html>

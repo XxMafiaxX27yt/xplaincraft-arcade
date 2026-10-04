@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reaction Test</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"reaction-test","n":7,"title":"REACTION TEST","genre":"mind","desc":"Wait for green, then hit as fast as you can. Five tries, your average counts. Click on red and that try is a fail. Fake-out colours show up from try 3.","controls":"Click / tap / Space when the screen turns GREEN","scoreLabel":"MS AVG","lowerIsBetter":true,"tasks":[{"stat":"best","target":1,"text":"Finish a Reaction Test with no early clicks"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+K.game({
+  bg: '#0b0b14', lowerIsBetter: true, noTitleSim: true,
+  init(s) { s.tries = []; s.phase = 'wait'; s.t = K.rand(1.4, 3.5); s.flash = 0; s.fake = 0; s.msg = 'WAIT FOR GREEN'; s.early = 0; },
+  update(s, dt) {
+    const hit = K.action();
+    if (s.phase === 'wait') {
+      s.t -= dt;
+      if (s.tries.length >= 2 && s.fake <= 0 && Math.random() < dt * 0.35) s.fake = 0.35;
+      if (s.fake > 0) s.fake -= dt;
+      if (hit) { s.phase = 'early'; s.early++; s.t = 1.2; K.sfx('wrong'); K.shake(6); s.tries.push(null); return; }
+      if (s.t <= 0) { s.phase = 'go'; s.go = performance.now(); K.sfx('blip'); }
+    } else if (s.phase === 'go') {
+      if (hit) { const ms = Math.round(performance.now() - s.go); s.tries.push(ms); s.phase = 'show'; s.t = 1.1; s.last = ms; K.sfx(ms < 250 ? 'coin' : 'click'); }
+    } else {
+      s.t -= dt;
+      if (s.t <= 0) {
+        if (s.tries.length >= 5) {
+          const ok = s.tries.filter((x) => x != null), avg = ok.length ? Math.round(ok.reduce((a, b) => a + b, 0) / ok.length) + (5 - ok.length) * 150 : 999;
+          return K.end(s, { score: avg, won: null, title: avg < 260 ? 'LIGHTNING' : avg < 340 ? 'SHARP' : 'KEEP PRACTISING', stats: { best: s.early === 0 ? 1 : 0 }, text: `Tries: ${s.tries.map((x) => (x == null ? 'EARLY' : x + 'ms')).join(' · ')}${s.early ? ` (+150 ms per early click)` : ''}` });
+        }
+        s.phase = 'wait'; s.t = K.rand(1.2, 3.8);
+      }
+    }
+  },
+  draw(s) {
+    const col = s.phase === 'go' ? '#1fd16a' : s.phase === 'early' ? '#ff3355' : s.fake > 0 ? K.pick(['#1f6ad1', '#d1c41f']) : '#b8243a';
+    K.rect(40, 70, 880, 400, col, 20);
+    const big = s.phase === 'go' ? 'CLICK!' : s.phase === 'early' ? 'TOO EARLY' : s.phase === 'show' ? `${s.last} ms` : s.fake > 0 ? 'NOT YET…' : 'WAIT…';
+    K.text(big, 480, 250, 72, '#fff', 'center', 'd', 10);
+    K.text(s.phase === 'wait' ? 'wait for GREEN — not blue, not yellow' : s.phase === 'show' ? (s.last < 220 ? 'insane' : s.last < 300 ? 'quick' : 'okay') : '', 480, 330, 22, '#ffffffcc');
+    for (let i = 0; i < 5; i++) {
+      const v = s.tries[i];
+      K.rect(250 + i * 96, 488, 80, 36, i < s.tries.length ? (v == null ? '#ff335533' : '#1fd16a33') : '#ffffff0d', 8);
+      K.text(i < s.tries.length ? (v == null ? 'EARLY' : v + '') : '—', 290 + i * 96, 507, 16, '#fff', 'center', 'd');
+    }
+    K.text('TRY', 210, 507, 14, '#8e88b8', 'center', 'm');
+  },
+});
+</script></body></html>

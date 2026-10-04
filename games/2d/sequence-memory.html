@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sequence Memory</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sequence-memory","n":9,"title":"SEQUENCE MEMORY","genre":"mind","desc":"Squares light up one after another with a note each. Repeat the order. One more step every round, and it plays faster as you go.","controls":"Click / tap the squares (or keys 1-9)","scoreLabel":"STEPS","tasks":[{"stat":"score","target":10,"text":"Remember 10 steps in Sequence Memory"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const NOTES = [262, 294, 330, 349, 392, 440, 494, 523, 587];
+const CS = 120, GP = 14, BX = 480 - (CS * 3 + GP * 2) / 2, BY = 70;
+const cellAt = (x, y) => { for (let i = 0; i < 9; i++) if (K.inRect(x, y, { x: BX + (i % 3) * (CS + GP), y: BY + Math.floor(i / 3) * (CS + GP), w: CS, h: CS })) return i; return -1; };
+function play(s) { s.phase = 'show'; s.si = 0; s.st = 0.6; s.input = 0; }
+K.game({
+  bg: '#0a0a1e',
+  init(s) { s.seq = [K.irand(0, 8)]; s.lit = Array(9).fill(0); play(s); s.score = 0; },
+  update(s, dt) {
+    s.lit = s.lit.map((v) => Math.max(0, v - dt * 3));
+    const gap = Math.max(0.28, 0.6 - s.seq.length * 0.025);
+    if (s.phase === 'show') {
+      s.st -= dt;
+      if (s.st <= 0) {
+        if (s.si >= s.seq.length) { s.phase = 'input'; return; }
+        const c = s.seq[s.si++]; s.lit[c] = 1; K.tone(NOTES[c], 0.25, 'triangle', 0.08); s.st = gap;
+      }
+      return;
+    }
+    if (s.phase === 'next') { s.st -= dt; if (s.st <= 0) { s.seq.push(K.irand(0, 8)); play(s); } return; }
+    let c = -1;
+    for (let i = 0; i < 9; i++) if (K.tap('Digit' + (i + 1), 'Numpad' + (i + 1))) c = i;
+    if (K.mouse.clicked) c = cellAt(K.mouse.x, K.mouse.y);
+    if (c < 0) return;
+    s.lit[c] = 1;
+    if (c !== s.seq[s.input]) { K.sfx('lose'); K.shake(10); K.flash('#ff3355', 0.25); return K.end(s, { score: s.score, won: null, title: 'WRONG SQUARE', text: `You remembered ${s.score} step${s.score === 1 ? '' : 's'}.` }); }
+    K.tone(NOTES[c], 0.25, 'triangle', 0.08);
+    s.input++;
+    if (s.input >= s.seq.length) { s.score = s.seq.length; s.phase = 'next'; s.st = 0.7; K.sfx('coin'); }
+  },
+  draw(s) {
+    for (let i = 0; i < 9; i++) {
+      const x = BX + (i % 3) * (CS + GP), y = BY + Math.floor(i / 3) * (CS + GP), l = s.lit[i];
+      K.glow('#22e6ff', l * 30); K.rect(x, y, CS, CS, l > 0.05 ? `rgba(34,230,255,${0.25 + l * 0.75})` : '#15153a', 14); K.noGlow();
+      K.stroke(x, y, CS, CS, '#22e6ff55', 2, 14);
+    }
+    K.text(`LEVEL ${s.seq.length}`, 130, 120, 26, '#fff', 'center', 'd');
+    K.text(s.phase === 'show' ? 'WATCH' : s.phase === 'input' ? 'YOUR TURN' : 'NICE', 130, 170, 20, s.phase === 'input' ? '#3dffa0' : '#22e6ff', 'center', 'd');
+    if (s.phase === 'input') K.text(`${s.input} / ${s.seq.length}`, 130, 210, 18, '#8e88b8', 'center', 'm');
+  },
+  ai(s) { if (s.phase === 'input') { s.aw = (s.aw || 0) + 1; if (s.aw % 20 === 0) { const c = s.seq[s.input]; K.vmouse(BX + (c % 3) * (CS + GP) + 60, BY + Math.floor(c / 3) * (CS + GP) + 60, true); } } },
+});
+</script></body></html>

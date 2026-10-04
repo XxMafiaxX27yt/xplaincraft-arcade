@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Typing Speed</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"typing-speed","n":10,"title":"TYPING SPEED","genre":"mind","desc":"60 seconds, real words. Your words-per-minute counts only correct words, so speed without accuracy gets you nowhere.","controls":"Type the highlighted word · Space moves to the next word","scoreLabel":"WPM","tasks":[{"stat":"score","target":35,"text":"Type 35 WPM in Typing Speed"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+function refill(s) { while (s.words.length - s.i < 40) s.words.push(WORDS.pick(K.pick([3, 4, 4, 5, 5, 6, 7]))); }
+K.game({
+  bg: '#0b0d16', touch: { stick: false, buttons: [] },
+  init(s) { s.words = []; s.i = 0; s.cur = ''; s.ok = 0; s.bad = 0; s.chars = 0; s.time = 0; s.started = false; s.marks = []; refill(s); },
+  update(s, dt) {
+    if (s.started) s.time += dt;
+    if (s.time >= 60) {
+      const wpm = Math.round(s.chars / 5);
+      return K.end(s, { score: wpm, won: null, title: `${wpm} WPM`, stats: { words: s.ok }, text: `${s.ok} correct words · ${s.bad} wrong · accuracy ${Math.round((s.ok / Math.max(1, s.ok + s.bad)) * 100)}%` });
+    }
+    const kb = K.isTouch ? K.keyboard(255, 380, 450, {}, { h: 40 }) : null;
+    const typed = K.isTouch ? (kb && kb.length === 1 ? [kb] : []) : K.typed();
+    for (const ch of typed) { s.cur += ch.toLowerCase(); s.started = true; }
+    if (K.tap('Backspace') || kb === 'BACK') s.cur = s.cur.slice(0, -1);
+    if ((K.tap('Space', 'Enter') || kb === 'ENTER') && s.cur) {
+      const w = s.words[s.i], good = s.cur === w;
+      s.marks[s.i] = good; if (good) { s.ok++; s.chars += w.length + 1; K.sfx('tick'); } else { s.bad++; K.sfx('wrong'); }
+      s.i++; s.cur = ''; refill(s);
+    }
+  },
+  draw(s) {
+    K.rect(60, 90, 840, 230, '#121528', 14);
+    let x = 90, y = 130, line = 0;
+    const start = Math.max(0, s.i - (s.i % 8));
+    K.ctx().font = K.font(28, 'm', 400);
+    for (let j = start; j < start + 24 && j < s.words.length; j++) {
+      const w = s.words[j], ww = K.ctx().measureText(w + ' ').width;
+      if (x + ww > 880) { x = 90; y += 60; line++; if (line > 2) break; }
+      const col = j < s.i ? (s.marks[j] ? '#3dffa0' : '#ff3355') : j === s.i ? '#fff' : '#6d6a90';
+      if (j === s.i) { K.rect(x - 6, y - 22, ww, 44, '#22e6ff22', 6); const typedOk = w.startsWith(s.cur); K.text(w, x, y, 28, typedOk ? '#fff' : '#ff8a3a', 'left', 'm'); }
+      else K.text(w, x, y, 28, col, 'left', 'm');
+      x += ww;
+    }
+    K.rect(260, 340, 440, 54, '#0f1222', 10); K.stroke(260, 340, 440, 54, s.words[s.i].startsWith(s.cur) ? '#22e6ff' : '#ff3355', 2, 10);
+    K.text(s.cur + (Math.sin(K.time() * 8) > 0 ? '|' : ''), 280, 368, 26, '#fff', 'left', 'm');
+    K.text(`${Math.ceil(60 - s.time)}`, 480, 50, 34, s.time > 50 ? '#ff3355' : '#22e6ff', 'center', 'd');
+    const wpm = s.time > 1 ? Math.round(s.chars / 5 / (s.time / 60)) : 0;
+    K.text(`${wpm} WPM`, 120, 50, 20, '#fff', 'center', 'd');
+    K.text(`${s.ok} ✓  ${s.bad} ✗`, 840, 50, 18, '#8e88b8', 'center', 'd');
+    if (!s.started && !K.isTouch) K.text('start typing — the timer starts with your first letter', 480, 450, 18, '#8e88b8');
+    if (K.isTouch) K.keyboard(255, 380, 450, {}, { h: 40 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 7 === 0) { const w = s.words[s.i]; if (s.cur.length < w.length) K.vtap('Key' + w[s.cur.length].toUpperCase()); else K.vtap('Space'); } },
+});
+</script></body></html>

@@ -1,0 +1,115 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mystery Café</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mystery-cafe","n":3,"title":"MYSTERY CAFÉ","genre":"relax","desc":"Run a cozy café for three days. Read what each guest wants and serve the right drink. Something goes missing every day, and the guests let slip clues. Close up and name who did it.","controls":"Click / tap a drink to serve it · pick the culprit at closing time","scoreLabel":"POINTS","tasks":[{"stat":"solved","target":2,"text":"Solve 2 café mysteries in one game"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/faces.js"></script>
+<script>
+const MENU = [
+  { n: 'ESPRESSO', c: '#5a3a22', lines: ['Something small and strong. I need to wake up.', 'Just a tiny shot of coffee, no milk.', 'The strongest hot coffee you have, please.'] },
+  { n: 'LATTE', c: '#d9b48a', lines: ['A big milky coffee, nice and mild.', 'Coffee with lots of warm milk, please.', 'Something gentle, mostly milk, a little coffee.'] },
+  { n: 'CAPPUCCINO', c: '#b8875a', lines: ['Coffee with a thick hat of foam on top.', 'Foamy coffee please, with cocoa dust.', 'I love the fluffy foam ones.'] },
+  { n: 'ICED COFFEE', c: '#7a5232', lines: ['It is so warm today. Cold coffee please.', 'Coffee, but with ice.', 'Something cold that still has caffeine.'] },
+  { n: 'HOT CHOCOLATE', c: '#6b3a1e', lines: ['No coffee for me. Something sweet and hot.', 'Chocolate, warm, with a marshmallow?', 'Sweet and hot, I don\'t drink coffee.'] },
+  { n: 'MINT TEA', c: '#3dbb7a', lines: ['A hot herbal tea, something fresh.', 'Tea, the green leafy one with no caffeine.', 'Something hot and minty for my throat.'] },
+  { n: 'LEMONADE', c: '#ffe066', lines: ['Something cold and sweet, no coffee.', 'Fresh and fizzy, cold please.', 'A cold glass of something lemony.'] },
+];
+const ITEMS = ['the strawberry cake', 'the tip jar', 'the secret recipe book', 'the silver spoon', 'the café cat\'s collar', 'the jar of rare beans'];
+const TRAITS = [
+  ['glasses', (p) => p.glasses, 'wore glasses', 'had no glasses'],
+  ['beard', (p) => p.beard, 'had a beard', 'had a clean shaven face'],
+  ['mole', (p) => !!p.mole, 'had a little mole', 'had no mole on their face'],
+  ['dark hair', (p) => ['#1b1209', '#4a2c14', '#2b2b45'].includes(p.hair), 'had dark hair', 'had light hair'],
+  ['blue top', (p) => ['#3a6fd8', '#7a4ad8', '#555a66'].includes(p.shirt), 'wore a blue or purple top', 'wore a bright top'],
+];
+function day(s) {
+  s.queue = []; s.served = 0; s.mood = 1;
+  const people = Array.from({ length: 6 }, () => F.make());
+  const sus = K.shuffle(people.slice()).slice(0, 3);
+  s.culprit = sus[0]; s.suspects = K.shuffle(sus.slice());
+  // clues that point to the culprit and rule out each innocent
+  const clues = [];
+  for (const inn of sus.slice(1)) {
+    const tr = K.shuffle(TRAITS.slice()).find((t) => t[1](s.culprit) !== t[1](inn));
+    if (tr) clues.push(`The person I saw ${tr[1](s.culprit) ? tr[2] : tr[3]}.`);
+  }
+  clues.push(`Someone was hanging around near the counter.`);
+  s.item = K.pick(ITEMS);
+  people.forEach((p, i) => s.queue.push({ p, want: K.irand(0, MENU.length - 1), line: null, clue: i < clues.length + 1 && i > 0 ? clues[i - 1] : null }));
+  s.queue.forEach((q) => (q.line = K.pick(MENU[q.want].lines)));
+  s.cur = null; s.next = 1; s.phase = 'serve'; s.reply = ''; s.replyT = 0;
+}
+K.game({
+  bg: '#1a1210', touch: { stick: false, buttons: [] },
+  init(s) { s.d = 0; s.score = 0; s.solved = 0; s.right = 0; s.steam = 0; day(s); },
+  update(s, dt) {
+    s.replyT -= dt; s.steam += dt;
+    if (s.phase === 'serve') {
+      if (!s.cur) { s.next -= dt; if (s.next <= 0) { if (!s.queue.length) { s.phase = 'accuse'; K.sfx('chime'); return; } s.cur = s.queue.shift(); s.cur.x = -120; K.sfx('knock'); } return; }
+      s.cur.x = K.lerp(s.cur.x, 300, dt * 4);
+      if (s.cur.done) { s.cur.leave = (s.cur.leave || 0) + dt; if (s.cur.leave > 2.4) { s.cur = null; s.next = 0.8; } return; }
+      if (!K.mouse.clicked) return;
+      MENU.forEach((m, i) => {
+        if (!K.inRect(K.mouse.x, K.mouse.y, { x: 560 + (i % 2) * 190, y: 90 + Math.floor(i / 2) * 82, w: 175, h: 70 })) return;
+        const ok = i === s.cur.want;
+        s.cur.done = true; s.cur.ok = ok;
+        if (ok) { s.score += 10; s.right++; K.sfx('coin'); s.reply = s.cur.clue ? `Perfect, thank you! Oh… about ${s.item}? ${s.cur.clue}` : 'Perfect, thank you!'; }
+        else { K.sfx('wrong'); s.reply = s.cur.clue ? `Hm, not quite what I asked for… ${s.cur.clue}` : 'Hm… that isn\'t what I asked for.'; }
+        s.notes = s.notes || []; if (s.cur.clue) s.notes.push(s.cur.clue);
+        s.replyT = 3;
+      });
+    } else if (s.phase === 'accuse') {
+      if (!K.mouse.clicked) return;
+      s.suspects.forEach((p, i) => {
+        if (!K.inRect(K.mouse.x, K.mouse.y, { x: 150 + i * 240, y: 170, w: 200, h: 250 })) return;
+        const ok = p === s.culprit;
+        if (ok) { s.solved++; s.score += 50; K.sfx('win'); } else K.sfx('lose');
+        s.phase = 'result'; s.resT = 2.5; s.resOk = ok;
+      });
+    } else {
+      s.resT -= dt;
+      if (s.resT <= 0) { s.d++; s.notes = []; if (s.d >= 3) return K.end(s, { score: s.score, won: s.solved >= 2, stats: { solved: s.solved }, title: 'CAFÉ CLOSED', text: `${s.right}/18 orders right · ${s.solved}/3 mysteries solved` }); day(s); }
+    }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#3a2618', '#1a1210']));
+    for (let i = 0; i < 6; i++) { K.alpha(0.5 + 0.5 * Math.sin(K.time() * 2 + i)); K.circle(80 + i * 160, 26, 6, '#ffd59a'); K.line(80 + i * 160, 0, 80 + i * 160, 20, '#553', 2); } K.alpha(1);
+    K.rect(0, 380, 540, 160, '#5a3a22'); K.rect(0, 380, 540, 10, '#7a5232');
+    K.text(`DAY ${s.d + 1} / 3`, 20, 60, 18, '#ffd59a', 'left', 'd'); K.text(`★ ${s.score}`, 20, 90, 18, '#ffd93a', 'left', 'd');
+    if (s.phase === 'serve') {
+      K.text(`Today: ${s.item} went missing…`, 270, 470, 16, '#ffd59acc', 'center', 'u');
+      MENU.forEach((m, i) => {
+        const x = 560 + (i % 2) * 190, y = 90 + Math.floor(i / 2) * 82, hov = K.inRect(K.mouse.x, K.mouse.y, { x, y, w: 175, h: 70 });
+        K.rect(x, y, 175, 70, hov ? '#4a3020' : '#2a1c14', 10); K.stroke(x, y, 175, 70, '#ffd59a55', 2, 10);
+        K.rect(x + 14, y + 18, 30, 36, m.c, 4); K.rect(x + 12, y + 14, 34, 6, '#eee', 3);
+        K.alpha(0.4); K.circle(x + 29 + Math.sin(s.steam * 3 + i) * 3, y + 8 - (s.steam * 20 % 10), 4, '#fff'); K.alpha(1);
+        K.text(m.n, x + 110, y + 36, 14, '#ffd59a', 'center', 'd');
+      });
+      const c = s.cur;
+      if (c) {
+        F.draw(c.p, c.x, 270, 1.1, {});
+        K.rect(c.x - 150, 92, 300, 74, '#fff8ee', 14);
+        K.poly([[c.x - 10, 166], [c.x + 10, 166], [c.x, 182]], '#fff8ee');
+        K.wrapText(c.done ? (s.replyT > 0 ? s.reply : '…') : c.line, c.x, 112, 280, 15, '#3a2618');
+        K.text(c.p.name, c.x, 360, 14, '#ffd59a', 'center', 'd');
+      }
+      (s.notes || []).forEach((n, i) => K.text('✎ ' + n, 560, 426 + i * 22, 13, '#ffd59a', 'left', 'u'));
+    } else {
+      K.text(`Who took ${s.item}?`, 480, 70, 28, '#ffd59a', 'center', 'd');
+      (s.notes || []).forEach((n, i) => K.text('✎ ' + n, 480, 110 + i * 22, 15, '#ffd59acc', 'center', 'u'));
+      s.suspects.forEach((p, i) => {
+        const x = 150 + i * 240, hov = s.phase === 'accuse' && K.inRect(K.mouse.x, K.mouse.y, { x, y: 170, w: 200, h: 250 });
+        K.rect(x, 170, 200, 250, hov ? '#4a3020' : '#2a1c14', 14);
+        if (s.phase === 'result' && p === s.culprit) K.stroke(x, 170, 200, 250, '#ff3355', 4, 14);
+        F.draw(p, x + 100, 270, 0.8, {});
+        K.text(p.name, x + 100, 400, 15, '#ffd59a', 'center', 'd');
+      });
+      if (s.phase === 'result') K.text(s.resOk ? 'SOLVED! +50' : 'WRONG PERSON…', 480, 470, 30, s.resOk ? '#3dffa0' : '#ff3355', 'center', 'd', 12);
+    }
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 50) return;
+    if (s.phase === 'serve' && s.cur && !s.cur.done) { const i = s.cur.want; K.vmouse(560 + (i % 2) * 190 + 80, 90 + Math.floor(i / 2) * 82 + 30, true); }
+    if (s.phase === 'accuse') K.vmouse(250, 300, true);
+  },
+});
+</script></body></html>

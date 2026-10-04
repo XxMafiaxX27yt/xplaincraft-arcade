@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aim Trainer</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"aim-trainer","n":6,"title":"AIM TRAINER","genre":"mind","desc":"30 seconds. Targets shrink while they live, some drift, gold ones are worth triple. Misses cost points, so don't spray.","controls":"Click / tap the targets","scoreLabel":"POINTS","tasks":[{"stat":"score","target":40,"text":"Score 40 in Aim Trainer"},{"stat":"accuracy","target":90,"text":"Get 90% accuracy in Aim Trainer"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function spawn(s) {
+  const gold = Math.random() < 0.12;
+  s.t.push({ x: K.rand(70, 890), y: K.rand(90, 500), r: gold ? 26 : 34, life: 0, max: gold ? 1.3 : 2.2, gold, vx: s.time > 15 && Math.random() < 0.4 ? K.rand(-90, 90) : 0, vy: s.time > 15 && Math.random() < 0.4 ? K.rand(-60, 60) : 0 });
+}
+K.game({
+  bg: '#060d14',
+  init(s) { s.t = []; s.score = 0; s.hits = 0; s.shots = 0; s.time = 0; s.next = 0; s.combo = 0; s.rings = []; },
+  update(s, dt) {
+    s.time += dt;
+    if (s.time >= 30) {
+      const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
+      return K.end(s, { score: Math.max(0, s.score), won: null, title: 'TIME', stats: { accuracy: acc, hits: s.hits }, text: `${s.hits} hits · ${acc}% accuracy` });
+    }
+    s.next -= dt;
+    if (s.next <= 0 && s.t.length < 4) { spawn(s); s.next = Math.max(0.35, 0.8 - s.time * 0.012); }
+    for (const t of s.t) { t.life += dt; t.x = K.clamp(t.x + t.vx * dt, 40, 920); t.y = K.clamp(t.y + t.vy * dt, 70, 510); }
+    const gone = s.t.filter((t) => t.life >= t.max);
+    if (gone.length) { s.combo = 0; gone.forEach((t) => s.rings.push({ x: t.x, y: t.y, r: 10, c: '#ff3355' })); }
+    s.t = s.t.filter((t) => t.life < t.max);
+    if (K.mouse.clicked) {
+      s.shots++;
+      const mx = K.mouse.x, my = K.mouse.y;
+      const hit = s.t.find((t) => Math.hypot(t.x - mx, t.y - my) < t.r * (1 - t.life / t.max * 0.6) + 4);
+      if (hit) {
+        s.hits++; s.combo++;
+        const pts = (hit.gold ? 3 : 1) + Math.floor(s.combo / 5);
+        s.score += pts; K.sfx(hit.gold ? 'coin' : 'pop');
+        K.burst(hit.x, hit.y, hit.gold ? '#ffd93a' : '#22e6ff', 12, 260, 0.4);
+        K.floatText('+' + pts, hit.x, hit.y - 20, hit.gold ? '#ffd93a' : '#22e6ff', 18);
+        s.t = s.t.filter((t) => t !== hit);
+      } else { s.score -= 1; s.combo = 0; K.sfx('wrong'); s.rings.push({ x: mx, y: my, r: 6, c: '#ff3355' }); }
+    }
+    s.rings.forEach((r) => (r.r += dt * 120)); s.rings = s.rings.filter((r) => r.r < 50);
+  },
+  draw(s) {
+    K.grid(48, '#22e6ff', 0.06);
+    for (const t of s.t) {
+      const k = 1 - (t.life / t.max) * 0.6, r = t.r * k, c = t.gold ? '#ffd93a' : '#22e6ff';
+      K.glow(c, 16); K.circle(t.x, t.y, r, c); K.noGlow();
+      K.circle(t.x, t.y, r * 0.66, '#060d14'); K.circle(t.x, t.y, r * 0.36, c);
+      K.ring(t.x, t.y, t.r + 6, c + '44', 2);
+    }
+    s.rings.forEach((r) => { K.alpha(1 - r.r / 50); K.ring(r.x, r.y, r.r, r.c, 2); }); K.alpha(1);
+    K.rect(0, 0, 960, 6, '#111'); K.rect(0, 0, 960 * (1 - s.time / 30), 6, s.time > 25 ? '#ff3355' : '#22e6ff');
+    K.text(String(s.score), 20, 32, 26, '#fff', 'left', 'd');
+    K.text(`${Math.ceil(30 - s.time)}s`, 940, 32, 22, '#22e6ff', 'right', 'd');
+    if (s.combo >= 5) K.text(`COMBO ×${s.combo}`, 480, 32, 18, '#ffd93a', 'center', 'd');
+    if (!K.attract) { K.ring(K.mouse.x, K.mouse.y, 12, '#ffffffaa', 2); K.line(K.mouse.x - 18, K.mouse.y, K.mouse.x - 6, K.mouse.y, '#fff', 2); K.line(K.mouse.x + 6, K.mouse.y, K.mouse.x + 18, K.mouse.y, '#fff', 2); }
+  },
+  ai(s) { const t = s.t.sort((a, b) => b.life - a.life)[0]; if (t && t.life > 0.4) K.vmouse(t.x, t.y, true); },
+});
+</script></body></html>

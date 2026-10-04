@@ -1,0 +1,90 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Word Connect</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"word-connect","n":2,"title":"WORD CONNECT","genre":"relax","desc":"Swipe across the letter wheel to spell words and fill every slot. Extra real words count as bonus words. Ten calm levels, no timer.","controls":"Drag across the letters (or type + Enter) · Shuffle button mixes the wheel","scoreLabel":"WORDS","tasks":[{"stat":"score","target":20,"text":"Find 20 words in Word Connect"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+const WX = 700, WY = 300, WR = 120;
+const fits = (w, pool) => { const p = pool.split(''); for (const ch of w) { const i = p.indexOf(ch); if (i < 0) return false; p.splice(i, 1); } return true; };
+function level(s) {
+  const len = s.lv < 3 ? 5 : s.lv < 7 ? 6 : 7;
+  let base, cands;
+  for (let tries = 0; tries < 60; tries++) {
+    base = WORDS.pick(len);
+    cands = WORDS.list(3, len).filter((w) => fits(w, base));
+    if (cands.length >= 5) break;
+  }
+  cands.sort((a, b) => b.length - a.length);
+  const pick = [base, ...K.shuffle(cands.filter((w) => w !== base)).slice(0, 6)].sort((a, b) => a.length - b.length || a.localeCompare(b));
+  s.targets = pick.map((w) => ({ w, found: false }));
+  s.all = new Set(cands);
+  s.letters = K.shuffle(base.toUpperCase().split(''));
+  s.path = []; s.typed = ''; s.bonus = new Set(); s.msg = ''; s.msgT = 0; s.cleared = 0;
+}
+const pos = (s, i) => { const a = (i / s.letters.length) * Math.PI * 2 - Math.PI / 2; return [WX + Math.cos(a) * WR * 0.72, WY + Math.sin(a) * WR * 0.72]; };
+function submit(s, w) {
+  w = w.toLowerCase();
+  if (w.length < 3) return;
+  const t = s.targets.find((x) => x.w === w);
+  if (t && !t.found) { t.found = true; s.score++; K.sfx('coin'); s.msg = w.toUpperCase(); s.msgT = 1; if (s.targets.every((x) => x.found)) { s.cleared = 1.6; K.sfx('win'); } }
+  else if (t) { s.msg = 'ALREADY FOUND'; s.msgT = 1; K.sfx('tick'); }
+  else if (s.all.has(w) && !s.bonus.has(w)) { s.bonus.add(w); s.score++; s.msg = 'BONUS WORD!'; s.msgT = 1; K.sfx('power'); }
+  else { s.msg = 'NOT A WORD HERE'; s.msgT = 0.8; K.sfx('wrong'); }
+}
+K.game({
+  bg: '#101826', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.score = 0; level(s); },
+  update(s, dt) {
+    s.msgT -= dt;
+    if (s.cleared > 0) { s.cleared -= dt; if (s.cleared <= 0) { s.lv++; if (s.lv >= 10) return K.end(s, { score: s.score, won: true, title: 'ALL LEVELS DONE', text: `${s.score} words, ${s.bonus.size} bonus on the last level.` }); level(s); } return; }
+    // drag on the wheel
+    const hit = () => s.letters.findIndex((_, i) => { const [x, y] = pos(s, i); return Math.hypot(K.mouse.x - x, K.mouse.y - y) < 30; });
+    if (K.mouse.down) {
+      const i = hit();
+      if (i >= 0) {
+        if (!s.path.length || (!s.path.includes(i))) { s.path.push(i); K.tone(400 + s.path.length * 80, 0.06, 'triangle', 0.05); }
+        else if (s.path.length > 1 && s.path[s.path.length - 2] === i) s.path.pop();
+      }
+    } else if (s.path.length) { submit(s, s.path.map((i) => s.letters[i]).join('')); s.path = []; }
+    if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: WX - 30, y: WY + WR + 20, w: 60, h: 40 })) { s.letters = K.shuffle(s.letters); K.sfx('whoosh'); }
+    if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 820, y: 20, w: 120, h: 36 })) return K.end(s, { score: s.score, won: null, title: 'NICE SESSION', text: `${s.score} words found.` });
+    for (const ch of K.typed()) if (s.typed.length < 8) s.typed += ch;
+    if (K.tap('Backspace')) s.typed = s.typed.slice(0, -1);
+    if (K.tap('Enter') && s.typed) { submit(s, s.typed); s.typed = ''; }
+  },
+  draw(s) {
+    K.text(`LEVEL ${s.lv + 1} / 10`, 60, 34, 18, '#8e88b8', 'left', 'd');
+    // slots
+    let y = 80;
+    s.targets.forEach((t) => {
+      const T = 34, x0 = 60;
+      for (let i = 0; i < t.w.length; i++) {
+        K.rect(x0 + i * (T + 4), y, T, T, t.found ? '#3dffa0' : '#1d2a40', 6);
+        if (t.found) K.text(t.w[i].toUpperCase(), x0 + i * (T + 4) + T / 2, y + T / 2 + 1, 20, '#0b1a12', 'center', 'd');
+      }
+      y += 46;
+    });
+    K.text(`BONUS ${s.bonus.size}`, 60, 500, 16, '#ffd93a', 'left', 'd');
+    // wheel
+    K.circle(WX, WY, WR, '#1a2740'); K.ring(WX, WY, WR, '#22e6ff55', 2);
+    if (s.path.length) { K.glow('#22e6ff', 10); for (let k = 1; k < s.path.length; k++) { const [a, b] = pos(s, s.path[k - 1]), [c, d] = pos(s, s.path[k]); K.line(a, b, c, d, '#22e6ff', 8); } const [lx, ly] = pos(s, s.path[s.path.length - 1]); K.line(lx, ly, K.mouse.x, K.mouse.y, '#22e6ff88', 6); K.noGlow(); }
+    s.letters.forEach((ch, i) => { const [x, y2] = pos(s, i), on = s.path.includes(i); K.circle(x, y2, 28, on ? '#22e6ff' : '#2a3c5c'); K.text(ch, x, y2 + 2, 26, on ? '#0b1726' : '#fff', 'center', 'd'); });
+    K.button(WX - 30, WY + WR + 20, 60, 40, '⟳', { color: '#8e88b8' });
+    const cur = s.path.map((i) => s.letters[i]).join('') || s.typed;
+    if (cur) { K.rect(WX - 90, WY - WR - 62, 180, 40, '#22e6ff', 20); K.text(cur, WX, WY - WR - 41, 22, '#0b1726', 'center', 'd'); }
+    else if (s.msgT > 0) K.text(s.msg, WX, WY - WR - 41, 20, '#ffd93a', 'center', 'd');
+    K.button(820, 20, 120, 36, 'FINISH', { color: '#8e88b8', size: 14 });
+    if (s.cleared > 0) K.text('LEVEL CLEAR!', 480, 270, 48, '#3dffa0', 'center', 'd', 20);
+  },
+  ai(s) {
+    if (s.cleared > 0) return;
+    s.aw = (s.aw || 0) + 1;
+    const t = s.targets.find((x) => !x.found);
+    if (!t) return;
+    if (!s.plan) { const used = []; s.plan = t.w.toUpperCase().split('').map((ch) => { const i = s.letters.findIndex((l, j) => l === ch && !used.includes(j)); used.push(i); return i; }); s.step = 0; }
+    if (s.aw % 6) return;
+    if (s.step < s.plan.length) { const [x, y] = pos(s, s.plan[s.step++]); K.vmouse(x, y, s.step === 1, true); }
+    else { K.vmouse(WX, WY, false, false); s.plan = null; }
+  },
+});
+</script></body></html>

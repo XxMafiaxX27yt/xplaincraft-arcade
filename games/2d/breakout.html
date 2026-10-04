@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Breakout</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"breakout","n":1,"title":"BREAKOUT","genre":"fun","desc":"Smash every neon brick. Tough bricks take two hits, glowing ones drop power-ups: wide paddle, multiball, slow ball. Each wall comes back thicker.","controls":"Mouse / touch or ← → to move · Space / click to launch","scoreLabel":"POINTS","tasks":[{"stat":"score","target":1500,"text":"Score 1500 in Breakout"},{"stat":"walls","target":2,"text":"Clear 2 walls in Breakout"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = 12, BW = 68, BH = 22, GAP = 6, X0 = (960 - COLS * (BW + GAP) + GAP) / 2;
+const HUES = ['#ff2bd6', '#ff8a3a', '#ffd93a', '#3dffa0', '#22e6ff', '#8b5cf6', '#ff3355', '#4f8bff', '#c45cff'];
+const POW = [['W', '#3dffa0', 'WIDE'], ['M', '#22e6ff', 'MULTI'], ['S', '#ffd93a', 'SLOW']];
+function wall(s) {
+  s.bricks = [];
+  const rows = Math.min(9, 5 + s.walls);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < COLS; c++) {
+    if (s.walls % 3 === 1 && (r + c) % 5 === 0) continue; // patterned walls
+    if (s.walls % 3 === 2 && Math.abs(c - 5.5) < r * 0.6 - 1) continue;
+    const hp = r < Math.min(rows - 2, 1 + s.walls) ? 2 : 1;
+    s.bricks.push({ x: X0 + c * (BW + GAP), y: 64 + r * (BH + GAP), w: BW, h: BH, hp, max: hp, col: HUES[(r + s.walls) % HUES.length], pow: Math.random() < 0.09 });
+  }
+  s.balls = [{ x: s.px, y: 470, vx: 0, vy: 0, stuck: true }];
+  s.speed = 420 + s.walls * 40;
+}
+function launch(b, s) { const a = -Math.PI / 2 + K.rand(-0.5, 0.5); b.vx = Math.cos(a) * s.speed; b.vy = Math.sin(a) * s.speed; b.stuck = false; K.sfx('laser'); }
+K.game({
+  bg: '#07051a',
+  init(s) { s.px = 480; s.pw = 130; s.score = 0; s.lives = 3; s.walls = 0; s.drops = []; s.wideT = 0; s.slowT = 0; wall(s); },
+  update(s, dt) {
+    const d = K.dir();
+    if (K.mouse.moved && !d.x) s.px = K.mouse.x;
+    s.px = K.clamp(s.px + d.x * 720 * dt, s.pw / 2, 960 - s.pw / 2);
+    K.mouse.moved = false;
+    s.wideT -= dt; s.slowT -= dt;
+    s.pw = K.lerp(s.pw, s.wideT > 0 ? 210 : 130, dt * 8);
+    const slow = s.slowT > 0 ? 0.6 : 1;
+    if (K.action()) s.balls.filter((b) => b.stuck).forEach((b) => launch(b, s));
+    for (const b of s.balls) {
+      if (b.stuck) { b.x = s.px; b.y = 482; continue; }
+      const steps = 4;
+      for (let i = 0; i < steps; i++) {
+        b.x += (b.vx * slow * dt) / steps; b.y += (b.vy * slow * dt) / steps;
+        if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx); K.sfx('click'); }
+        if (b.x > 952) { b.x = 952; b.vx = -Math.abs(b.vx); K.sfx('click'); }
+        if (b.y < 8) { b.y = 8; b.vy = Math.abs(b.vy); K.sfx('click'); }
+        if (b.vy > 0 && b.y > 486 && b.y < 504 && Math.abs(b.x - s.px) < s.pw / 2 + 8) {
+          const off = (b.x - s.px) / (s.pw / 2), a = -Math.PI / 2 + off * 1.05, sp = Math.hypot(b.vx, b.vy);
+          b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.y = 486; K.sfx('blip');
+        }
+        for (const br of s.bricks) {
+          if (br.hp <= 0 || b.x < br.x - 8 || b.x > br.x + br.w + 8 || b.y < br.y - 8 || b.y > br.y + br.h + 8) continue;
+          const ox = Math.min(b.x + 8 - br.x, br.x + br.w - (b.x - 8)), oy = Math.min(b.y + 8 - br.y, br.y + br.h - (b.y - 8));
+          if (ox < oy) b.vx *= -1; else b.vy *= -1;
+          br.hp--; s.score += 10 * (s.walls + 1);
+          K.burst(br.x + br.w / 2, br.y + br.h / 2, br.col, br.hp > 0 ? 5 : 14, 200, 0.5);
+          K.sfx(br.hp > 0 ? 'click' : 'pop');
+          if (br.hp <= 0 && br.pow) s.drops.push({ x: br.x + br.w / 2, y: br.y, k: K.pick(POW) });
+          const sp = Math.hypot(b.vx, b.vy); if (sp < s.speed * 1.35) { b.vx *= 1.01; b.vy *= 1.01; }
+          break;
+        }
+      }
+    }
+    const before = s.balls.length;
+    s.balls = s.balls.filter((b) => b.y < 560);
+    if (!s.balls.length) {
+      s.lives--; K.sfx('hit'); K.shake(10);
+      if (s.lives <= 0) return K.end(s, { score: s.score, won: false, stats: { walls: s.walls }, text: `You cleared ${s.walls} wall${s.walls === 1 ? '' : 's'}.` });
+      s.balls = [{ x: s.px, y: 470, vx: 0, vy: 0, stuck: true }];
+    } else if (s.balls.length < before) K.sfx('wrong');
+    for (const p of s.drops) {
+      p.y += 170 * dt;
+      if (p.y > 480 && p.y < 506 && Math.abs(p.x - s.px) < s.pw / 2 + 12) {
+        p.y = 999; K.sfx('power'); K.floatText(p.k[2], p.x, 470, p.k[1]);
+        if (p.k[0] === 'W') s.wideT = 12;
+        if (p.k[0] === 'S') s.slowT = 9;
+        if (p.k[0] === 'M') { const src = s.balls.find((b) => !b.stuck) || s.balls[0]; for (let i = 0; i < 2; i++) { const nb = { x: src.x, y: src.y, vx: 0, vy: 0, stuck: false }; const a = -Math.PI / 2 + K.rand(-0.9, 0.9); nb.vx = Math.cos(a) * s.speed; nb.vy = Math.sin(a) * s.speed; s.balls.push(nb); } }
+      }
+    }
+    s.drops = s.drops.filter((p) => p.y < 560);
+    if (s.bricks.every((b) => b.hp <= 0)) { s.walls++; s.score += 250; K.sfx('win'); K.flash('#fff', 0.15); s.drops = []; wall(s); }
+  },
+  draw(s) {
+    K.grid(40, '#8b5cf6', 0.07);
+    for (const b of s.bricks) {
+      if (b.hp <= 0) continue;
+      K.glow(b.col, b.pow ? 18 : 8);
+      K.rect(b.x, b.y, b.w, b.h, b.hp < b.max ? b.col + '88' : b.col, 4); K.noGlow();
+      if (b.max > 1) K.stroke(b.x + 2, b.y + 2, b.w - 4, b.h - 4, '#ffffffaa', 2, 3);
+      if (b.pow) K.text('✦', b.x + b.w / 2, b.y + b.h / 2 + 1, 14, '#fff');
+    }
+    for (const p of s.drops) { K.glow(p.k[1], 14); K.circle(p.x, p.y, 13, p.k[1]); K.noGlow(); K.text(p.k[0], p.x, p.y + 1, 14, '#05040c', 'center', 'd'); }
+    K.glow('#22e6ff', 18); K.rect(s.px - s.pw / 2, 490, s.pw, 14, '#22e6ff', 7); K.noGlow();
+    for (const b of s.balls) { K.glow('#fff', 16); K.circle(b.x, b.y, 8, '#fff'); K.noGlow(); }
+    K.text(`${s.score}`, 20, 24, 22, '#fff', 'left', 'd');
+    K.text('♥'.repeat(Math.max(0, s.lives)), 940, 24, 22, '#ff3355', 'right');
+    K.text(`WALL ${s.walls + 1}`, 480, 24, 16, '#8e88b8', 'center', 'd');
+    if (s.balls.some((b) => b.stuck) && !K.attract) K.text('SPACE / CLICK TO LAUNCH', 480, 440, 18, '#22e6ff', 'center', 'd');
+  },
+  ai(s) {
+    const b = s.balls.filter((x) => !x.stuck).sort((a, c) => c.y - a.y)[0];
+    const tx = b ? b.x + (b.vx > 0 ? 20 : -20) : 480;
+    K.vhold('ArrowLeft', tx < s.px - 10); K.vhold('ArrowRight', tx > s.px + 10);
+    if (s.balls.some((x) => x.stuck)) K.vtap('Space');
+  },
+});
+</script></body></html>
