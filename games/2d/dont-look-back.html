@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Don't Look Back</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"dont-look-back","n":7,"title":"DON'T LOOK BACK","genre":"horror","desc":"A statue follows you through the ruins. It only moves when you are not looking at it. Light all the candles while keeping it in sight.","controls":"WASD move · mouse = where you look","scoreLabel":"CANDLES","tasks":[{"stat":"score","target":8,"text":"Light 8 candles in Don't Look Back"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const VIEW = 0.6;
+const watching = (s, st) => { let a = Math.atan2(st.y - s.p.y, st.x - s.p.x) - s.look; a = Math.atan2(Math.sin(a), Math.cos(a)); return Math.abs(a) < VIEW; };
+function candle(s) { let c; do { c = { x: K.rand(60, 900), y: K.rand(60, 480) }; } while (K.dist(c, s.p) < 220); s.candle = c; }
+K.game({
+  bg: '#0b0a0e',
+  init(s) {
+    s.p = { x: 480, y: 270 }; s.look = 0; s.score = 0; s.statues = [{ x: 80, y: 80, sp: 115 }];
+    s.pillars = Array.from({ length: 10 }, () => ({ x: K.rand(80, 880), y: K.rand(80, 460), r: 22 })).filter((p) => K.dist(p.x, p.y, 480, 270) > 80);
+    s.lit = []; candle(s); s.grind = 0;
+  },
+  update(s, dt) {
+    const d = K.dir(); const nx = K.clamp(s.p.x + d.x * 150 * dt, 12, 948), ny = K.clamp(s.p.y + d.y * 150 * dt, 12, 528);
+    if (!s.pillars.some((p) => K.dist(nx, ny, p.x, p.y) < p.r + 10)) { s.p.x = nx; s.p.y = ny; }
+    if (!K.attract) s.look = Math.atan2(K.mouse.y - s.p.y, K.mouse.x - s.p.x);
+    if (K.dist(s.p, s.candle) < 22) {
+      s.score++; s.lit.push(s.candle); K.sfx('chime'); K.burst(s.candle.x, s.candle.y, K.C.orange, 18); candle(s);
+      if (s.score % 3 === 0) { const a = K.rand(Math.PI * 2); s.statues.push({ x: 480 + Math.cos(a) * 500, y: 270 + Math.sin(a) * 400, sp: 115 }); K.sfx('creak'); }
+    }
+    let moving = false;
+    s.statues.forEach((st) => {
+      if (watching(s, st)) return;
+      moving = true;
+      const a = Math.atan2(s.p.y - st.y, s.p.x - st.x), sp = st.sp + s.score * 8;
+      st.x += Math.cos(a) * sp * dt; st.y += Math.sin(a) * sp * dt;
+      if (K.dist(st, s.p) < 22) s.caught = true;
+    });
+    s.grind -= dt; if (moving && s.grind <= 0) { K.noise(0.12, 0.04, 200); s.grind = 0.3; }
+    if (s.caught) { K.sfx('scare'); K.shake(20); K.flash('#fff', 0.25); K.end(s, { score: s.score, won: false, title: 'YOU LOOKED AWAY', text: `${s.score} candles lit.` }); }
+  },
+  draw(s) {
+    for (let i = 0; i < 24; i++) for (let j = 0; j < 14; j++) K.rect(i * 40, j * 40, 39, 39, (i + j) % 2 ? '#131118' : '#16141b');
+    s.lit.forEach((c) => { K.glow(K.C.orange, 18); K.circle(c.x, c.y - 8, 4, '#ffcc66'); K.noGlow(); K.rect(c.x - 3, c.y - 4, 6, 12, '#ddd'); });
+    s.pillars.forEach((p) => { K.circle(p.x, p.y, p.r, '#2a2733'); K.circle(p.x - 5, p.y - 5, p.r * 0.6, '#36323f'); });
+    K.rect(s.candle.x - 3, s.candle.y - 4, 6, 12, '#bbb');
+    s.statues.forEach((st) => { const w = watching(s, st); K.circle(st.x, st.y - 10, 12, '#8a8a92'); K.rect(st.x - 11, st.y, 22, 26, '#7a7a82', 4); K.circle(st.x - 4, st.y - 12, 2, w ? '#333' : '#f22'); K.circle(st.x + 4, st.y - 12, 2, w ? '#333' : '#f22'); });
+    K.circle(s.p.x, s.p.y, 9, '#e8e2ff');
+    const c = K.ctx(); c.save(); c.fillStyle = 'rgba(0,0,0,0.92)'; c.beginPath(); c.rect(0, 0, 960, 540);
+    c.moveTo(s.p.x + 46, s.p.y); c.arc(s.p.x, s.p.y, 46, 0, Math.PI * 2, true);
+    c.moveTo(s.p.x, s.p.y); c.arc(s.p.x, s.p.y, 700, s.look + VIEW, s.look - VIEW, true); c.closePath();
+    s.lit.forEach((l) => { c.moveTo(l.x + 40, l.y); c.arc(l.x, l.y, 40, 0, Math.PI * 2, true); });
+    c.fill('evenodd'); c.restore();
+    K.glow(K.C.orange, 14); K.circle(s.candle.x, s.candle.y - 10, 5, K.C.gold); K.noGlow();
+    s.statues.forEach((st) => { if (!watching(s, st)) { K.glow('#f00', 8); K.circle(st.x - 4, st.y - 12, 2, '#f22'); K.circle(st.x + 4, st.y - 12, 2, '#f22'); K.noGlow(); } });
+    K.text(`CANDLES ${s.score}`, 20, 24, 20, K.C.gold, 'left', 'd'); K.text(`STATUES ${s.statues.length}`, 940, 24, 16, '#aaa', 'right', 'd');
+  },
+  ai(s, dt) {
+    ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false));
+    const st = s.statues[0]; s.look = Math.atan2(st.y - s.p.y, st.x - s.p.x);
+    if (s.candle.x > s.p.x + 6) K.vhold('ArrowRight'); if (s.candle.x < s.p.x - 6) K.vhold('ArrowLeft'); if (s.candle.y > s.p.y + 6) K.vhold('ArrowDown'); if (s.candle.y < s.p.y - 6) K.vhold('ArrowUp');
+  },
+});
+</script></body></html>

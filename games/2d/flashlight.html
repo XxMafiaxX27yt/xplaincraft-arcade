@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flashlight</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"flashlight","n":6,"title":"FLASHLIGHT","genre":"horror","desc":"Lost in a black forest with one torch. Shadows crawl toward you from the dark and burn away in the beam, but the battery drains. Grab spare batteries and survive as long as you can.","controls":"WASD move · mouse aims the torch · right click / F toggles it","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":90,"text":"Survive 90 seconds in Flashlight"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CONE = 0.42, RANGE = 330;
+function inCone(s, x, y) {
+  if (!s.on || s.bat <= 0) return false;
+  const d = K.dist(s.p.x, s.p.y, x, y); if (d > RANGE) return false;
+  let a = Math.atan2(y - s.p.y, x - s.p.x) - s.aim; a = Math.atan2(Math.sin(a), Math.cos(a));
+  return Math.abs(a) < CONE;
+}
+K.game({
+  bg: '#05080a',
+  init(s) {
+    s.p = { x: 480, y: 270 }; s.aim = 0; s.on = true; s.bat = 100; s.t = 0; s.shadows = []; s.spawn = 2; s.batts = [];
+    s.trees = Array.from({ length: 40 }, () => ({ x: K.rand(960), y: K.rand(540), r: K.rand(10, 22) })).filter((t) => K.dist(t.x, t.y, 480, 270) > 70);
+  },
+  update(s, dt) {
+    s.t += dt;
+    const d = K.dir(); s.p.x = K.clamp(s.p.x + d.x * 140 * dt, 15, 945); s.p.y = K.clamp(s.p.y + d.y * 140 * dt, 15, 525);
+    if (!K.attract) s.aim = Math.atan2(K.mouse.y - s.p.y, K.mouse.x - s.p.x);
+    if (K.mouse.right || K.tap('KeyF')) { s.on = !s.on; K.sfx('click'); }
+    if (s.on) s.bat = Math.max(0, s.bat - dt * (4 + s.t * 0.02));
+    s.spawn -= dt;
+    if (s.spawn <= 0) {
+      s.spawn = Math.max(0.6, 2.4 - s.t * 0.02);
+      const a = K.rand(Math.PI * 2); s.shadows.push({ x: 480 + Math.cos(a) * 600, y: 270 + Math.sin(a) * 600, hp: 1, sp: K.rand(40, 70) + s.t * 0.4 });
+    }
+    if (Math.random() < dt * 0.12 && s.batts.length < 3) s.batts.push({ x: K.rand(60, 900), y: K.rand(60, 480) });
+    s.batts = s.batts.filter((b) => { if (K.dist(b, s.p) < 22) { s.bat = Math.min(100, s.bat + 35); K.sfx('coin'); K.floatText('+35%', b.x, b.y, K.C.yel); return false; } return true; });
+    s.shadows.forEach((sh) => {
+      const lit = inCone(s, sh.x, sh.y);
+      if (lit) { sh.hp -= dt * 1.6; if (Math.random() < 0.3) K.particle({ x: sh.x + K.rand(-10, 10), y: sh.y, vx: K.rand(-20, 20), vy: -60, color: '#ff7733', life: 0.5, size: 3 }); }
+      const a = Math.atan2(s.p.y - sh.y, s.p.x - sh.x), sp = lit ? -20 : sh.sp;
+      sh.x += Math.cos(a) * sp * dt; sh.y += Math.sin(a) * sp * dt;
+      if (sh.hp <= 0) { K.sfx('whoosh'); K.burst(sh.x, sh.y, ['#000', '#552', '#ff6633'], 14, 120); }
+      if (K.dist(sh, s.p) < 18) s.caught = true;
+    });
+    s.shadows = s.shadows.filter((sh) => sh.hp > 0);
+    if (s.caught) { K.sfx('scare'); K.shake(18); K.end(s, { score: Math.floor(s.t), won: false, title: 'THE DARK TOOK YOU', text: `You lasted ${Math.floor(s.t)} seconds.` }); }
+  },
+  draw(s) {
+    s.trees.forEach((t) => { K.circle(t.x, t.y, t.r, '#0f1c14'); K.circle(t.x - 3, t.y - 3, t.r * 0.6, '#16281c'); });
+    s.batts.forEach((b) => { K.glow(K.C.yel, 10); K.rect(b.x - 6, b.y - 10, 12, 20, '#e8e030', 2); K.rect(b.x - 3, b.y - 13, 6, 3, '#aaa'); K.noGlow(); });
+    s.shadows.forEach((sh) => { K.alpha(0.6 + sh.hp * 0.4); K.circle(sh.x, sh.y, 16, '#000'); K.poly([[sh.x - 16, sh.y], [sh.x - 10, sh.y + 26], [sh.x, sh.y + 14], [sh.x + 10, sh.y + 26], [sh.x + 16, sh.y]], '#000'); K.alpha(1); });
+    K.circle(s.p.x, s.p.y, 9, '#dcd6c8');
+    const c = K.ctx(); c.save();
+    c.fillStyle = 'rgba(0,0,0,0.97)'; c.beginPath(); c.rect(0, 0, 960, 540);
+    c.moveTo(s.p.x + 40, s.p.y); c.arc(s.p.x, s.p.y, 40, 0, Math.PI * 2, true);
+    if (s.on && s.bat > 0) { c.moveTo(s.p.x, s.p.y); c.arc(s.p.x, s.p.y, RANGE * (0.6 + s.bat / 250), s.aim + CONE, s.aim - CONE, true); c.closePath(); }
+    c.fill('evenodd'); c.restore();
+    if (s.on && s.bat > 0) { K.alpha(0.08); K.poly([[s.p.x, s.p.y], [s.p.x + Math.cos(s.aim - CONE) * 300, s.p.y + Math.sin(s.aim - CONE) * 300], [s.p.x + Math.cos(s.aim + CONE) * 300, s.p.y + Math.sin(s.aim + CONE) * 300]], '#fff3c0'); K.alpha(1); }
+    s.shadows.forEach((sh) => { if (!inCone(s, sh.x, sh.y)) { K.glow('#f00', 8); K.circle(sh.x - 5, sh.y - 3, 2, '#ff2a2a'); K.circle(sh.x + 5, sh.y - 3, 2, '#ff2a2a'); K.noGlow(); } });
+    K.text(`${Math.floor(s.t)}s`, 20, 24, 22, '#fff', 'left', 'd');
+    K.rect(780, 16, 160, 16, '#222', 4); K.rect(780, 16, 1.6 * s.bat, 16, s.bat > 25 ? K.C.yel : K.C.red, 4); K.text('🔋', 768, 25, 16, '#fff', 'right');
+  },
+  ai(s, dt) {
+    const t = s.shadows.reduce((a, b) => (!a || K.dist(b, s.p) < K.dist(a, s.p) ? b : a), null);
+    if (t) s.aim += Math.atan2(Math.sin(Math.atan2(t.y - s.p.y, t.x - s.p.x) - s.aim), Math.cos(Math.atan2(t.y - s.p.y, t.x - s.p.x) - s.aim)) * Math.min(1, dt * 4);
+    s.bat = Math.max(s.bat, 60);
+  },
+});
+</script></body></html>

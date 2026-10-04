@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Phone Call</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"phone-call","n":11,"title":"PHONE CALL","genre":"horror","desc":"You're home alone. The phone keeps ringing. Every answer tells the caller something. Never let him learn you're alone, and lock the house between calls.","controls":"Click an answer (or 1 / 2 / 3) · click doors & windows to lock them","scoreLabel":"CALLS","tasks":[{"stat":"score","target":8,"text":"Survive 8 calls in Phone Call"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// [question, [answer, danger]...]  danger: 0 safe, 1 risky, 2 gives you away
+const Q = [
+  ['Hi… is your mom home?', [['She\'s in the shower. Who is this?', 0], ['No, she\'s out.', 2], ['Why do you want to know?', 1]]],
+  ['What are you wearing right now?', [['I\'m hanging up.', 0], ['Pyjamas…', 1], ['Is this a joke?', 1]]],
+  ['Do you like scary movies?', [['My dad loves them, he\'s watching one now.', 0], ['Not really.', 1], ['Yes. Why?', 1]]],
+  ['Is your front door locked?', [['Of course.', 0], ['I… think so.', 2], ['Why would you ask that?', 1]]],
+  ['I can see a light on upstairs.', [['That\'s my brother\'s room.', 0], ['That\'s my room.', 2], ['Stop watching my house.', 1]]],
+  ['How many people live there?', [['Five, and two big dogs.', 0], ['Just me tonight.', 2], ['None of your business.', 1]]],
+  ['When will your parents be back?', [['Any minute now.', 0], ['Tomorrow.', 2], ['I don\'t know.', 1]]],
+  ['Did you hear that noise downstairs?', [['That\'s my uncle, he\'s a cop.', 0], ['What noise?!', 1], ['I\'ll go check.', 2]]],
+  ['Which window is yours?', [['I\'m calling the police.', 0], ['The one by the tree.', 2], ['Why?', 1]]],
+  ['Are you scared?', [['No. Are you?', 0], ['…yes.', 1], ['Please leave me alone.', 1]]],
+  ['Go look out the back window.', [['No.', 0], ['…okay.', 2], ['Who are you?!', 1]]],
+  ['I left something on your porch.', [['I\'m not opening the door.', 0], ['I\'ll go get it.', 2], ['What is it?', 1]]],
+];
+const OPENINGS = ['FRONT DOOR', 'BACK DOOR', 'KITCHEN WINDOW', 'BEDROOM WINDOW', 'GARAGE'];
+function call(s) { s.q = s.pool.pop() || K.pick(Q); s.ans = K.shuffle(s.q[1].slice()); s.ring = 1.5; s.qt = 9; s.phase = 'call'; K.tone(880, 0.3, 'square', 0.04); K.tone(880, 0.3, 'square', 0.04, 0, 0.5); }
+function answer(s, i) {
+  const [txt, d] = s.ans[i]; s.danger += d; s.last = txt; K.sfx(d === 2 ? 'wrong' : 'click');
+  s.reply = d === 2 ? K.pick(['Good to know…', 'Interesting.', 'Thank you.']) : d === 1 ? K.pick(['Hm.', 'Don\'t be like that.', 'Click.']) : K.pick(['…', 'We\'ll see.', 'Liar.']);
+  s.calls++; s.phase = 'lock'; s.lockT = 6; s.unlock = K.pick(OPENINGS.filter((o) => s.locked[o]));
+  if (s.unlock && Math.random() < 0.6) { s.locked[s.unlock] = false; K.sfx('creak'); }
+}
+K.game({
+  bg: '#0d0b10',
+  init(s) { s.pool = K.shuffle(Q.slice()); s.danger = 0; s.calls = 0; s.locked = Object.fromEntries(OPENINGS.map((o) => [o, true])); s.phase = 'wait'; s.wait = 2; s.reply = ''; },
+  update(s, dt) {
+    if (s.phase === 'wait') { s.wait -= dt; if (s.wait <= 0) call(s); return; }
+    if (s.phase === 'call') {
+      s.ring -= dt; if (s.ring > 0) return;
+      s.qt -= dt;
+      for (let i = 0; i < 3; i++) if (K.tap('Digit' + (i + 1)) || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 380, y: 300 + i * 66, w: 550, h: 56 }))) return answer(s, i);
+      if (s.qt <= 0) { s.danger += 1; s.reply = 'Silence tells me a lot.'; s.calls++; s.phase = 'lock'; s.lockT = 6; }
+      return;
+    }
+    if (s.phase === 'lock') {
+      s.lockT -= dt;
+      OPENINGS.forEach((o, i) => { if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 380 + (i % 3) * 186, y: 300 + Math.floor(i / 3) * 90, w: 176, h: 76 }) && !s.locked[o]) { s.locked[o] = true; K.sfx('hit'); } });
+      if (s.lockT <= 0) {
+        const open = OPENINGS.filter((o) => !s.locked[o]).length;
+        if (s.danger >= 4 && (open > 0 || s.danger >= 6)) { K.sfx('scare'); K.shake(22); K.flash('#fff', 0.3); return K.end(s, { score: s.calls, won: false, title: 'HE\'S INSIDE', text: open ? `The ${OPENINGS.find((o) => !s.locked[o]).toLowerCase()} was open.` : 'He knew you were alone.' }); }
+        if (s.calls >= 10) return K.end(s, { score: 10, won: true, title: 'HEADLIGHTS', text: 'Your parents pull into the driveway. The phone finally stops.' });
+        s.phase = 'wait'; s.wait = K.rand(1.5, 3);
+      }
+    }
+  },
+  draw(s) {
+    K.rect(20, 20, 330, 500, '#16121c', 12);
+    K.rect(70, 60, 230, 400, '#0a0a0e', 26); K.rect(84, 90, 202, 330, s.phase === 'call' ? '#123a26' : '#111', 8);
+    if (s.phase === 'call') { K.text(s.ring > 0 ? 'INCOMING…' : 'UNKNOWN', 185, 130, 20, '#9fffcf', 'center', 'd'); K.text('NO CALLER ID', 185, 160, 13, '#6c9', 'center', 'm'); if (s.ring > 0 && Math.sin(K.time() * 30) > 0) K.circle(185, 260, 40, '#3c6'); }
+    else K.text('CALLS ' + s.calls + '/10', 185, 250, 20, '#888', 'center', 'd');
+    K.text('FEAR', 185, 470, 14, '#c99', 'center', 'd'); for (let i = 0; i < 6; i++) K.rect(110 + i * 26, 484, 22, 12, i < s.danger ? '#d33' : '#333', 3);
+    if (s.phase === 'call' && s.ring <= 0) {
+      K.text('“' + s.q[0] + '”', 650, 130, 28, '#fff', 'center', 'd', 8);
+      K.rect(380, 270, 550 * (s.qt / 9), 6, s.qt < 3 ? K.C.red : K.C.cyan);
+      s.ans.forEach((a, i) => K.button(380, 300 + i * 66, 550, 56, `${i + 1}. ${a[0]}`, { color: '#c9b8ff', size: 16, font: 'u' }));
+    } else if (s.phase === 'lock') {
+      K.text(s.reply ? '“' + s.reply + '” *click*' : '', 650, 110, 24, '#f99', 'center', 'd');
+      K.text('Check the house before he calls again', 650, 170, 20, '#ddd', 'center');
+      K.rect(380, 196, 550 * (s.lockT / 6), 6, K.C.gold);
+      OPENINGS.forEach((o, i) => { const x = 380 + (i % 3) * 186, y = 300 + Math.floor(i / 3) * 90, l = s.locked[o]; K.rect(x, y, 176, 76, l ? '#1a2a22' : '#3a1414', 8); K.stroke(x, y, 176, 76, l ? '#3c6' : '#f44', 2, 8); K.text(o, x + 88, y + 28, 14, '#fff', 'center', 'd'); K.text(l ? '🔒 LOCKED' : '🔓 OPEN — click!', x + 88, y + 52, 14, l ? '#7c9' : '#f88', 'center'); });
+    } else K.text('…', 650, 270, 40, '#555', 'center', 'd');
+  },
+  ai(s, dt) { if (s.phase === 'call' && s.ring <= 0 && s.qt < 7) K.vtap('Digit' + (1 + s.ans.findIndex((a) => a[1] === 0))); },
+});
+</script></body></html>

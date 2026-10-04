@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The House</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-house","n":2,"title":"THE HOUSE","genre":"horror","desc":"Find the 5 lost photos in a dark house and get out the front door. A ghost drifts through the walls. Hide in a wardrobe when it comes.","controls":"WASD / arrows move · E hide in a wardrobe","scoreLabel":"POINTS","tasks":[{"stat":"photos","target":5,"text":"Find all 5 photos in The House"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const X0 = 30, Y0 = 40, RW = 300, RH = 160, G = 64; // 3x3 rooms, door gap
+const NAMES = ['NURSERY', 'BATH', 'STUDY', 'KITCHEN', 'HALL', 'DINING', 'CELLAR', 'LIVING', 'ENTRY'];
+function walls() {
+  const w = [], t = 8, W = RW * 3, H = RH * 3;
+  w.push({ x: X0 - t, y: Y0 - t, w: W + 2 * t, h: t }, { x: X0 - t, y: Y0 + H, w: W + 2 * t, h: t }, { x: X0 - t, y: Y0, w: t, h: H }, { x: X0 + W, y: Y0, w: t, h: H });
+  for (let c = 1; c < 3; c++) for (let r = 0; r < 3; r++) { const x = X0 + c * RW - t / 2, y = Y0 + r * RH; w.push({ x, y, w: t, h: (RH - G) / 2 }, { x, y: y + (RH + G) / 2, w: t, h: (RH - G) / 2 }); }
+  for (let r = 1; r < 3; r++) for (let c = 0; c < 3; c++) { const x = X0 + c * RW, y = Y0 + r * RH - t / 2; w.push({ x, y, w: (RW - G) / 2, h: t }, { x: x + (RW + G) / 2, y, w: (RW - G) / 2, h: t }); }
+  return w;
+}
+function furniture() {
+  const f = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    const x = X0 + c * RW, y = Y0 + r * RH;
+    f.push({ x: x + 20, y: y + 18, w: K.irand(50, 80), h: 22, col: '#3a2a1e' });
+    f.push({ x: x + RW - 70, y: y + RH - 40, w: 48, h: 24, col: '#2e2433' });
+  }
+  return f;
+}
+const solid = (s, x, y, r) => s.walls.concat(s.furn).some((b) => x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h);
+K.game({
+  bg: '#07060a',
+  init(s) {
+    s.walls = walls(); s.furn = furniture();
+    s.p = { x: X0 + RW * 2.5, y: Y0 + RH * 2.6, hid: null };
+    s.ghost = { x: X0 + 60, y: Y0 + 60, tx: 0, ty: 0, t: 0 };
+    s.wards = [[0, 1], [1, 2], [2, 0], [1, 0]].map(([c, r]) => ({ x: X0 + c * RW + RW / 2 - 18, y: Y0 + r * RH + 6, w: 36, h: 18 }));
+    const rooms = K.shuffle([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, 5);
+    s.photos = rooms.map((i) => ({ x: X0 + (i % 3) * RW + K.rand(60, RW - 60), y: Y0 + Math.floor(i / 3) * RH + K.rand(60, RH - 50), got: false }));
+    s.found = 0; s.t = 0; s.sanity = 100; s.door = { x: X0 + RW * 2.5 - 30, y: Y0 + RH * 3 - 4, w: 60, h: 10 };
+  },
+  update(s, dt) {
+    s.t += dt;
+    const p = s.p, g = s.ghost;
+    if (K.tap('KeyE')) {
+      if (p.hid) { p.y = p.hid.y + 34; p.hid = null; K.sfx('creak'); }
+      else { const w = s.wards.find((w) => K.dist(p.x, p.y, w.x + 18, w.y + 9) < 44); if (w) { p.hid = w; K.sfx('creak'); } }
+    }
+    if (!p.hid) {
+      const d = K.dir(), sp = 150;
+      const nx = p.x + d.x * sp * dt, ny = p.y + d.y * sp * dt;
+      if (!solid(s, nx, p.y, 9)) p.x = nx;
+      if (!solid(s, p.x, ny, 9)) p.y = ny;
+    }
+    s.photos.forEach((ph) => { if (!ph.got && !p.hid && K.dist(p, ph) < 18) { ph.got = true; s.found++; K.sfx('chime'); K.floatText('PHOTO ' + s.found + '/5', ph.x, ph.y - 10, K.C.gold); } });
+    // ghost: chase when it sees you, otherwise drift around
+    const seen = !p.hid && K.dist(p, g) < 230;
+    g.t -= dt;
+    if (seen) { g.tx = p.x; g.ty = p.y; } else if (g.t <= 0 || K.dist(g.x, g.y, g.tx, g.ty) < 10) { g.tx = K.rand(X0 + 30, X0 + RW * 3 - 30); g.ty = K.rand(Y0 + 30, Y0 + RH * 3 - 30); g.t = 5; }
+    const a = Math.atan2(g.ty - g.y, g.tx - g.x), sp = (seen ? 95 : 55) + s.found * 8;
+    g.x += Math.cos(a) * sp * dt; g.y += Math.sin(a) * sp * dt;
+    const d = K.dist(p, g);
+    s.sanity = K.clamp(s.sanity + (d < 160 && !p.hid ? -14 : 4) * dt, 0, 100);
+    if (Math.random() < dt * 0.15) K.sfx(K.pick(['creak', 'whisper', 'drip']));
+    if (!p.hid && d < 20) { K.sfx('scare'); K.shake(16); K.flash('#fff', 0.3); K.end(s, { score: s.found * 100, won: false, title: 'IT FOUND YOU', stats: { photos: s.found } }); }
+    if (s.found === 5 && K.rectHit({ x: p.x - 9, y: p.y - 9, w: 18, h: 18 }, s.door)) K.end(s, { score: 500 + Math.max(0, Math.round(300 - s.t) * 2), won: true, title: 'YOU GOT OUT', stats: { photos: 5 } });
+  },
+  draw(s) {
+    for (let i = 0; i < 9; i++) { const x = X0 + (i % 3) * RW, y = Y0 + Math.floor(i / 3) * RH; K.rect(x, y, RW, RH, i % 2 ? '#1b1520' : '#18131c'); for (let k = 0; k < RW; k += 30) K.line(x + k, y, x + k, y + RH, 'rgba(255,255,255,0.025)', 1); K.text(NAMES[i], x + RW / 2, y + RH / 2, 22, 'rgba(255,255,255,0.05)', 'center', 'd'); }
+    s.furn.forEach((f) => K.rect(f.x, f.y, f.w, f.h, f.col, 3));
+    s.wards.forEach((w) => { K.rect(w.x, w.y, w.w, w.h, '#4a3322', 2); K.line(w.x + 18, w.y, w.x + 18, w.y + w.h, '#1a0f08', 2); });
+    s.walls.forEach((w) => K.rect(w.x, w.y, w.w, w.h, '#3d3346'));
+    K.rect(s.door.x, s.door.y, s.door.w, s.door.h, s.found === 5 ? K.C.green : '#5a2a2a');
+    s.photos.forEach((ph) => { if (!ph.got) { K.glow(K.C.gold, 12); K.rect(ph.x - 7, ph.y - 9, 14, 18, '#e9dcc0'); K.rect(ph.x - 5, ph.y - 7, 10, 10, '#665544'); K.noGlow(); } });
+    const p = s.p;
+    if (!p.hid) { K.circle(p.x, p.y, 9, '#e8e2ff'); }
+    const fl = 1 + (Math.random() < 0.03 ? -0.4 : 0);
+    K.darkness([{ x: p.hid ? p.hid.x + 18 : p.x, y: p.hid ? p.hid.y + 9 : p.y, r: (p.hid ? 50 : K.attract ? 260 : 150) * fl }], 0.94);
+    const g = s.ghost, wob = Math.sin(K.time() * 4) * 3;
+    K.alpha(0.55); K.glow('#9ad9ff', 20); K.poly([[g.x - 14, g.y + 16 + wob], [g.x - 14, g.y - 6], [g.x, g.y - 20], [g.x + 14, g.y - 6], [g.x + 14, g.y + 16 + wob], [g.x + 7, g.y + 10], [g.x, g.y + 16 - wob], [g.x - 7, g.y + 10]], '#cfeaff'); K.noGlow();
+    K.circle(g.x - 5, g.y - 5, 2.6, '#000'); K.circle(g.x + 5, g.y - 5, 2.6, '#000'); K.alpha(1);
+    if (s.sanity < 60) { K.alpha((60 - s.sanity) / 80); K.vignette(1); K.alpha(1); }
+    K.text(`PHOTOS ${s.found}/5`, 30, 20, 18, K.C.gold, 'left', 'd');
+    K.text(p.hid ? 'HIDING… press E to come out' : s.found === 5 ? 'THE FRONT DOOR IS OPEN' : '', 480, 20, 16, p.hid ? K.C.cyan : K.C.green, 'center', 'd');
+    K.text('SANITY', 760, 20, 14, K.C.dim, 'right', 'm'); K.rect(770, 13, 160, 12, '#222'); K.rect(770, 13, 1.6 * s.sanity, 12, s.sanity > 40 ? '#88ccff' : K.C.red);
+  },
+  ai(s, dt) {
+    s.aiT = (s.aiT || 0) - dt; if (s.aiT > 0) return; s.aiT = 0.15;
+    ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false));
+    const t = s.photos.find((p) => !p.got); if (!t) return;
+    if (t.x > s.p.x + 8) K.vhold('ArrowRight'); if (t.x < s.p.x - 8) K.vhold('ArrowLeft'); if (t.y > s.p.y + 8) K.vhold('ArrowDown'); if (t.y < s.p.y - 8) K.vhold('ArrowUp');
+  },
+});
+</script></body></html>

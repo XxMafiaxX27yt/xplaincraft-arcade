@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Night Drive</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"night-drive","n":15,"title":"NIGHT DRIVE","genre":"horror","desc":"An empty highway at 3 AM. The same hitchhiker keeps appearing ahead. Don't slow down near him. Don't hit him. Watch your fuel and make it to town.","controls":"← / → steer · ↑ speed up · ↓ brake","scoreLabel":"KM","tasks":[{"stat":"score","target":20,"text":"Drive 20 km in Night Drive"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ROAD = { x: 300, w: 360 };
+K.game({
+  bg: '#04060a',
+  init(s) { s.car = { x: 480, sp: 260 }; s.dist = 0; s.fuel = 100; s.obj = []; s.spawn = 1; s.lines = 0; s.hh = 6; s.cans = 0; },
+  update(s, dt) {
+    const d = K.dir();
+    s.car.sp = K.clamp(s.car.sp + (d.y < 0 ? 140 : d.y > 0 ? -260 : -20) * dt, 60, 520);
+    s.car.x = K.clamp(s.car.x + d.x * 260 * dt, ROAD.x + 30, ROAD.x + ROAD.w - 30);
+    s.dist += s.car.sp * dt / 400; s.fuel -= dt * (1.4 + s.car.sp / 400); s.lines = (s.lines + s.car.sp * dt) % 80;
+    s.spawn -= dt;
+    if (s.spawn <= 0) { s.spawn = K.rand(0.6, 1.6) * 260 / s.car.sp; s.obj.push({ kind: Math.random() < 0.15 ? 'fuel' : 'car', x: K.rand(ROAD.x + 40, ROAD.x + ROAD.w - 40), y: -80, sp: K.rand(60, 140) }); }
+    s.hh -= dt; if (s.hh <= 0) { s.hh = K.rand(5, 9); const onRoad = Math.random() < 0.35; s.obj.push({ kind: 'hiker', x: onRoad ? K.rand(ROAD.x + 50, ROAD.x + ROAD.w - 50) : K.pick([ROAD.x - 30, ROAD.x + ROAD.w + 30]), y: -80, sp: 0, onRoad }); K.sfx('whisper'); }
+    s.obj.forEach((o) => { o.y += (s.car.sp - o.sp) * dt; });
+    for (const o of s.obj) {
+      const near = Math.abs(o.y - 440) < 50 && Math.abs(o.x - s.car.x) < (o.kind === 'hiker' && !o.onRoad ? 140 : 40);
+      if (o.kind === 'car' && near) { K.sfx('boom'); K.shake(25); return K.end(s, { score: Math.floor(s.dist), won: false, title: 'CRASH', text: `${Math.floor(s.dist)} km from home.` }); }
+      if (o.kind === 'fuel' && near) { o.dead = true; s.fuel = Math.min(100, s.fuel + 40); K.sfx('coin'); }
+      if (o.kind === 'hiker' && near) {
+        if (o.onRoad && Math.abs(o.x - s.car.x) < 40) { K.sfx('scare'); K.flash('#fff', 0.4); K.shake(25); return K.end(s, { score: Math.floor(s.dist), won: false, title: 'YOU HIT HIM', text: 'You get out to look. There is nobody there. Then the car door closes behind you.' }); }
+        if (!o.onRoad && s.car.sp < 160) { K.sfx('scare'); K.flash('#300', 0.4); return K.end(s, { score: Math.floor(s.dist), won: false, title: 'HE GOT IN', text: 'You slowed down. Now he is in the back seat.' }); }
+      }
+    }
+    s.obj = s.obj.filter((o) => !o.dead && o.y < 640);
+    if (s.fuel <= 0) { K.sfx('lose'); return K.end(s, { score: Math.floor(s.dist), won: false, title: 'OUT OF FUEL', text: 'The engine dies. Footsteps on the road behind you.' }); }
+    if (s.dist >= 30) K.end(s, { score: 30, won: true, title: 'TOWN LIGHTS', text: 'Streetlights. People. You made it.' });
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#03050a'); K.rect(ROAD.x, 0, ROAD.w, 540, '#16181c');
+    K.rect(ROAD.x - 6, 0, 6, 540, '#c8c8c8'); K.rect(ROAD.x + ROAD.w, 0, 6, 540, '#c8c8c8');
+    for (let y = -80 + s.lines; y < 540; y += 80) K.rect(478, y, 4, 40, '#e0c040');
+    for (let y = -100 + (s.lines * 1.6) % 160; y < 540; y += 160) { K.circle(ROAD.x - 80, y, 26, '#08120a'); K.circle(ROAD.x + ROAD.w + 90, y + 60, 30, '#08120a'); }
+    s.obj.forEach((o) => {
+      if (o.kind === 'car') { K.rect(o.x - 22, o.y - 40, 44, 80, '#4a4f5a', 8); K.rect(o.x - 16, o.y + 26, 10, 6, '#f33'); K.rect(o.x + 6, o.y + 26, 10, 6, '#f33'); }
+      if (o.kind === 'fuel') { K.rect(o.x - 12, o.y - 16, 24, 32, '#c22', 4); K.text('F', o.x, o.y, 14, '#fff', 'center', 'd'); }
+      if (o.kind === 'hiker') { K.circle(o.x, o.y - 26, 10, '#0a0a0a'); K.rect(o.x - 9, o.y - 16, 18, 38, '#0a0a0a', 4); K.line(o.x + 9, o.y - 10, o.x + 22, o.y - 22, '#0a0a0a', 4); K.glow('#fff', 6); K.circle(o.x - 3, o.y - 27, 1.5, '#fff'); K.circle(o.x + 3, o.y - 27, 1.5, '#fff'); K.noGlow(); }
+    });
+    const c = K.ctx(); c.save(); c.fillStyle = 'rgba(0,0,0,0.9)'; c.beginPath(); c.rect(0, 0, 960, 540);
+    c.moveTo(s.car.x - 18, 420); c.lineTo(s.car.x - 140, 60); c.lineTo(s.car.x + 140, 60); c.lineTo(s.car.x + 18, 420); c.closePath();
+    c.moveTo(s.car.x + 50, 460); c.arc(s.car.x, 460, 50, 0, Math.PI * 2, true); c.fill('evenodd'); c.restore();
+    K.rect(s.car.x - 22, 410, 44, 80, '#7a1a22', 8); K.rect(s.car.x - 16, 418, 32, 18, '#223'); K.glow('#ffe9a0', 14); K.rect(s.car.x - 18, 408, 10, 5, '#ffe9a0'); K.rect(s.car.x + 8, 408, 10, 5, '#ffe9a0'); K.noGlow();
+    K.text(`${s.dist.toFixed(1)} / 30 KM`, 20, 24, 20, '#fff', 'left', 'd');
+    K.text(`${Math.round(s.car.sp / 4)} km/h`, 20, 52, 16, s.car.sp < 160 ? K.C.red : '#9cf', 'left', 'm');
+    K.rect(780, 16, 160, 14, '#222'); K.rect(780, 16, 1.6 * s.fuel, 14, s.fuel < 25 ? K.C.red : K.C.gold); K.text('FUEL', 770, 23, 12, '#aaa', 'right', 'm');
+  },
+  ai(s) { ['ArrowLeft', 'ArrowRight', 'ArrowUp'].forEach((k) => K.vhold(k, false)); const t = s.obj.find((o) => o.kind === 'car' && o.y > 200 && o.y < 440 && Math.abs(o.x - s.car.x) < 60); if (t) K.vhold(t.x > s.car.x ? 'ArrowLeft' : 'ArrowRight'); K.vhold('ArrowUp'); },
+});
+</script></body></html>

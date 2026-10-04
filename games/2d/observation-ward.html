@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Observation Ward</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"observation-ward","n":4,"title":"OBSERVATION WARD","genre":"horror","desc":"Watch four hospital rooms through the cameras from midnight to 6 AM. Things move, vanish or appear. Click whatever changed to report it. Four unreported anomalies and the ward is lost.","controls":"1-4 or arrows switch camera · click the thing that changed","scoreLabel":"REPORTS","tasks":[{"stat":"score","target":12,"text":"Report 12 anomalies in Observation Ward"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ROOMS = ['WARD A', 'WARD B', 'CORRIDOR', 'MORGUE'];
+const KINDS = ['bed', 'chair', 'lamp', 'frame', 'plant', 'cabinet', 'window', 'doll', 'clock', 'trolley'];
+function makeRoom() {
+  const objs = [], used = [];
+  const n = K.irand(6, 8);
+  for (let i = 0; i < n; i++) {
+    const kind = KINDS[(i + K.irand(0, 9)) % KINDS.length];
+    let x, y, w = kind === 'bed' || kind === 'trolley' ? 140 : kind === 'cabinet' ? 70 : 54, h = kind === 'bed' ? 60 : kind === 'cabinet' ? 110 : kind === 'window' || kind === 'frame' || kind === 'clock' ? 60 : 70, tries = 0;
+    do { x = K.rand(60, 860 - w); y = kind === 'window' || kind === 'frame' || kind === 'clock' ? K.rand(80, 150) : K.rand(230, 430 - h); tries++; } while (used.some((u) => K.rectHit({ x: x - 10, y: y - 10, w: w + 20, h: h + 20 }, u)) && tries < 40);
+    const o = { kind, x, y, w, h, col: K.pick(['#7a8aa0', '#a07a6a', '#6a9a7a', '#8a7aa8', '#b0a080']), on: true };
+    used.push(o); objs.push(o);
+  }
+  return objs;
+}
+function anomaly(s) {
+  const r = K.irand(0, 3); const room = s.rooms[r];
+  const fresh = room.filter((o) => !o.anom);
+  const type = K.pick(['move', 'vanish', 'color', 'grow', 'figure']);
+  if (type === 'figure' || !fresh.length) { room.push({ kind: 'figure', x: K.rand(100, 800), y: 200, w: 50, h: 180, col: '#000', anom: 'figure', on: true }); }
+  else {
+    const o = K.pick(fresh); o.anom = type; o.orig = { x: o.x, y: o.y, w: o.w, h: o.h, col: o.col };
+    if (type === 'move') o.x = K.clamp(o.x + K.pick([-1, 1]) * K.rand(90, 180), 40, 900 - o.w);
+    if (type === 'vanish') o.on = false;
+    if (type === 'color') o.col = K.pick(['#c0303a', '#30c05a', '#e0e0e0', '#303030']);
+    if (type === 'grow') { o.w *= 1.45; o.h *= 1.45; o.y -= o.h * 0.3; }
+  }
+  if (r === s.cam) K.sfx('whisper');
+}
+function drawObj(o, a = 1) {
+  if (!o.on) return; K.alpha(a);
+  const { x, y, w, h, col } = o;
+  switch (o.kind) {
+    case 'bed': K.rect(x, y + 20, w, h - 20, col, 4); K.rect(x, y, 30, h, '#ddd', 4); K.rect(x + 34, y + 22, w - 38, 20, '#e8e8f0', 3); break;
+    case 'chair': K.rect(x, y, 10, h, col); K.rect(x, y + h * 0.55, w, 10, col); K.rect(x + w - 8, y + h * 0.55, 8, h * 0.45, col); break;
+    case 'lamp': K.rect(x + w / 2 - 3, y + 20, 6, h - 20, '#666'); K.poly([[x + 6, y + 24], [x + w - 6, y + 24], [x + w - 14, y], [x + 14, y]], col); break;
+    case 'frame': K.rect(x, y, w, h, '#4a3a2a'); K.rect(x + 6, y + 6, w - 12, h - 12, col); break;
+    case 'plant': K.rect(x + 12, y + h - 26, w - 24, 26, '#7a4a2a'); K.circle(x + w / 2, y + h / 2 - 6, w / 2.2, col); break;
+    case 'cabinet': K.rect(x, y, w, h, col, 3); K.line(x, y + h / 2, x + w, y + h / 2, '#0004', 2); K.circle(x + w - 10, y + h / 4, 3, '#222'); break;
+    case 'window': K.rect(x, y, w, h, '#0b1622'); K.stroke(x, y, w, h, col, 4); K.line(x + w / 2, y, x + w / 2, y + h, col, 3); break;
+    case 'doll': K.circle(x + w / 2, y + 14, 13, '#f0d0c0'); K.rect(x + 12, y + 26, w - 24, h - 26, col, 6); K.circle(x + w / 2 - 5, y + 13, 2, '#000'); K.circle(x + w / 2 + 5, y + 13, 2, '#000'); break;
+    case 'clock': K.circle(x + w / 2, y + h / 2, w / 2, '#ddd'); K.ring(x + w / 2, y + h / 2, w / 2, col, 4); K.line(x + w / 2, y + h / 2, x + w / 2, y + 12, '#222', 2); break;
+    case 'trolley': K.rect(x, y + 10, w, 12, col); K.rect(x, y + h - 22, w, 10, col); K.circle(x + 10, y + h - 6, 6, '#333'); K.circle(x + w - 10, y + h - 6, 6, '#333'); break;
+    case 'figure': K.alpha(a * (0.7 + 0.2 * Math.sin(K.time() * 9))); K.circle(x + 25, y + 24, 22, '#000'); K.rect(x + 4, y + 44, 42, h - 44, '#000', 12); K.circle(x + 17, y + 22, 3, '#fff'); K.circle(x + 33, y + 22, 3, '#fff'); break;
+  }
+  K.alpha(1);
+}
+K.game({
+  bg: '#05070a',
+  init(s) { s.rooms = [0, 1, 2, 3].map(makeRoom); s.cam = 0; s.t = 0; s.next = 6; s.score = 0; s.cool = 0; s.msg = ''; s.msgT = 0; s.static = 0; },
+  update(s, dt) {
+    s.t += dt; s.cool -= dt; s.msgT -= dt; s.static -= dt;
+    const hour = Math.floor(s.t / 40);
+    if (hour >= 6) return K.end(s, { score: s.score, won: true, title: '6:00 AM', text: 'Your shift is over. The ward is quiet. For now.' });
+    s.next -= dt; if (s.next <= 0) { anomaly(s); s.next = Math.max(3, 9 - hour * 1.1) + K.rand(0, 3); }
+    const t = K.tapDir(); for (let i = 1; i <= 4; i++) if (K.tap('Digit' + i)) { s.cam = i - 1; s.static = 0.2; K.sfx('click'); }
+    if (t === 'right') { s.cam = (s.cam + 1) % 4; s.static = 0.2; } if (t === 'left') { s.cam = (s.cam + 3) % 4; s.static = 0.2; }
+    for (let i = 0; i < 4; i++) if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 20 + i * 120, y: 488, w: 110, h: 40 })) { s.cam = i; s.static = 0.2; }
+    if (K.mouse.clicked && K.mouse.y < 470 && s.cool <= 0) {
+      const room = s.rooms[s.cam];
+      const hit = room.find((o) => o.anom && (K.inRect(K.mouse.x, K.mouse.y, o) || (o.orig && K.inRect(K.mouse.x, K.mouse.y, o.orig))));
+      if (hit) {
+        if (hit.anom === 'figure') room.splice(room.indexOf(hit), 1);
+        else { Object.assign(hit, hit.orig); hit.on = true; delete hit.anom; }
+        s.score++; K.sfx('select'); s.msg = 'ANOMALY REPORTED ✓'; s.msgT = 1.5; K.burst(K.mouse.x, K.mouse.y, K.C.cyan, 16);
+      } else { s.cool = 3; K.sfx('wrong'); s.msg = 'FALSE REPORT — system locked 3s'; s.msgT = 2; }
+    }
+    const active = s.rooms.flat().filter((o) => o.anom).length;
+    if (active >= 4) { K.sfx('scare'); K.flash('#fff', 0.3); K.end(s, { score: s.score, won: false, title: 'WARD LOST', text: 'Too many anomalies went unreported.' }); }
+  },
+  draw(s) {
+    K.rect(20, 20, 920, 450, '#0d1418');
+    K.rect(20, 300, 920, 170, '#141c1a'); K.line(20, 300, 940, 300, '#1f2a28', 3);
+    s.rooms[s.cam].forEach((o) => drawObj(o));
+    const c = K.ctx();
+    for (let y = 20; y < 470; y += 3) { K.rect(20, y, 920, 1, 'rgba(0,0,0,0.25)'); }
+    K.alpha(0.08 + (s.static > 0 ? 0.5 : 0)); for (let i = 0; i < 60; i++) K.rect(20 + K.rand(920), 20 + K.rand(450), K.rand(2, 30), 2, '#fff'); K.alpha(1);
+    c.fillStyle = 'rgba(30,255,140,0.05)'; c.fillRect(20, 20, 920, 450);
+    K.text(`CAM ${s.cam + 1} · ${ROOMS[s.cam]}`, 36, 40, 18, '#9fffcf', 'left', 'm');
+    const hour = Math.floor(s.t / 40), min = Math.floor((s.t % 40) / 40 * 60);
+    K.text(`${hour === 0 ? 12 : hour}:${String(min).padStart(2, '0')} AM`, 924, 40, 18, '#9fffcf', 'right', 'm');
+    if (Math.floor(K.time() * 2) % 2) K.circle(900, 66, 6, '#ff3344');
+    for (let i = 0; i < 4; i++) { const on = i === s.cam; K.rect(20 + i * 120, 488, 110, 40, on ? '#1e4a3a' : '#121a1a', 6); K.text(`${i + 1} ${ROOMS[i]}`, 75 + i * 120, 508, 14, on ? '#9fffcf' : '#5a7a70', 'center', 'd'); }
+    K.text(`REPORTS ${s.score}`, 760, 508, 18, K.C.cyan, 'center', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 440, 20, s.cool > 0 ? K.C.red : K.C.green, 'center', 'd', 10);
+    if (s.cool > 0) { K.alpha(0.4); K.rect(20, 20, 920, 450, '#300'); K.alpha(1); }
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 0) - dt; if (s.aiT <= 0) { s.aiT = 3; K.vtap('ArrowRight'); } },
+});
+</script></body></html>

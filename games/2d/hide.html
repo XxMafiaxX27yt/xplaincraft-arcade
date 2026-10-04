@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hide</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hide","n":12,"title":"HIDE","genre":"horror","desc":"It's searching the house. Each round, pick a hiding place before it walks in. When it gets close, hold your breath and keep calm. It remembers where it found you before.","controls":"Click a hiding spot · hold SPACE to hold your breath, keep the marker in the green","scoreLabel":"ROUNDS","tasks":[{"stat":"score","target":6,"text":"Survive 6 rounds in Hide"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SPOTS = [{ n: 'WARDROBE', x: 120, y: 120 }, { n: 'UNDER BED', x: 340, y: 160 }, { n: 'BATHTUB', x: 600, y: 110 }, { n: 'CUPBOARD', x: 830, y: 150 }, { n: 'CURTAINS', x: 180, y: 360 }, { n: 'FRIDGE', x: 470, y: 380 }, { n: 'LAUNDRY', x: 730, y: 380 }];
+function round(s) { s.phase = 'pick'; s.pickT = 5; s.spot = -1; s.search = []; }
+K.game({
+  bg: '#0c0a0e',
+  init(s) { s.rounds = 0; s.heat = SPOTS.map(() => 0); round(s); },
+  update(s, dt) {
+    if (s.phase === 'pick') {
+      s.pickT -= dt;
+      SPOTS.forEach((sp, i) => { if (K.mouse.clicked && K.dist(K.mouse.x, K.mouse.y, sp.x, sp.y + 30) < 70) { s.spot = i; K.sfx('creak'); } });
+      if (s.pickT <= 0) {
+        if (s.spot < 0) s.spot = 0;
+        const order = SPOTS.map((_, i) => i).sort((a, b) => s.heat[b] + Math.random() * 2 - (s.heat[a] + Math.random() * 2));
+        s.search = order.slice(0, Math.min(5, 2 + Math.floor(s.rounds / 2)));
+        s.phase = 'search'; s.si = 0; s.walk = 0; s.mon = { x: 480, y: 560 }; s.breath = 0.5; s.vel = 0; s.calm = 1;
+      }
+    } else if (s.phase === 'search') {
+      const target = SPOTS[s.search[s.si]];
+      if (!target) { s.rounds++; s.heat[s.spot] += 1.5; K.sfx('select'); if (s.rounds >= 10) return K.end(s, { score: 10, won: true, title: 'IT GAVE UP', text: 'The front door slams. It is gone.' }); round(s); return; }
+      const a = Math.atan2(target.y - s.mon.y, target.x - s.mon.x), d = K.dist(s.mon, target);
+      if (d > 8) { s.mon.x += Math.cos(a) * 160 * dt; s.mon.y += Math.sin(a) * 160 * dt; if (Math.random() < dt * 4) K.sfx('step'); }
+      else { s.walk += dt; if (s.walk > 1.4) { if (s.search[s.si] === s.spot && s.calm < 0.5) return lose(s); s.si++; s.walk = 0; } }
+      const near = K.dist(s.mon, SPOTS[s.spot]) < 220;
+      if (near) {
+        const hold = K.down('Space') || K.mouse.down;
+        s.vel += (hold ? -1.6 : 1.4) * dt + K.rand(-1, 1) * dt * 2;
+        s.vel *= 0.96; s.breath = K.clamp(s.breath + s.vel * dt * 3, 0, 1);
+        const ok = s.breath > 0.38 && s.breath < 0.62;
+        s.calm = K.clamp(s.calm + (ok ? 0.5 : -0.9) * dt, 0, 1);
+        if (!ok && Math.random() < dt * 2) K.sfx('heart');
+      } else s.calm = Math.min(1, s.calm + dt);
+      if (s.search[s.si] === s.spot && d < 8 && s.calm < 0.35) return lose(s);
+    }
+  },
+  draw(s) {
+    K.rect(20, 20, 920, 500, '#17131a', 10);
+    SPOTS.forEach((sp, i) => {
+      const chosen = s.spot === i;
+      K.rect(sp.x - 60, sp.y, 120, 70, chosen ? '#2a3a4a' : '#26202c', 8); K.stroke(sp.x - 60, sp.y, 120, 70, chosen ? K.C.cyan : '#3a3044', 2, 8);
+      K.text(sp.n, sp.x, sp.y + 35, 14, chosen ? K.C.cyan : '#aaa', 'center', 'd');
+      if (s.heat[i] > 0) K.text('⚠'.repeat(Math.min(3, Math.ceil(s.heat[i] / 1.5))), sp.x, sp.y - 10, 12, '#f66', 'center');
+    });
+    if (s.phase === 'pick') {
+      K.text(`HIDE! ${Math.ceil(s.pickT)}`, 480, 270, 46, K.C.red, 'center', 'd', 16);
+      K.text('Click where to hide. ⚠ = it found someone there before', 480, 310, 16, '#ccc', 'center');
+    } else {
+      K.darkness([{ x: SPOTS[s.spot].x, y: SPOTS[s.spot].y + 35, r: 120 }, { x: s.mon.x, y: s.mon.y, r: 90 }], 0.9);
+      const m = s.mon; K.circle(m.x, m.y - 30, 22, '#050505'); K.rect(m.x - 18, m.y - 10, 36, 60, '#050505', 10); K.glow('#f00', 10); K.circle(m.x - 7, m.y - 33, 3, '#f22'); K.circle(m.x + 7, m.y - 33, 3, '#f22'); K.noGlow();
+      const near = K.dist(s.mon, SPOTS[s.spot]) < 220;
+      if (near) {
+        K.rect(330, 470, 300, 22, '#222', 6); K.rect(330 + 300 * 0.38, 470, 300 * 0.24, 22, '#1d5a3a', 4); K.rect(330 + 300 * s.breath - 4, 466, 8, 30, '#fff', 3);
+        K.text('HOLD YOUR BREATH (SPACE)', 480, 452, 16, '#fff', 'center', 'd');
+        K.alpha(1 - s.calm); K.vignette(1); K.alpha(1);
+      }
+    }
+    K.text(`ROUND ${s.rounds + 1}`, 40, 46, 18, '#fff', 'left', 'd');
+  },
+  ai(s, dt) { if (s.phase === 'pick' && s.spot < 0) { s.spot = K.irand(0, 6); } if (s.phase === 'search') { if (s.breath > 0.5) K.vhold('Space'); else K.vhold('Space', false); } },
+});
+function lose(s) { K.sfx('scare'); K.shake(24); K.flash('#fff', 0.3); K.end(s, { score: s.rounds, won: false, title: 'FOUND YOU', text: `It found you in the ${SPOTS[s.spot].n.toLowerCase()}.` }); }
+</script></body></html>

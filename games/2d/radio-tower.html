@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Radio Tower</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"radio-tower","n":19,"title":"RADIO TOWER","genre":"horror","desc":"After the blackout, you run the last radio tower. Tune the dial to find voices asking for help. Real survivors give real details. Mimics repeat themselves and get things wrong. Send the rescue truck only to real people.","controls":"← / → or mouse wheel tune · R rescue · X ignore","scoreLabel":"SAVED","tasks":[{"stat":"score","target":6,"text":"Save 6 survivors in Radio Tower"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PLACES = ['the old school', 'the gas station', 'the church', 'the hospital', 'the bridge', 'the mall', 'the farm', 'the library'];
+const NAMES = ['Ana', 'Marco', 'Jun', 'Priya', 'Eli', 'Sofia', 'Kofi', 'Lena'];
+function signal(s) {
+  const real = Math.random() < 0.55, name = K.pick(NAMES), place = K.pick(PLACES), n = K.irand(2, 6);
+  let lines;
+  if (real) lines = [`This is ${name}. We're at ${place}.`, `There are ${n} of us, one is hurt.`, `Please hurry, we have water for a day.`];
+  else { const tell = K.irand(0, 2); lines = tell === 0 ? [`This is ${name}. We're at ${place}.`, `We're at ${place}. We're at ${place}.`, `Come closer. Come closer.`] : tell === 1 ? [`This is ${name}. We're at ${place}.`, `There are ${n} of us… no, ${n + 3}. No. ${n}.`, `Please open the tower door.`] : [`H-hello? This is… this is ${name}.`, `We are at ${K.pick(PLACES.filter((p) => p !== place))}. No, ${place}.`, `Are you alone up there?`]; }
+  return { f: K.rand(88, 108), real, lines, name };
+}
+K.game({
+  bg: '#080a08',
+  init(s) { s.f = 98; s.sig = signal(s); s.saved = 0; s.lost = 0; s.heard = 0; s.feed = []; s.knock = 0; },
+  update(s, dt) {
+    const d = K.dir(); s.f = K.clamp(s.f + d.x * 6 * dt + K.mouse.wheel * 0.2, 86, 110);
+    const close = 1 - K.clamp(Math.abs(s.f - s.sig.f) / 3, 0, 1);
+    if (close > 0.8) s.heard += dt; if (Math.random() < dt * 8) K.noise(0.05, 0.02 * (1 - close), 1800);
+    if (close > 0.8 && (K.tap('KeyR') || K.tap('KeyX') || (K.mouse.clicked && K.mouse.y > 440))) {
+      const rescue = K.tap('KeyR') || (K.mouse.clicked && K.mouse.x < 480);
+      if (rescue && s.sig.real) { s.saved++; s.feed.unshift(`✓ Truck reached ${s.sig.name}.`); K.sfx('win'); }
+      else if (rescue && !s.sig.real) { s.lost++; s.feed.unshift(`✗ The truck went silent near ${s.sig.name}'s signal.`); K.sfx('scare'); K.shake(14); }
+      else if (!rescue && s.sig.real) { s.lost++; s.feed.unshift(`✗ ${s.sig.name}'s signal stopped.`); K.sfx('wrong'); }
+      else { s.feed.unshift('✓ The mimic\'s signal fades. Good.'); K.sfx('select'); s.saved += 0; }
+      s.sig = signal(s); s.heard = 0;
+      if (s.lost >= 3) return K.end(s, { score: s.saved, won: false, title: 'THE TOWER GOES DARK', text: 'Something climbed the ladder.' });
+      if (s.saved >= 8) return K.end(s, { score: s.saved, won: true, title: 'DAWN BROADCAST', text: 'Eight people safe. The tower hums on.' });
+    }
+  },
+  draw(s) {
+    K.rect(20, 20, 920, 400, '#141a14', 12);
+    const close = 1 - K.clamp(Math.abs(s.f - s.sig.f) / 3, 0, 1);
+    K.rect(60, 60, 840, 110, '#0a0e0a', 6);
+    for (let x = 0; x < 840; x += 3) { const fr = 86 + (x / 840) * 24, peak = Math.exp(-((fr - s.sig.f) ** 2) / 0.8) * 80; K.rect(60 + x, 165 - peak - K.rand(0, 14), 2, peak + 4, '#3c6'); }
+    const px = 60 + ((s.f - 86) / 24) * 840; K.rect(px - 2, 60, 4, 110, '#f84');
+    K.text(s.f.toFixed(1) + ' MHz', 480, 200, 26, '#f84', 'center', 'm', 8);
+    const n = Math.min(3, Math.floor(s.heard / 1.4) + 1);
+    if (close > 0.5) s.sig.lines.slice(0, close > 0.8 ? n : 1).forEach((l, i) => { const garble = close < 0.8 ? l.replace(/[aeiou]/g, '#') : l; K.text('“' + garble + '”', 480, 250 + i * 40, 20, '#cfe', 'center'); });
+    else K.text('· · · static · · ·', 480, 270, 20, '#456', 'center', 'm');
+    K.rect(20, 440, 450, 80, close > 0.8 ? '#1a3a24' : '#151a15', 10); K.text('R · SEND RESCUE', 245, 480, 20, close > 0.8 ? K.C.green : '#456', 'center', 'd');
+    K.rect(490, 440, 450, 80, close > 0.8 ? '#3a1a1a' : '#151a15', 10); K.text('X · IGNORE', 715, 480, 20, close > 0.8 ? K.C.red : '#456', 'center', 'd');
+    s.feed.slice(0, 2).forEach((f, i) => K.text(f, 480, 365 + i * 24, 15, f[0] === '✓' ? '#7c9' : '#f88', 'center', 'm'));
+    K.text(`SAVED ${s.saved}/8   LOST ${s.lost}/3`, 40, 40, 16, '#bdb', 'left', 'd');
+  },
+  ai(s, dt) { K.vhold('ArrowRight', s.f < s.sig.f - 0.2); K.vhold('ArrowLeft', s.f > s.sig.f + 0.2); },
+});
+</script></body></html>

@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Night Shift Store</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"night-shift-store","n":21,"title":"NIGHT SHIFT STORE","genre":"horror","desc":"Ring up customers at a 24-hour store by typing each item's price code. Keep one eye on the CCTV. Something walks the aisles toward your counter. Hit the shutter before it reaches you.","controls":"Type the code shown · ENTER to scan · S / click SHUTTER","scoreLabel":"SALES","tasks":[{"stat":"score","target":12,"text":"Make 12 sales in Night Shift Store"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ITEMS = ['MILK', 'BREAD', 'CHIPS', 'SODA', 'ICE', 'BATTERY', 'CANDY', 'NOODLES', 'COFFEE', 'MATCHES'];
+const newItem = () => ({ name: K.pick(ITEMS), code: String(K.irand(100, 999)) });
+K.game({
+  bg: '#0b0d0c',
+  init(s) { s.sales = 0; s.item = newItem(); s.typed = ''; s.thing = { aisle: 0, d: 0 }; s.shut = 0; s.t = 0; s.patience = 10; s.cust = 1; },
+  update(s, dt) {
+    s.t += dt;
+    for (let i = 0; i <= 9; i++) if (K.tap('Digit' + i, 'Numpad' + i) && s.typed.length < 3 && !s.shut) { s.typed += i; K.sfx('click'); }
+    if (K.tap('Backspace')) s.typed = s.typed.slice(0, -1);
+    if (K.tap('Enter') && s.typed.length === 3) {
+      if (s.typed === s.item.code) { s.sales++; K.sfx('coin'); s.item = newItem(); s.patience = Math.max(5, 10 - s.sales * 0.2); } else { K.sfx('wrong'); s.patience -= 2; }
+      s.typed = '';
+    }
+    if (!s.shut) s.patience -= dt; if (s.patience <= 0) { s.patience = 10; s.item = newItem(); s.typed = ''; K.sfx('wrong'); s.angry = (s.angry || 0) + 1; if (s.angry >= 3) return K.end(s, { score: s.sales, won: false, title: 'FIRED', text: 'Three customers walked out.' }); }
+    if ((K.tap('KeyS') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 760, y: 440, w: 180, h: 70 }))) && s.shut <= 0) { s.shut = 3; K.sfx('boom'); if (s.thing.d > 0.65) { s.thing = { aisle: K.irand(0, 3), d: 0 }; } }
+    s.shut = Math.max(0, s.shut - dt);
+    s.thing.d += dt * (0.05 + s.t * 0.0006) * (Math.random() < 0.02 ? 6 : 1);
+    if (Math.random() < dt * 0.2) s.thing.aisle = K.irand(0, 3);
+    if (s.thing.d >= 1 && s.shut <= 0) { K.sfx('scare'); K.shake(24); K.flash('#fff', 0.3); return K.end(s, { score: s.sales, won: false, title: 'IT REACHED THE COUNTER', text: `${s.sales} sales tonight.` }); }
+    if (s.thing.d >= 1) s.thing = { aisle: K.irand(0, 3), d: 0 };
+    if (s.sales >= 20) K.end(s, { score: 20, won: true, title: 'SHIFT OVER', text: 'The morning clerk arrives. You don\'t mention the aisles.' });
+  },
+  draw(s) {
+    K.rect(20, 20, 440, 300, '#0a140e', 6); K.text('CCTV · AISLES', 34, 36, 13, '#7c9', 'left', 'm');
+    for (let a = 0; a < 4; a++) { const x = 60 + a * 100; K.rect(x, 60, 60, 240, '#122016'); for (let y = 70; y < 300; y += 30) K.rect(x + 4, y, 52, 4, '#1c3a24'); }
+    const t = s.thing, tx = 90 + t.aisle * 100, ty = 70 + t.d * 230; K.circle(tx, ty, 9 + t.d * 6, '#000'); K.circle(tx - 3, ty - 2, 2, '#f33'); K.circle(tx + 3, ty - 2, 2, '#f33');
+    K.rect(40, 300, 400, 10, '#1a3a2a'); K.text('COUNTER', 240, 316, 11, '#7c9', 'center', 'm');
+    for (let y = 20; y < 320; y += 3) K.rect(20, y, 440, 1, 'rgba(0,0,0,0.3)');
+    K.rect(480, 20, 460, 300, '#1a1a20', 6);
+    K.text('CUSTOMER #' + (s.sales + 1), 710, 50, 16, '#aac', 'center', 'd');
+    K.text(s.item.name, 710, 110, 40, '#fff', 'center', 'd'); K.text('CODE ' + s.item.code, 710, 170, 30, K.C.gold, 'center', 'm', 8);
+    K.rect(600, 210, 220, 56, '#000', 6); K.text(s.typed.padEnd(3, '_'), 710, 238, 34, '#3f6', 'center', 'm');
+    K.rect(500, 290, 420 * K.clamp(s.patience / 10, 0, 1), 8, s.patience < 3 ? K.C.red : K.C.cyan);
+    K.rect(20, 340, 920, 180, '#16120e', 8); K.text(`SALES ${s.sales}/20`, 40, 370, 20, '#fff', 'left', 'd'); K.text('Type the code, press ENTER', 40, 410, 16, '#998', 'left');
+    K.rect(760, 440, 180, 70, s.shut > 0 ? '#555' : '#a22', 8); K.text(s.shut > 0 ? 'SHUT…' : 'SHUTTER (S)', 850, 475, 18, '#fff', 'center', 'd');
+    if (s.shut > 0) { K.alpha(0.5); for (let y = 20; y < 320; y += 20) K.rect(480, y, 460, 12, '#666'); K.alpha(1); }
+    if (t.d > 0.6) { K.alpha((t.d - 0.6) * 1.5); K.vignette(1); K.alpha(1); }
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 0) - dt; if (s.aiT <= 0) { s.aiT = 0.4; if (s.typed.length < 3) K.vtap('Digit' + s.item.code[s.typed.length]); else K.vtap('Enter'); } if (s.thing.d > 0.8) K.vtap('KeyS'); },
+});
+</script></body></html>

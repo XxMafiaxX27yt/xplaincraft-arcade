@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pages</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pages","n":17,"title":"PAGES","genre":"horror","desc":"Eight torn pages are pinned to trees in a foggy wood. A tall faceless man appears between the trees, closer with every page. Looking at him fills your screen with static. Don't stare.","controls":"WASD move · mouse look · torch shows what you face","scoreLabel":"PAGES","tasks":[{"stat":"score","target":8,"text":"Collect all 8 pages"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WW = 2400, WH = 1600;
+const NOTES = ['ALWAYS WATCHES', 'NO EYES', 'DON\'T LOOK', 'CAN\'T RUN', 'LEAVE ME ALONE', 'FOLLOWS', 'HELP ME', 'NOWHERE TO HIDE'];
+K.game({
+  bg: '#080a0c',
+  init(s) {
+    s.p = { x: WW / 2, y: WH / 2 }; s.look = 0; s.got = 0; s.static = 0; s.tele = 6; s.man = null;
+    s.trees = Array.from({ length: 180 }, () => ({ x: K.rand(WW), y: K.rand(WH), r: K.rand(10, 20) }));
+    s.pages = K.shuffle(s.trees.slice()).slice(0, 8).map((t, i) => ({ x: t.x, y: t.y + t.r + 4, note: NOTES[i], got: false }));
+  },
+  update(s, dt) {
+    const d = K.dir(), sp = K.down('ShiftLeft') ? 170 : 120;
+    s.p.x = K.clamp(s.p.x + d.x * sp * dt, 20, WW - 20); s.p.y = K.clamp(s.p.y + d.y * sp * dt, 20, WH - 20);
+    if (!K.attract) s.look = Math.atan2(K.mouse.y - 270, K.mouse.x - 480);
+    s.pages.forEach((pg) => { if (!pg.got && K.dist(pg, s.p) < 24) { pg.got = true; s.got++; s.msg = pg.note; s.msgT = 2; K.sfx('chime'); if (s.got === 8) K.end(s, { score: 8, won: true, title: 'ALL 8 PAGES', text: 'The static stops. The forest is silent. You are alone. Probably.' }); } });
+    s.msgT = (s.msgT || 0) - dt;
+    s.tele -= dt;
+    if (s.got > 0 && s.tele <= 0) { s.tele = Math.max(2, 7 - s.got * 0.6); const r = Math.max(110, 480 - s.got * 45), a = K.rand(Math.PI * 2); s.man = { x: s.p.x + Math.cos(a) * r, y: s.p.y + Math.sin(a) * r }; }
+    if (s.man) {
+      const dd = K.dist(s.man, s.p); let ang = Math.atan2(s.man.y - s.p.y, s.man.x - s.p.x) - s.look; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
+      const seen = Math.abs(ang) < 0.5 && dd < 520;
+      s.static = K.clamp(s.static + (seen ? 0.5 + 200 / dd : -0.35) * dt, 0, 1);
+      if (seen && Math.random() < dt * 3) K.noise(0.2, 0.05 + s.static * 0.1, 3000);
+      if (dd < 30 || s.static >= 1) { K.sfx('scare'); K.shake(25); return K.end(s, { score: s.got, won: false, title: 'HE TOOK YOU', text: `${s.got} of 8 pages.` }); }
+    }
+  },
+  draw(s) {
+    const cx = s.p.x - 480, cy = s.p.y - 270, c = K.ctx();
+    c.save(); c.translate(-cx, -cy);
+    K.rect(cx, cy, 960, 540, '#0b120d');
+    s.pages.forEach((pg) => { if (!pg.got) { K.rect(pg.x - 8, pg.y - 10, 16, 20, '#e8e2d0'); K.line(pg.x - 5, pg.y - 4, pg.x + 5, pg.y - 4, '#333', 1); } });
+    if (s.man) { const m = s.man; K.rect(m.x - 8, m.y - 70, 16, 70, '#050505'); K.circle(m.x, m.y - 80, 11, '#e8e8e8'); K.line(m.x - 8, m.y - 60, m.x - 20, m.y - 10, '#050505', 4); K.line(m.x + 8, m.y - 60, m.x + 20, m.y - 10, '#050505', 4); }
+    s.trees.forEach((t) => { if (Math.abs(t.x - s.p.x) < 520 && Math.abs(t.y - s.p.y) < 320) { K.circle(t.x, t.y, t.r, '#1a1410'); K.circle(t.x, t.y, t.r * 0.5, '#241a14'); } });
+    c.restore();
+    K.circle(480, 270, 7, '#ddd');
+    c.save(); c.fillStyle = 'rgba(0,0,0,0.94)'; c.beginPath(); c.rect(0, 0, 960, 540); c.moveTo(510, 270); c.arc(480, 270, 30, 0, Math.PI * 2, true); c.moveTo(480, 270); c.arc(480, 270, 360, s.look + 0.5, s.look - 0.5, true); c.closePath(); c.fill('evenodd'); c.restore();
+    K.alpha(0.12); K.bg('#9aa'); K.alpha(1);
+    if (s.static > 0) { K.alpha(s.static * 0.85); for (let i = 0; i < 500; i++) { const g = K.irand(0, 255); K.rect(K.rand(960), K.rand(540), 4, 4, `rgb(${g},${g},${g})`); } K.alpha(1); }
+    K.text(`PAGES ${s.got}/8`, 20, 24, 20, '#ddd', 'left', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 470, 30, '#ddd', 'center', 'd', 8);
+  },
+  ai(s, dt) { s.look += dt * 0.6; K.vhold('KeyD', Math.sin(K.time() * 0.5) > 0); K.vhold('KeyA', Math.sin(K.time() * 0.5) <= 0); if (!s.man) s.man = { x: s.p.x + 140, y: s.p.y - 40 }; s.static = 0.15; },
+});
+</script></body></html>

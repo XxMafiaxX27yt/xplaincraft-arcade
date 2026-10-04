@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Last Train</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"last-train","n":8,"title":"LAST TRAIN","genre":"horror","desc":"The same train car, over and over. Study it. If anything is different, go back. If nothing changed, go forward. Get it right 8 times in a row to reach your stop.","controls":"→ / D go forward · ← / A go back","scoreLabel":"CARS","tasks":[{"stat":"score","target":8,"text":"Escape the Last Train"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ANOMS = ['poster', 'eyes', 'passenger', 'light', 'handles', 'door', 'sign', 'extra', 'clock', 'seat'];
+function car(an) {
+  return { an, flick: an === 'light', t: 0 };
+}
+K.game({
+  bg: '#0a0c10',
+  init(s) { s.streak = 0; s.best = 0; s.c = car(null); s.trans = 0; s.msg = 'Car 1. Look closely.'; s.first = true; },
+  update(s, dt) {
+    s.c.t += dt;
+    if (s.trans > 0) { s.trans -= dt; if (s.trans <= 0) { s.c = car(Math.random() < 0.55 && !s.first ? K.pick(ANOMS) : null); s.first = false; } return; }
+    const d = K.tap('ArrowRight', 'KeyD') ? 1 : K.tap('ArrowLeft', 'KeyA') ? -1 : 0;
+    if (!d) return;
+    const right = (d === -1) === !!s.c.an;
+    if (right) { s.streak++; s.best = Math.max(s.best, s.streak); K.sfx('select'); s.msg = s.c.an ? `Yes — the ${s.c.an} was wrong.` : 'Nothing changed. Good.'; }
+    else { s.msg = s.c.an ? `You missed it: the ${s.c.an}. Back to car 1.` : 'Nothing was different… back to car 1.'; s.streak = 0; K.sfx('wrong'); K.shake(8); s.first = true; }
+    if (s.streak >= 8) return K.end(s, { score: 8, won: true, title: 'YOUR STOP', text: 'The doors open onto a real platform. You made it.' });
+    if (s.c.an === 'eyes' && !right) K.sfx('scare');
+    s.trans = 0.6; K.sfx('whoosh');
+  },
+  draw(s) {
+    const a = s.c.an, t = s.c.t;
+    const lightOn = !(a === 'light' && Math.sin(t * 17) > 0.6);
+    K.rect(0, 0, 960, 540, lightOn ? (a === 'light' ? '#2a1414' : '#1e2128') : '#06070a');
+    K.rect(0, 380, 960, 160, '#2a2a30');
+    for (let i = 0; i < 4; i++) { const x = 60 + i * 230; K.rect(x, 110, 170, 110, '#0a0f18'); K.stroke(x, 110, 170, 110, '#555a66', 6); K.alpha(0.3); K.rect(x + ((t * 400 + i * 80) % 170), 115, 10, 100, '#aac'); K.alpha(1);
+      if (a === 'eyes' && i === 2) { K.glow('#fff', 10); K.circle(x + 70, 160, 6, '#fff'); K.circle(x + 100, 160, 6, '#fff'); K.noGlow(); } }
+    for (let i = 0; i < 9; i++) { const x = 40 + i * 105; K.line(x, 40, x, 70, '#888', 2); K.ring(x, 78, a === 'handles' && i === 4 ? 14 : 8, '#999', 3); }
+    if (a === 'handles') { K.line(40 + 4 * 105, 86, 40 + 4 * 105, 140, '#999', 2); }
+    for (let i = 0; i < 5; i++) { const x = 40 + i * 190; K.rect(x, 290, 150, 70, a === 'seat' && i === 1 ? '#6a1a1a' : '#2a4a8a', 8); K.rect(x, 250, 150, 50, a === 'seat' && i === 1 ? '#5a1414' : '#22407a', 8); }
+    // passenger
+    const pf = a === 'passenger' ? -1 : 1;
+    K.circle(320, 240, 22, '#d8b090'); K.rect(296, 260, 48, 60, '#444c5a', 10); K.circle(320 + 8 * pf, 238, 3, '#000');
+    if (a === 'extra') { K.alpha(0.85); K.circle(700, 240, 22, '#111'); K.rect(676, 260, 48, 60, '#111', 10); K.alpha(1); }
+    K.rect(420, 20, 150, 50, '#111'); K.text(a === 'sign' ? 'NO EXIT' : 'NEXT: HOME', 495, 45, 16, a === 'sign' ? '#ff3344' : '#ffb84a', 'center', 'm');
+    K.rect(800, 240, 90, 120, '#d8d0b8'); K.text(a === 'poster' ? 'SMILE' : 'METRO', 845, 270, 16, a === 'poster' ? '#a00' : '#246', 'center', 'd');
+    if (a === 'poster') { K.circle(845, 320, 18, '#f0d0c0'); K.circle(838, 316, 3, '#000'); K.circle(852, 316, 3, '#000'); K.ctx().strokeStyle = '#a00'; K.ctx().lineWidth = 3; K.ctx().beginPath(); K.ctx().arc(845, 320, 12, 0.2, Math.PI - 0.2); K.ctx().stroke(); }
+    else K.rect(825, 300, 40, 40, '#3a6aaa', 4);
+    K.circle(150, 50, 20, '#ddd'); const ang = a === 'clock' ? -K.time() * 3 : K.time() * 0.5; K.line(150, 50, 150 + Math.cos(ang) * 14, 50 + Math.sin(ang) * 14, '#222', 2);
+    K.rect(910, 120, 40, 240, a === 'door' ? '#7a1414' : '#3a3d48'); K.rect(0, 120, 40, 240, '#3a3d48');
+    if (!lightOn) K.vignette(1);
+    if (s.trans > 0) { K.alpha(1 - Math.abs(s.trans - 0.3) / 0.3); K.bg('#000'); K.alpha(1); }
+    K.rect(0, 470, 960, 70, 'rgba(0,0,0,0.6)');
+    K.text(`CAR ${s.streak + 1} / 8`, 30, 500, 22, '#fff', 'left', 'd');
+    K.text(s.msg, 480, 500, 18, K.C.gold, 'center');
+    K.text('← BACK   ·   FORWARD →', 930, 500, 16, K.C.dim, 'right', 'm');
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 2) - dt; if (s.aiT <= 0) { s.aiT = 2.2; K.vtap(s.c.an ? 'ArrowLeft' : 'ArrowRight'); } },
+});
+</script></body></html>

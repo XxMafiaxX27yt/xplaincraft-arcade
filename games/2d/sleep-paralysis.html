@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sleep Paralysis</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sleep-paralysis","n":14,"title":"SLEEP PARALYSIS","genre":"horror","desc":"You wake up and can't move. Only your eyes and your breath. Keep your gaze on the figure so it can't come closer, and breathe in time with the circle to stay calm until dawn.","controls":"Mouse = where you look · tap SPACE when the circle is full to breathe","scoreLabel":"MINUTES","tasks":[{"stat":"score","target":5,"text":"Reach dawn in Sleep Paralysis"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SPOTS = [[160, 200], [480, 140], [800, 210], [300, 330], [680, 340], [880, 400]];
+K.game({
+  bg: '#05060c',
+  init(s) { s.t = 0; s.fig = { i: 1, close: 0 }; s.panic = 0; s.cycle = 0; s.tele = 4; s.lx = 480; s.ly = 270; },
+  update(s, dt) {
+    s.t += dt; s.cycle += dt;
+    if (!K.attract) { s.lx = K.lerp(s.lx, K.mouse.x, dt * 6); s.ly = K.lerp(s.ly, K.mouse.y, dt * 6); }
+    const per = 3.2, ph = (s.cycle % per) / per;
+    if (K.tap('Space') || K.mouse.clicked) { const good = ph > 0.8 || ph < 0.12; s.panic = K.clamp(s.panic + (good ? -14 : 9), 0, 100); K.sfx(good ? 'whoosh' : 'heart'); }
+    if (Math.floor(s.cycle / per) !== Math.floor((s.cycle - dt) / per)) s.panic = Math.min(100, s.panic + 6);
+    s.panic = Math.min(100, s.panic + dt * 1.5);
+    const f = SPOTS[s.fig.i], looking = K.dist(s.lx, s.ly, f[0], f[1]) < 110;
+    s.fig.close = K.clamp(s.fig.close + dt * (looking ? -0.05 : 0.09 + s.panic / 900), 0, 1);
+    s.tele -= dt; if (s.tele <= 0) { s.tele = K.rand(3, 6); if (Math.random() < 0.6) { s.fig.i = K.pick(SPOTS.map((_, i) => i).filter((i) => i !== s.fig.i)); K.sfx('whisper'); } }
+    if (s.panic >= 100 || s.fig.close >= 1) { K.sfx('scare'); K.shake(25); K.flash('#fff', 0.3); return K.end(s, { score: Math.floor(s.t / 36), won: false, title: s.panic >= 100 ? 'YOU PANICKED' : 'IT SAT ON YOUR CHEST', text: `You held on until ${3 + Math.floor(s.t / 36)} AM.` }); }
+    if (s.t >= 180) K.end(s, { score: 5, won: true, title: 'DAWN', text: 'Your fingers twitch. You can move again.' });
+  },
+  draw(s) {
+    const dawn = s.t / 180;
+    K.rect(0, 0, 960, 540, `rgb(${8 + dawn * 30},${8 + dawn * 20},${18 + dawn * 30})`);
+    K.rect(380, 40, 200, 140, `rgb(${20 + dawn * 120},${30 + dawn * 90},${60 + dawn * 80})`); K.line(480, 40, 480, 180, '#000', 4); K.line(380, 110, 580, 110, '#000', 4);
+    K.rect(60, 120, 140, 300, '#120e14'); K.rect(760, 160, 160, 260, '#120e14'); K.rect(250, 380, 460, 160, '#1a1420');
+    const f = SPOTS[s.fig.i], c = s.fig.close, sz = 30 + c * 140;
+    K.alpha(0.85 + 0.1 * Math.sin(K.time() * 7)); const fx = K.lerp(f[0], 480, c), fy = K.lerp(f[1], 300, c);
+    K.circle(fx, fy - sz * 0.8, sz * 0.5, '#000'); K.poly([[fx - sz * 0.6, fy + sz], [fx - sz * 0.35, fy - sz * 0.4], [fx + sz * 0.35, fy - sz * 0.4], [fx + sz * 0.6, fy + sz]], '#000');
+    K.glow('#fff', 8); K.circle(fx - sz * 0.16, fy - sz * 0.85, 2 + c * 5, '#fff'); K.circle(fx + sz * 0.16, fy - sz * 0.85, 2 + c * 5, '#fff'); K.noGlow(); K.alpha(1);
+    K.darkness([{ x: s.lx, y: s.ly, r: 200 }], 0.82);
+    K.rect(0, 0, 960, 40, '#000'); K.rect(0, 500, 960, 40, '#000');
+    const per = 3.2, ph = (s.cycle % per) / per, r = 12 + ph * 34, good = ph > 0.8 || ph < 0.12;
+    K.ring(80, 440, 46, '#333', 3); K.ring(80, 440, r, good ? K.C.green : '#88a', 4); K.text('BREATHE', 80, 500, 12, '#aaa', 'center', 'd');
+    K.rect(160, 500, 200, 10, '#222'); K.rect(160, 500, 2 * s.panic, 10, s.panic > 70 ? K.C.red : '#a8a'); K.text('PANIC', 160, 490, 12, '#aaa', 'left', 'm');
+    K.text(`${3 + Math.floor(s.t / 36)}:${String(Math.floor((s.t % 36) / 36 * 60)).padStart(2, '0')} AM`, 920, 20, 18, '#9af', 'right', 'm');
+    if (s.panic > 60) { K.alpha((s.panic - 60) / 50); K.vignette(1); K.alpha(1); }
+  },
+  ai(s, dt) { const f = SPOTS[s.fig.i]; s.lx = K.lerp(s.lx, f[0], dt * 3); s.ly = K.lerp(s.ly, f[1], dt * 3); s.panic = 20; },
+});
+</script></body></html>

@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doll House</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"doll-house","n":13,"title":"DOLL HOUSE","genre":"horror","desc":"Seven dolls on the shelves. Every time you blink, one of them changes. Click the one that changed before the next blink, or it climbs one step closer.","controls":"Click the doll that changed","scoreLabel":"BLINKS","tasks":[{"stat":"score","target":15,"text":"Survive 15 blinks in Doll House"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SLOTS = [[140, 140], [300, 140], [460, 140], [620, 140], [780, 140], [220, 330], [540, 330]];
+const DRESS = ['#c04a6a', '#4a7ac0', '#7ac04a', '#c0a04a', '#8a4ac0', '#c06a4a', '#4ac0b0'];
+function doll(i) { return { i, x: SLOTS[i][0], y: SLOTS[i][1], dress: DRESS[i], head: 0, eyes: 'open', arm: 0, near: 0, hair: K.pick(['#3a2210', '#d8b060', '#1a1a1a', '#a03a1a']) }; }
+function change(s) {
+  const d = K.pick(s.dolls);
+  const t = K.pick(['head', 'eyes', 'arm', 'dress', 'swap']);
+  if (t === 'head') d.head = d.head ? 0 : K.pick([-1, 1]);
+  if (t === 'eyes') d.eyes = d.eyes === 'open' ? K.pick(['closed', 'black', 'red']) : 'open';
+  if (t === 'arm') d.arm = d.arm ? 0 : 1;
+  if (t === 'dress') d.dress = K.pick(DRESS.filter((c) => c !== d.dress));
+  if (t === 'swap') { const o = K.pick(s.dolls.filter((x) => x !== d)); [d.x, o.x, d.y, o.y] = [o.x, d.x, o.y, d.y]; s.changed = [d, o]; return; }
+  s.changed = [d];
+}
+function drawDoll(d) {
+  const sc = 1 + d.near * 0.5, x = d.x, y = d.y + d.near * 60;
+  const c = K.ctx(); c.save(); c.translate(x, y); c.scale(sc, sc);
+  K.poly([[-26, 70], [26, 70], [16, 10], [-16, 10]], d.dress);
+  K.line(-16, 22, d.arm ? -34 : -28, d.arm ? -4 : 46, '#f0d6c8', 6); K.line(16, 22, 28, 46, '#f0d6c8', 6);
+  c.rotate(d.head * 0.35);
+  K.circle(0, -10, 24, '#f6dfd2'); K.rect(-24, -38, 48, 18, d.hair, 8);
+  if (d.eyes === 'closed') { K.line(-12, -10, -4, -10, '#222', 2); K.line(4, -10, 12, -10, '#222', 2); }
+  else { const col = d.eyes === 'black' ? '#000' : d.eyes === 'red' ? '#f11' : '#2a3a6a'; K.circle(-8, -10, d.eyes === 'black' ? 6 : 4, col); K.circle(8, -10, d.eyes === 'black' ? 6 : 4, col); }
+  K.circle(0, 2, 3, '#c66'); c.restore();
+}
+K.game({
+  bg: '#0e0a0c',
+  init(s) { s.dolls = SLOTS.map((_, i) => doll(i)); s.blinks = 0; s.timer = 4; s.blink = 0; s.changed = null; s.answered = true; },
+  update(s, dt) {
+    if (s.blink > 0) { s.blink -= dt; if (s.blink <= 0.15 && !s.didChange) { change(s); s.didChange = true; s.answered = false; } return; }
+    s.timer -= dt;
+    if (K.mouse.clicked && !s.answered) {
+      const hit = s.dolls.find((d) => K.dist(K.mouse.x, K.mouse.y, d.x, d.y + d.near * 60 + 20) < 50 * (1 + d.near * 0.5));
+      if (hit) {
+        if (s.changed.includes(hit)) { s.answered = true; K.sfx('select'); K.burst(hit.x, hit.y, K.C.cyan, 14); s.blinks++; }
+        else { K.sfx('wrong'); s.changed[0].near++; s.answered = true; K.shake(6); }
+      }
+    }
+    if (s.timer <= 0) {
+      if (!s.answered && s.changed) { s.changed[0].near++; K.sfx('creak'); }
+      if (s.dolls.some((d) => d.near >= 3)) { K.sfx('scare'); K.shake(24); K.flash('#fff', 0.3); return K.end(s, { score: s.blinks, won: false, title: 'IT REACHED YOU', text: `You survived ${s.blinks} blinks.` }); }
+      if (s.blinks >= 25) return K.end(s, { score: 25, won: true, title: 'THEY STOPPED', text: 'Morning light. Just dolls again.' });
+      s.blink = 0.35; s.didChange = false; s.timer = Math.max(2.2, 5 - s.blinks * 0.12); if (!s.answered) s.answered = true;
+    }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#24161c'); for (let x = 0; x < 960; x += 48) K.rect(x, 0, 24, 540, 'rgba(255,255,255,0.02)');
+    [220, 410].forEach((y) => K.rect(60, y, 840, 16, '#4a2e22'));
+    s.dolls.slice().sort((a, b) => a.near - b.near).forEach(drawDoll);
+    K.vignette(0.85);
+    if (s.blink > 0) K.bg('#000');
+    K.text(`BLINKS ${s.blinks}`, 20, 24, 18, '#fff', 'left', 'd');
+    K.rect(780, 16, 160, 12, '#222'); K.rect(780, 16, 160 * Math.max(0, s.timer) / Math.max(2.2, 5 - s.blinks * 0.12), 12, '#ccc');
+    K.text('EYES OPEN', 860, 40, 12, '#888', 'center', 'm');
+    if (!s.answered && s.blink <= 0) K.text('SOMETHING CHANGED', 480, 510, 18, '#f88', 'center', 'd');
+  },
+  ai(s) { if (!s.answered && s.timer < 2 && s.changed) { const d = s.changed[0]; K.vmouse(d.x, d.y + d.near * 60 + 20, true); } },
+});
+</script></body></html>

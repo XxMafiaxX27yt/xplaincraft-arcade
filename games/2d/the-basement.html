@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Basement</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-basement","n":10,"title":"THE BASEMENT","genre":"horror","desc":"Keep the old generator running until morning. Feed it fuel, swap blown fuses, vent the pressure. When the lights die, something comes down the stairs.","controls":"Mouse: hold on the fuel can · click blown fuses · click the valve","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":120,"text":"Keep the lights on 120s in The Basement"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CAN = { x: 80, y: 330, w: 110, h: 140 }, VALVE = { x: 700, y: 120, r: 46 }, FUSE = { x: 470, y: 90, w: 180, h: 200 };
+K.game({
+  bg: '#0a0806',
+  init(s) { s.t = 0; s.fuel = 70; s.press = 30; s.fuses = [1, 1, 1, 1]; s.thing = 0; s.loud = 0; s.blow = 5; },
+  update(s, dt) {
+    s.t += dt;
+    const m = K.mouse, lv = 1 + s.t / 60;
+    s.fuel = Math.max(0, s.fuel - dt * 3.2 * lv);
+    if (m.down && K.inRect(m.x, m.y, CAN)) { s.fuel = Math.min(100, s.fuel + dt * 18); s.loud += dt * 0.4; if (Math.random() < 0.2) K.sfx('drip'); }
+    s.press = Math.min(100, s.press + dt * 4.5 * lv);
+    if (m.clicked && K.dist(m.x, m.y, VALVE.x, VALVE.y) < VALVE.r) { s.press = Math.max(0, s.press - 35); s.loud += 1.2; K.noise(0.5, 0.15, 3000); K.burst(VALVE.x, VALVE.y - 40, '#ddd', 20, 160); }
+    s.blow -= dt; if (s.blow <= 0) { s.blow = K.rand(4, 9) / lv; const ok = s.fuses.map((f, i) => (f ? i : -1)).filter((i) => i >= 0); if (ok.length) { s.fuses[K.pick(ok)] = 0; K.sfx('hit'); K.flash('#fff', 0.05); } }
+    s.fuses.forEach((f, i) => { if (!f && m.clicked && K.inRect(m.x, m.y, { x: FUSE.x + 20 + i * 38, y: FUSE.y + 60, w: 30, h: 90 })) { s.fuses[i] = 1; K.sfx('select'); } });
+    if (s.press >= 100) { K.sfx('boom'); K.shake(25); return K.end(s, { score: Math.floor(s.t), won: false, title: 'BOILER BLEW', text: 'You forgot the pressure valve.' }); }
+    const power = s.fuel > 0 && s.fuses.filter(Boolean).length >= 2;
+    s.lit = power ? (s.fuses.filter(Boolean).length / 4) * Math.min(1, s.fuel / 25) : 0;
+    s.loud = Math.max(0, s.loud - dt * 0.5);
+    s.thing = K.clamp(s.thing + dt * ((s.lit < 0.4 ? 9 : -5) + s.loud * 2), 0, 100);
+    if (s.thing > 60 && Math.random() < dt * 2) K.sfx('step');
+    if (s.thing >= 100) { K.sfx('scare'); K.shake(25); K.flash('#300', 0.4); return K.end(s, { score: Math.floor(s.t), won: false, title: 'IT CAME DOWN', text: `The lights died at ${Math.floor(s.t)} seconds.` }); }
+    if (s.t >= 240) K.end(s, { score: 240, won: true, title: 'MORNING', text: 'Daylight through the cellar window. The stairs are empty.' });
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#1a1612'); for (let x = 0; x < 960; x += 64) for (let y = 0; y < 400; y += 32) K.stroke(x + ((y / 32) % 2) * 32, y, 64, 32, '#241e18', 2);
+    K.rect(0, 400, 960, 140, '#100e0c');
+    // stairs
+    for (let i = 0; i < 8; i++) K.rect(820 + i * 0, 120 + i * 35, 140 - i * 4, 14, '#2a221a');
+    if (s.thing > 20) { const k = s.thing / 100; K.alpha(k); K.circle(890, 140 + k * 200, 26 + k * 20, '#000'); K.circle(880, 135 + k * 200, 3 + k * 2, '#f22'); K.circle(900, 135 + k * 200, 3 + k * 2, '#f22'); K.alpha(1); }
+    // generator
+    K.rect(240, 300, 300, 160, '#3a4a3a', 10); K.rect(260, 320, 120, 60, '#222'); K.rect(264, 324, 112 * (s.fuel / 100), 52, s.fuel < 25 ? '#a33' : '#7a6'); K.text('FUEL', 320, 395, 14, '#cdc', 'center', 'd');
+    for (let i = 0; i < 3; i++) K.circle(430 + i * 30, 350 + Math.sin(K.time() * 20 + i) * (s.fuel > 0 ? 2 : 0), 10, '#2a3a2a');
+    // can
+    K.rect(CAN.x, CAN.y, CAN.w, CAN.h, K.mouse.down && K.inRect(K.mouse.x, K.mouse.y, CAN) ? '#c33' : '#a22', 10); K.rect(CAN.x + 70, CAN.y - 20, 24, 24, '#811'); K.text('FUEL', CAN.x + 55, CAN.y + 70, 18, '#fdd', 'center', 'd'); K.text('HOLD', CAN.x + 55, CAN.y + 95, 12, '#fcc', 'center', 'm');
+    // fuse box
+    K.rect(FUSE.x, FUSE.y, FUSE.w, FUSE.h, '#2c2c34', 6); K.text('FUSES', FUSE.x + 90, FUSE.y + 30, 16, '#ccd', 'center', 'd');
+    s.fuses.forEach((f, i) => { const x = FUSE.x + 20 + i * 38; K.rect(x, FUSE.y + 60, 30, 90, '#111', 4); K.rect(x + 5, FUSE.y + 70, 20, 70, f ? '#5c8' : '#422', 3); if (!f) { K.text('✕', x + 15, FUSE.y + 105, 18, '#f55', 'center'); } });
+    // valve
+    K.rect(VALVE.x - 8, VALVE.y, 16, 200, '#555'); K.ring(VALVE.x, VALVE.y, VALVE.r, '#a33', 8); K.line(VALVE.x - VALVE.r, VALVE.y, VALVE.x + VALVE.r, VALVE.y, '#a33', 6); K.line(VALVE.x, VALVE.y - VALVE.r, VALVE.x, VALVE.y + VALVE.r, '#a33', 6);
+    K.rect(620, 210, 160, 16, '#222'); K.rect(620, 210, 1.6 * s.press, 16, s.press > 75 ? '#f33' : '#da3'); K.text('PRESSURE', 700, 240, 14, '#dcc', 'center', 'd');
+    // bulb + darkness
+    K.line(480, 0, 480, 40, '#333', 2); K.circle(480, 48, 12, s.lit > 0.05 ? '#ffe9a0' : '#333');
+    const flick = s.lit < 0.6 && Math.random() < 0.15 ? 0.3 : 1;
+    K.alpha(K.clamp(1 - s.lit * flick, 0, 0.93)); K.bg('#000'); K.alpha(1);
+    if (s.lit < 0.4) { K.alpha(0.6); K.text('THE LIGHTS ARE DYING', 480, 500, 22, '#f44', 'center', 'd'); K.alpha(1); }
+    K.text(`${Math.floor(s.t)}s / 240`, 20, 24, 18, '#fff', 'left', 'd');
+    K.text('STAIRS', 890, 100, 14, s.thing > 50 ? '#f44' : '#666', 'center', 'd');
+  },
+  ai(s) { K.vmouse(CAN.x + 50, CAN.y + 50, false, s.fuel < 80); if (s.press > 60) K.vmouse(VALVE.x, VALVE.y, true); const b = s.fuses.indexOf(0); if (b >= 0) K.vmouse(FUSE.x + 35 + b * 38, FUSE.y + 100, true); },
+});
+</script></body></html>

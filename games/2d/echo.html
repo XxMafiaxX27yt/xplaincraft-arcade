@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Echo</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"echo","n":16,"title":"ECHO","genre":"horror","desc":"You are blind. Clap and the sound shows you the walls for a moment. But the thing in the dark hunts by sound, and it heads to every clap you make.","controls":"WASD move · SPACE clap","scoreLabel":"ROOMS","tasks":[{"stat":"score","target":3,"text":"Find 3 exits in Echo"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function level(s) {
+  s.walls = [];
+  for (let i = 0; i < 14 + s.lv * 3; i++) { const v = Math.random() < 0.5; s.walls.push({ x: K.rand(80, 820), y: K.rand(60, 440), w: v ? 18 : K.rand(80, 220), h: v ? K.rand(80, 200) : 18 }); }
+  s.walls = s.walls.filter((w) => !K.rectHit(w, { x: 20, y: 220, w: 120, h: 120 }) && !K.rectHit(w, { x: 820, y: 200, w: 140, h: 140 }));
+  s.p = { x: 60, y: 270 }; s.exit = { x: 900, y: 270 }; s.mon = { x: 900, y: K.pick([60, 480]), tx: 480, ty: 270 }; s.rings = []; s.reveal = [];
+}
+const blocked = (s, x, y) => x < 10 || x > 950 || y < 10 || y > 530 || s.walls.some((w) => x > w.x - 9 && x < w.x + w.w + 9 && y > w.y - 9 && y < w.y + w.h + 9);
+K.game({
+  bg: '#000',
+  init(s) { s.lv = 0; s.cool = 0; level(s); },
+  update(s, dt) {
+    const d = K.dir(), sp = 110;
+    if (!blocked(s, s.p.x + d.x * sp * dt, s.p.y)) s.p.x += d.x * sp * dt;
+    if (!blocked(s, s.p.x, s.p.y + d.y * sp * dt)) s.p.y += d.y * sp * dt;
+    s.cool -= dt;
+    if (K.tap('Space') && s.cool <= 0) { s.rings.push({ x: s.p.x, y: s.p.y, r: 0 }); s.mon.tx = s.p.x; s.mon.ty = s.p.y; s.cool = 0.8; K.noise(0.08, 0.2, 2500); }
+    if ((d.x || d.y) && Math.random() < dt * 0.6) { s.mon.tx = s.p.x + K.rand(-120, 120); s.mon.ty = s.p.y + K.rand(-120, 120); }
+    s.rings.forEach((r) => { r.r += 420 * dt; });
+    s.rings = s.rings.filter((r) => r.r < 700);
+    s.walls.forEach((w) => s.rings.forEach((r) => { const cx = K.clamp(r.x, w.x, w.x + w.w), cy = K.clamp(r.y, w.y, w.y + w.h); if (Math.abs(K.dist(cx, cy, r.x, r.y) - r.r) < 12) w.lit = 1.6; }));
+    s.walls.forEach((w) => (w.lit = Math.max(0, (w.lit || 0) - dt)));
+    s.rings.forEach((r) => { if (Math.abs(K.dist(r.x, r.y, s.exit.x, s.exit.y) - r.r) < 14) s.exitLit = 2; if (Math.abs(K.dist(r.x, r.y, s.mon.x, s.mon.y) - r.r) < 14) s.monLit = 1.2; });
+    s.exitLit = Math.max(0, (s.exitLit || 0) - dt); s.monLit = Math.max(0, (s.monLit || 0) - dt);
+    const m = s.mon, a = Math.atan2(m.ty - m.y, m.tx - m.x);
+    if (K.dist(m.x, m.y, m.tx, m.ty) > 6) { m.x += Math.cos(a) * (70 + s.lv * 12) * dt; m.y += Math.sin(a) * (70 + s.lv * 12) * dt; }
+    if (K.dist(m, s.p) < 20) { K.sfx('scare'); K.shake(22); K.flash('#fff', 0.3); return K.end(s, { score: s.lv, won: false, title: 'IT HEARD YOU', text: `${s.lv} rooms escaped.` }); }
+    if (K.dist(s.p, s.exit) < 26) { s.lv++; K.sfx('win'); level(s); }
+  },
+  draw(s) {
+    s.rings.forEach((r) => { K.alpha(Math.max(0, 1 - r.r / 700) * 0.6); K.ring(r.x, r.y, r.r, '#7fd0ff', 2); }); K.alpha(1);
+    s.walls.forEach((w) => { if (w.lit > 0) { K.alpha(Math.min(1, w.lit)); K.glow('#7fd0ff', 12); K.stroke(w.x, w.y, w.w, w.h, '#a8e2ff', 2); K.noGlow(); } }); K.alpha(1);
+    if (s.exitLit > 0) { K.alpha(Math.min(1, s.exitLit)); K.glow(K.C.green, 20); K.ring(s.exit.x, s.exit.y, 22, K.C.green, 3); K.text('EXIT', s.exit.x, s.exit.y, 12, K.C.green, 'center', 'd'); K.noGlow(); K.alpha(1); }
+    if (s.monLit > 0) { K.alpha(Math.min(1, s.monLit)); K.glow('#f00', 16); K.ring(s.mon.x, s.mon.y, 16, '#ff3344', 3); K.noGlow(); K.alpha(1); }
+    K.circle(s.p.x, s.p.y, 6, '#cfe8ff');
+    const near = 1 - K.clamp(K.dist(s.mon, s.p) / 260, 0, 1); if (near > 0) { K.alpha(near * 0.6); K.vignette(1); K.rect(0, 0, 960, 540, 'rgba(90,0,0,0.3)'); K.alpha(1); }
+    K.text(`ROOM ${s.lv + 1}`, 20, 22, 16, '#7fd0ff', 'left', 'd'); K.text('SPACE = CLAP', 940, 22, 14, '#456', 'right', 'm');
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 0) - dt; if (s.aiT <= 0) { s.aiT = 0.9; K.vtap('Space'); } K.vhold('ArrowRight', true); },
+});
+</script></body></html>

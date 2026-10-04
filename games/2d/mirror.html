@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mirror</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mirror","n":20,"title":"MIRROR","genre":"horror","desc":"Your reflection copies every move, but it lives in a different room. Things hunt it on the other side of the glass. If your reflection dies, so do you. Grab the candles on both sides.","controls":"WASD / arrows move you AND your mirrored reflection","scoreLabel":"CANDLES","tasks":[{"stat":"score","target":10,"text":"Collect 10 candles in Mirror"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const HW = 470;
+function spawnCandle(s) { s.candle = { side: K.irand(0, 1), x: K.rand(40, HW - 40), y: K.rand(60, 500) }; }
+K.game({
+  bg: '#08070c',
+  init(s) { s.p = { x: 235, y: 300 }; s.score = 0; s.hands = []; s.t = 0; s.spawn = 2; spawnCandle(s); s.glitch = 0; },
+  update(s, dt) {
+    s.t += dt; const d = K.dir();
+    s.p.x = K.clamp(s.p.x + d.x * 170 * dt, 15, HW - 15); s.p.y = K.clamp(s.p.y + d.y * 170 * dt, 40, 525);
+    const pos = [{ x: s.p.x, y: s.p.y }, { x: HW - s.p.x, y: s.p.y }];
+    const c = s.candle; if (K.dist(pos[c.side], c) < 22) { s.score++; K.sfx('chime'); K.burst(c.side ? c.x + 490 : c.x, c.y, K.C.gold, 14); spawnCandle(s); }
+    s.spawn -= dt; if (s.spawn <= 0) { s.spawn = Math.max(0.7, 2.6 - s.t * 0.02); s.hands.push({ side: K.irand(0, 1), x: K.rand(20, HW - 20), y: K.pick([30, 530]), vy: 0, sp: K.rand(80, 140) + s.t }); }
+    s.hands.forEach((h) => { const tgt = pos[h.side], a = Math.atan2(tgt.y - h.y, tgt.x - h.x); h.x += Math.cos(a) * h.sp * dt * 0.6; h.y += Math.sin(a) * h.sp * dt; h.life = (h.life || 0) + dt; if (K.dist(h, tgt) < 20) s.dead = h.side; });
+    s.hands = s.hands.filter((h) => h.life < 6);
+    s.glitch = Math.max(0, s.glitch - dt); if (Math.random() < dt * 0.3) s.glitch = 0.2;
+    if (s.dead !== undefined) { K.sfx('scare'); K.shake(22); K.flash('#fff', 0.3); K.end(s, { score: s.score, won: false, title: s.dead ? 'YOUR REFLECTION DIED' : 'THEY GOT YOU', text: `${s.score} candles.` }); }
+  },
+  draw(s) {
+    [0, 1].forEach((side) => {
+      const ox = side ? 490 : 0;
+      K.rect(ox, 0, HW, 540, side ? '#141022' : '#101418');
+      for (let y = 40; y < 540; y += 40) K.line(ox, y, ox + HW, y, side ? '#1c1630' : '#161c22', 1);
+      const px = side ? HW - s.p.x : s.p.x;
+      K.circle(ox + px, s.p.y, 12, side ? '#c9b8ff' : '#e8f0ff');
+      if (side) { K.circle(ox + px - 4, s.p.y - 2, 2, s.glitch > 0 ? '#f00' : '#000'); K.circle(ox + px + 4, s.p.y - 2, 2, s.glitch > 0 ? '#f00' : '#000'); }
+      if (s.candle.side === side) { K.glow(K.C.gold, 14); K.circle(ox + s.candle.x, s.candle.y - 10, 5, K.C.gold); K.noGlow(); K.rect(ox + s.candle.x - 3, s.candle.y - 5, 6, 12, '#ddd'); }
+      s.hands.filter((h) => h.side === side).forEach((h) => { K.circle(ox + h.x, h.y, 10, '#0a0a0a'); for (let i = -2; i <= 2; i++) K.line(ox + h.x, h.y, ox + h.x + i * 5, h.y - 16, '#0a0a0a', 3); });
+    });
+    K.rect(470, 0, 20, 540, '#8a8aa0'); K.rect(474, 0, 4, 540, '#dde');
+    K.text(`CANDLES ${s.score}`, 20, 20, 18, K.C.gold, 'left', 'd'); K.text('REFLECTION', 940, 20, 14, '#a9f', 'right', 'd');
+    if (s.glitch > 0) { K.alpha(0.3); K.rect(490, K.rand(540), HW, 20, '#fff'); K.alpha(1); }
+  },
+  ai(s) { ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false)); const c = s.candle, tx = c.side ? HW - c.x : c.x; if (tx > s.p.x + 6) K.vhold('ArrowRight'); if (tx < s.p.x - 6) K.vhold('ArrowLeft'); if (c.y > s.p.y + 6) K.vhold('ArrowDown'); if (c.y < s.p.y - 6) K.vhold('ArrowUp'); },
+});
+</script></body></html>

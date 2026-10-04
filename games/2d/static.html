@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Static</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"static","n":9,"title":"STATIC","genre":"horror","desc":"An old TV at 3 AM. Somewhere in the channels a broadcast flashes four digits. Find all four and type the code. But channel 13 is not empty, and the face gets closer every time you land on it.","controls":"↑ / ↓ change channel · type digits 0-9 to enter the code · Backspace","scoreLabel":"POINTS","tasks":[{"stat":"score","target":1,"text":"Crack the code in Static"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+K.game({
+  bg: '#050505',
+  init(s) {
+    s.code = Array.from({ length: 4 }, () => K.irand(0, 9)); s.where = K.shuffle([2, 5, 7, 9, 11, 15, 17, 19]).slice(0, 4);
+    s.ch = 1; s.t = 0; s.face = 0; s.input = ''; s.seen = [false, false, false, false]; s.tries = 3; s.msg = ''; s.chT = 0;
+  },
+  update(s, dt) {
+    s.t += dt; s.chT += dt;
+    const d = K.tapDir(); if (d === 'up' || d === 'down') { s.ch = K.wrap(s.ch - 1 + (d === 'up' ? 1 : -1), 20) + 1; s.chT = 0; K.noise(0.1, 0.05, 2500); if (s.ch === 13) { s.face++; K.sfx(s.face > 3 ? 'scare' : 'whisper'); if (s.face >= 6) { K.shake(25); return K.end(s, { score: s.seen.filter(Boolean).length * 50, won: false, title: 'IT CAME THROUGH', text: 'You watched channel 13 too many times.' }); } } }
+    for (let i = 0; i <= 9; i++) if (K.tap('Digit' + i, 'Numpad' + i) && s.input.length < 4) { s.input += i; K.sfx('click'); }
+    if (K.tap('Backspace')) s.input = s.input.slice(0, -1);
+    const idx = s.where.indexOf(s.ch); if (idx >= 0 && Math.sin(s.chT * 3) > 0.2) s.seen[idx] = true;
+    if (s.input.length === 4) {
+      if (s.input === s.code.join('')) return K.end(s, { score: 500 + Math.max(0, 300 - Math.floor(s.t)) * 2 - s.face * 40, won: true, title: 'SIGNAL LOST', text: 'The TV goes dark. Whatever was broadcasting has stopped.' });
+      s.tries--; s.msg = 'WRONG CODE'; s.input = ''; K.sfx('wrong'); K.shake(6);
+      if (s.tries <= 0) return K.end(s, { score: s.seen.filter(Boolean).length * 50, won: false, title: 'NO SIGNAL', text: `The code was ${s.code.join('')}.` });
+    }
+  },
+  draw(s) {
+    K.rect(60, 30, 840, 470, '#2a221c', 30); K.rect(90, 60, 680, 410, '#000', 24);
+    const c = K.ctx(); c.save(); c.beginPath(); c.roundRect(90, 60, 680, 410, 24); c.clip();
+    const idx = s.where.indexOf(s.ch);
+    if (s.ch === 13) {
+      K.bg('#0a0a0a'); const sz = 60 + s.face * 45 + Math.sin(K.time() * 8) * 3;
+      K.circle(430, 265, sz, '#d8d8d8'); K.circle(430 - sz * 0.35, 245, sz * 0.14, '#000'); K.circle(430 + sz * 0.35, 245, sz * 0.14, '#000'); K.rect(430 - sz * 0.4, 265 + sz * 0.35, sz * 0.8, sz * 0.12, '#000', 4);
+    } else if (idx >= 0) {
+      K.bg('#0a1a3a'); K.text('EMERGENCY BROADCAST', 430, 120, 26, '#fff', 'center', 'm');
+      if (Math.sin(s.chT * 3) > 0.2) { K.text(`DIGIT ${idx + 1}`, 430, 210, 28, '#9cf', 'center', 'd'); K.text(String(s.code[idx]), 430, 300, 110, '#fff', 'center', 'd', 20); }
+      else K.text('PLEASE STAND BY', 430, 280, 28, '#9cf', 'center', 'm');
+    } else if (s.ch % 3 === 0) { const bars = ['#ccc', '#cc0', '#0cc', '#0c0', '#c0c', '#c00', '#00c']; bars.forEach((b, i) => K.rect(90 + i * 97, 60, 97, 300, b)); K.rect(90, 360, 680, 110, '#111'); }
+    for (let i = 0; i < 900; i++) { const g = K.irand(0, 255); K.alpha(s.ch === 13 ? 0.15 : idx >= 0 ? 0.25 : 0.9); K.rect(90 + K.rand(680), 60 + K.rand(410), 3, 3, `rgb(${g},${g},${g})`); }
+    K.alpha(1); for (let y = 60; y < 470; y += 4) K.rect(90, y, 680, 1, 'rgba(0,0,0,0.35)');
+    c.restore();
+    K.text(`CH ${String(s.ch).padStart(2, '0')}`, 700, 90, 26, '#3f6', 'right', 'm', 10);
+    K.rect(790, 80, 90, 380, '#1a1410', 8);
+    K.circle(835, 140, 26, '#3a2a20'); K.circle(835, 220, 26, '#3a2a20'); K.text('CODE', 835, 290, 16, '#aa8', 'center', 'd');
+    for (let i = 0; i < 4; i++) { K.rect(800 + (i % 2) * 40, 310 + Math.floor(i / 2) * 50, 34, 42, '#0a0a0a', 4); K.text(s.input[i] ?? '_', 817 + (i % 2) * 40, 331 + Math.floor(i / 2) * 50, 24, '#3f6', 'center', 'm'); }
+    K.text(`TRIES ${s.tries}`, 835, 430, 14, s.tries === 1 ? '#f44' : '#aa8', 'center', 'm');
+    K.text('SEEN: ' + s.seen.map((v, i) => (v ? s.code[i] : '?')).join(' '), 480, 520, 18, '#cfc', 'center', 'm');
+    if (s.face > 0) K.text('13 ' + '■'.repeat(s.face) + '□'.repeat(6 - s.face), 140, 520, 16, '#f44', 'center', 'm');
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 0) - dt; if (s.aiT <= 0) { s.aiT = 1.2; K.vtap('ArrowUp'); } },
+});
+</script></body></html>

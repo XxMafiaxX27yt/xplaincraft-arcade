@@ -1,0 +1,226 @@
+/* Every cosmetic look. Palette colors arrive as CSS variables:
+   skins/banners --c1 --c2 --c3 --cd · frames --f1.. · callsign plates --p1.. · name effects --e1.. */
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes hue { to { filter: hue-rotate(360deg); } }
+@keyframes huefast { to { filter: hue-rotate(360deg) saturate(1.6); } }
+@keyframes shinef { 50% { filter: brightness(1.35) drop-shadow(0 0 6px var(--c1, #fff)); } }
+@keyframes pulsef { 50% { filter: drop-shadow(0 0 8px var(--c1, #ff2bd6)) brightness(1.15); } }
+@keyframes aurf { 0%, 100% { filter: drop-shadow(0 0 4px #fff); } 50% { filter: drop-shadow(0 0 12px #c45cff); } }
+@keyframes glitchf { 0%, 86%, 100% { transform: none; filter: none; } 88% { transform: translate(2px, -1px); filter: hue-rotate(90deg) saturate(3); } 92% { transform: translate(-2px, 1px); filter: hue-rotate(-120deg); } 95% { filter: invert(1); } }
+@keyframes bob { 50% { transform: translateY(-12%); } }
+@keyframes drift { to { background-position: 400px 0, 0 0; } }
+
+/* palette effects on skins, pets, badges */
+.pfx-shine { animation: shinef 3s ease-in-out infinite; }
+.pfx-pulse { animation: pulsef 2s ease-in-out infinite; }
+.pfx-holo { animation: hue 6s linear infinite; }
+.pfx-prism { animation: huefast 3s linear infinite; }
+.pfx-glitch { animation: glitchf 2.4s steps(1) infinite; }
+.pfx-aura { animation: aurf 2.5s ease-in-out infinite; }
+
+/* ---------- avatar + frames ---------- */
+.av { --s: 44px; position: relative; display: inline-grid; place-items: center; width: var(--s); height: var(--s); flex: none; border-radius: 50%; isolation: isolate;
+  background: radial-gradient(circle at 50% 35%, #2a2160, #0b0920); box-shadow: inset 0 0 0 1px rgba(150,120,255,.3); --f1: #22e6ff; --f2: #ff2bd6; --f3: #f6ff3a; }
+.av-svg { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: block; }
+.av::before, .av::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; pointer-events: none; animation: var(--fa, none), var(--fxa, none); }
+.av::after { animation: var(--fa2, none); }
+.fr-none::before, .fr-none::after, .av:not([class*="fr-"])::before { display: none; }
+.ffx-holo, .ffx-prism { --fxa: hue 5s linear infinite; }
+.ffx-shine, .ffx-aura { --fxa: shinef 3s ease-in-out infinite; }
+.ffx-pulse { --fxa: pulsef 2s ease-in-out infinite; }
+.ffx-glitch { --fxa: glitchf 2.4s steps(1) infinite; }
+.av[class*="fr-"]:not(.fr-orbit):not(.fr-wings):not(.fr-crown):not(.fr-chain)::after { display: none; }
+.ring-mask { -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); }
+
+.fr-ring::before { border: 2px solid var(--f1); box-shadow: 0 0 10px var(--f1), inset 0 0 6px var(--f1); }
+.fr-dual::before { inset: -5px; background: linear-gradient(135deg, var(--f1), var(--f2)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+.fr-spin::before { inset: -6px; border: 3px dashed var(--f1); --fa: spin 6s linear infinite; filter: drop-shadow(0 0 4px var(--f1)); }
+.fr-orbit::before { inset: -6px; border: 1px solid color-mix(in srgb, var(--f2) 70%, transparent); }
+.fr-orbit::after { inset: -6px; background: radial-gradient(circle at 50% 0, var(--f1) 0 4%, transparent 5%), radial-gradient(circle at 50% 100%, var(--f3) 0 3%, transparent 4%); --fa2: spin 3s linear infinite; filter: drop-shadow(0 0 4px var(--f1)); }
+.fr-flame::before { inset: -7px; background: conic-gradient(var(--f1), var(--f3), var(--f2), var(--f3), var(--f1)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px)); --fa: spin 1.4s linear infinite; filter: blur(.6px) drop-shadow(0 0 8px var(--f1)); }
+.fr-pulse::before { border: 3px solid var(--f1); --fa: framepulse 1.6s ease-in-out infinite; }
+@keyframes framepulse { 50% { box-shadow: 0 0 18px var(--f1), 0 0 4px var(--f2); transform: scale(1.06); } }
+.fr-hex::before { inset: -8%; border-radius: 0; z-index: -1; background: linear-gradient(135deg, var(--f1), var(--f2)); clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+.fr-square::before { inset: -5px; border-radius: 22%; border: 3px solid var(--f1); box-shadow: 0 0 12px var(--f1), inset 0 0 8px var(--f2); }
+.fr-spikes::before { inset: -9px; background: repeating-conic-gradient(var(--f1) 0 8deg, transparent 8deg 18deg); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); --fa: spin 20s linear infinite; }
+.fr-wings::before { inset: 10% -38%; border-radius: 0; z-index: -1; background: radial-gradient(ellipse at 0 50%, var(--f1) 0 30%, transparent 31%), radial-gradient(ellipse at 100% 50%, var(--f1) 0 30%, transparent 31%); opacity: .85; filter: drop-shadow(0 0 6px var(--f1)); -webkit-mask: repeating-linear-gradient(0deg, #000 0 6%, transparent 6% 9%); mask: repeating-linear-gradient(0deg, #000 0 6%, transparent 6% 9%); }
+.fr-wings::after { inset: -3px; border: 2px solid var(--f2); }
+.fr-crown::before { border: 2px solid var(--f2); box-shadow: 0 0 8px var(--f2); }
+.fr-crown::after { inset: -34% 22% 76%; border-radius: 0; background: var(--f1); clip-path: polygon(0 100%, 0 20%, 25% 60%, 50% 0, 75% 60%, 100% 20%, 100% 100%); filter: drop-shadow(0 0 6px var(--f1)); }
+.fr-bolt::before { inset: -6px; border: 3px double var(--f1); --fa: boltflick 1.8s steps(1) infinite; }
+@keyframes boltflick { 0%, 100% { box-shadow: 0 0 14px var(--f1); opacity: 1; } 40% { opacity: .4; box-shadow: none; } 45% { opacity: 1; } 70% { box-shadow: 0 0 22px var(--f3); } }
+.fr-pixel::before { inset: -6px; border-radius: 0; border: 4px dotted var(--f1); --fa: pixspin 2s steps(4) infinite; }
+@keyframes pixspin { to { transform: rotate(90deg); } }
+.fr-gear::before { inset: -8px; background: repeating-conic-gradient(var(--f2) 0 12deg, transparent 12deg 30deg); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px)); mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px)); --fa: spin 10s linear infinite; box-shadow: inset 0 0 0 3px var(--f1); }
+.fr-petals::before { inset: -8px; background: repeating-conic-gradient(var(--f1) 0 15deg, var(--f2) 15deg 30deg); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px)); mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px)); --fa: spin 14s linear infinite reverse; filter: drop-shadow(0 0 5px var(--f1)); }
+.fr-chain::before { inset: -6px; border: 4px dashed var(--f2); }
+.fr-chain::after { inset: -6px; border: 2px dotted var(--f1); --fa2: spin 30s linear infinite; }
+
+/* pet next to avatar */
+.avw { position: relative; display: inline-block; width: var(--s); height: var(--s); flex: none; }
+.avw > .av { position: absolute; inset: 0; }
+.pet { position: absolute; width: 46%; height: 46%; right: -26%; bottom: -6%; animation: bob 1.8s ease-in-out infinite; filter: drop-shadow(0 3px 4px rgba(0,0,0,.6)); }
+.pet-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.pv-pet { display: block; width: 70px; height: 70px; animation: bob 1.8s ease-in-out infinite; }
+.pv-pet svg { width: 100%; height: 100%; }
+
+/* ---------- callsign: plates (outer) + name effects (inner .cs-t) ---------- */
+.cs { display: inline-block; font-weight: 700; font-size: calc(17px * var(--fs, 1)); letter-spacing: 1px; line-height: 1.25; padding: 1px 0; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; position: relative;
+  --p1: #22e6ff; --p2: #3b3580; --p3: #ff2bd6; --pd: #1d1a44; --e1: #ff2bd6; --e2: #22e6ff; --e3: #f6ff3a; }
+.cs-t { font-weight: inherit; display: inline; }
+.cs.sm { font-size: calc(14px * var(--fs, 1)); }
+.cs.lg { font-size: calc(24px * var(--fs, 1)); }
+.cs.xl { font-size: calc(clamp(28px, 4vw, 42px) * var(--fs, 1)); letter-spacing: 2px; justify-self: start; }
+.cs:not(.np-none) { padding: 2px 12px; border-radius: 5px; }
+.cs.sm:not(.np-none) { padding: 1px 8px; }
+.np-solid { background: color-mix(in srgb, var(--p1) 22%, var(--pd)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 60%, transparent); }
+.np-edge { background: rgba(8,6,20,.85); box-shadow: inset 0 0 0 1px var(--p1), 0 0 10px color-mix(in srgb, var(--p1) 40%, transparent); }
+.np-gradient { background: linear-gradient(90deg, var(--p1), var(--p2)); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+.np-hazard { color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; background: repeating-linear-gradient(-45deg, var(--p1) 0 10px, var(--pd) 10px 20px); box-shadow: inset 0 0 0 1px #000; }
+.np-carbon { background: repeating-linear-gradient(45deg, #15151c 0 3px, #22222c 3px 6px), #111; box-shadow: inset 0 0 0 1px var(--p1); }
+.np-dots { background: radial-gradient(color-mix(in srgb, var(--p1) 55%, transparent) 1.2px, transparent 1.6px) 0 0/7px 7px, var(--pd); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 50%, transparent); }
+.np-checker { background: conic-gradient(color-mix(in srgb, var(--p1) 35%, var(--pd)) 25%, var(--pd) 0 50%, color-mix(in srgb, var(--p1) 35%, var(--pd)) 0 75%, var(--pd) 0) 0 0/12px 12px; text-shadow: 0 1px 2px #000; }
+.np-glitch { background: var(--pd); text-shadow: 2px 0 var(--p1), -2px 0 var(--p3); animation: npglitch 2s steps(1) infinite; }
+@keyframes npglitch { 0%, 80%, 100% { text-shadow: 2px 0 var(--p1), -2px 0 var(--p3); } 85% { text-shadow: -3px 1px var(--p1), 3px -1px var(--p3); } 90% { text-shadow: 1px -1px var(--p1), -1px 2px var(--p3); } }
+.np-holo { color: #170a28; background: linear-gradient(110deg, var(--p1), #fff, var(--p2), var(--p3), var(--p1)); background-size: 300% 100%; animation: slide 4s linear infinite; }
+.np-scan { background: linear-gradient(transparent 40%, color-mix(in srgb, var(--p1) 60%, transparent) 50%, transparent 60%) 0 0/100% 300%, var(--pd); animation: scanv 2s linear infinite; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 50%, transparent); }
+@keyframes scanv { to { background-position: 0 300%, 0 0; } }
+.np-fire { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); background: linear-gradient(90deg, var(--pd), var(--p1), var(--p3), var(--p1), var(--pd)); background-size: 200% 100%; animation: slide 3s linear infinite; }
+.np-liquid { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: radial-gradient(circle at 20% 50%, var(--p1), transparent 40%), radial-gradient(circle at 80% 50%, var(--p3), transparent 40%), var(--p2); background-size: 200% 100%; animation: slide 5s ease-in-out infinite alternate; }
+.np-chevron { background: linear-gradient(135deg, color-mix(in srgb, var(--p1) 45%, transparent) 25%, transparent 25%) -6px 0/12px 12px, linear-gradient(225deg, color-mix(in srgb, var(--p1) 45%, transparent) 25%, transparent 25%) -6px 0/12px 12px, var(--pd); text-shadow: 0 1px 2px #000; }
+.np-split { color: #fff; text-shadow: 0 1px 3px #000; background: linear-gradient(115deg, var(--p1) 50%, var(--p2) 50%); }
+.np-outline { background: transparent; box-shadow: inset 0 0 0 2px var(--p1), 0 0 12px color-mix(in srgb, var(--p1) 50%, transparent), inset 0 0 10px color-mix(in srgb, var(--p1) 40%, transparent); }
+.np-tape { color: #111; background: var(--p1); transform: skewX(-8deg); box-shadow: 2px 2px 0 rgba(0,0,0,.5); }
+.np-chip { background: linear-gradient(90deg, transparent 48%, color-mix(in srgb, var(--p1) 50%, transparent) 48% 52%, transparent 52%) 0 0/16px 100%, linear-gradient(transparent 45%, color-mix(in srgb, var(--p1) 40%, transparent) 45% 55%, transparent 55%), var(--pd); box-shadow: inset 0 0 0 1px var(--p1); text-shadow: 0 0 4px #000; }
+.np-brush { color: #fff; text-shadow: 0 1px 2px #000; background: var(--p1); clip-path: polygon(2% 12%, 30% 0, 60% 8%, 98% 2%, 100% 70%, 94% 100%, 55% 92%, 20% 100%, 0 85%); }
+.np-stripe { background: linear-gradient(90deg, var(--pd) 30%, var(--p1) 30% 38%, var(--pd) 38% 42%, var(--p3) 42% 50%, var(--pd) 50%); text-shadow: 0 1px 3px #000; }
+.np-neonbox { background: rgba(5,4,14,.9); box-shadow: inset 0 0 0 2px var(--p1), 0 0 14px var(--p1), inset 0 0 12px var(--p2); }
+
+.ne-glow .cs-t { text-shadow: 0 0 6px var(--e1), 0 0 16px var(--e1); }
+.ne-flicker .cs-t { text-shadow: 0 0 6px var(--e1), 0 0 16px var(--e1); animation: flick 3s infinite; }
+.ne-gradient .cs-t, .ne-shimmer .cs-t, .ne-chrome .cs-t, .ne-rainbow .cs-t, .ne-scan .cs-t { -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ne-gradient .cs-t { background-image: linear-gradient(90deg, var(--e1), var(--e2)); }
+.ne-shimmer .cs-t { background-image: linear-gradient(100deg, var(--e1) 30%, #fff 50%, var(--e1) 70%); background-size: 250% 100%; animation: shimmer 2.4s linear infinite; }
+@keyframes shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+.ne-glitch .cs-t { text-shadow: 2px 0 var(--e1), -2px 0 var(--e2); animation: npglitch 1.6s steps(1) infinite; --p1: var(--e1); --p3: var(--e2); }
+.ne-fire .cs-t { text-shadow: 0 -2px 4px var(--e3), 0 -4px 10px var(--e1), 0 -8px 18px var(--e2); animation: firefx 1s ease-in-out infinite alternate; }
+@keyframes firefx { to { text-shadow: 0 -3px 6px var(--e3), 0 -6px 14px var(--e1), 0 -10px 22px var(--e2); } }
+.ne-outline .cs-t { color: transparent; -webkit-text-stroke: 1.2px var(--e1); text-shadow: 0 0 8px color-mix(in srgb, var(--e1) 50%, transparent); }
+.ne-chrome .cs-t { background-image: linear-gradient(180deg, #fff 0 40%, var(--e2) 50%, #fff 60%, var(--e1) 100%); }
+.ne-rainbow .cs-t { background-image: linear-gradient(90deg, #ff2b2b, #ffd93a, #3dffa0, #22e6ff, #8b5cf6, #ff2bd6, #ff2b2b); background-size: 200% 100%; animation: slide 3s linear infinite; }
+.ne-pulse .cs-t { display: inline-block; animation: npulse 1.4s ease-in-out infinite; text-shadow: 0 0 10px var(--e1); }
+@keyframes npulse { 50% { transform: scale(1.06); text-shadow: 0 0 18px var(--e1), 0 0 4px #fff; } }
+.ne-shadow3d .cs-t { text-shadow: 1px 1px 0 var(--e2), 2px 2px 0 var(--e2), 3px 3px 0 var(--e3), 4px 4px 6px rgba(0,0,0,.6); }
+.ne-scan .cs-t { background-image: linear-gradient(180deg, #fff 0 40%, var(--e1) 45% 55%, #fff 60%); background-size: 100% 300%; animation: scanv 1.6s linear infinite; }
+@keyframes slide { to { background-position: 200% 0; } }
+
+/* title under a name */
+.ttl { display: inline-block; font-family: var(--f-m); font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--r, #9aa4c7); text-shadow: 0 0 8px color-mix(in srgb, var(--r) 50%, transparent); }
+.ttl.big { font-size: 15px; text-align: center; }
+
+/* badges + stickers */
+.bdg { --s: 34px; width: var(--s); height: calc(var(--s) * 1.1); display: inline-grid; place-items: center; flex: none; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--c1), var(--c2)); position: relative; }
+.bdg::before { content: ''; position: absolute; inset: 3px; clip-path: inherit; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c1) 35%, var(--cd)), var(--cd)); }
+.bdg i { position: relative; font-style: normal; font-size: calc(var(--s) * .48); line-height: 1; filter: drop-shadow(0 0 4px var(--c1)); }
+.stk { --s: 46px; width: var(--s); height: var(--s); display: inline-grid; place-items: center; flex: none; font-size: calc(var(--s) * .58); border-radius: 12px; background: rgba(10,8,24,.9);
+  box-shadow: inset 0 0 0 2px var(--r), 0 0 12px color-mix(in srgb, var(--r) 40%, transparent); transform: rotate(-5deg); }
+.stk:nth-child(even) { transform: rotate(4deg); }
+
+/* click effects (motion is in js/cosmetics/apply.js) */
+.cfx { position: fixed; z-index: 990; pointer-events: none; display: block; font-style: normal; line-height: 1; }
+.pv-click { position: relative; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 8px; background: radial-gradient(circle, color-mix(in srgb, var(--c1) 22%, transparent), transparent 70%); }
+.pv-click svg { width: 78px; height: 78px; overflow: visible; filter: drop-shadow(0 0 5px var(--c1)); }
+.pv-click small { position: absolute; bottom: 2px; color: var(--dim); font-family: var(--f-m); font-size: 10px; }
+
+/* ---------- banners / profile backgrounds ---------- */
+.bn { position: relative; overflow: hidden; --c1: #ff2bd6; --c2: #22e6ff; --c3: #f6ff3a; --cd: #12082a; background-color: var(--cd); animation: var(--ba, none), var(--fxa, none); }
+.bn::before, .bn::after { content: ''; position: absolute; pointer-events: none; }
+.bfx-holo, .bfx-prism { --fxa: hue 8s linear infinite; }
+.bfx-glitch { --fxa: glitchf 3s steps(1) infinite; }
+.bfx-shine, .bfx-aura, .bfx-pulse { --fxa: bshine 4s ease-in-out infinite; }
+@keyframes bshine { 50% { filter: brightness(1.25) saturate(1.2); } }
+.mix1 { color: color-mix(in srgb, var(--c1) 50%, transparent); }
+
+.bs-grid { background: linear-gradient(transparent 55%, color-mix(in srgb, var(--c1) 18%, transparent) 55%), linear-gradient(color-mix(in srgb, var(--c1) 55%, transparent) 1px, transparent 1px) 0 0/40px 20px, linear-gradient(90deg, color-mix(in srgb, var(--c2) 40%, transparent) 1px, transparent 1px) 0 0/40px 20px, linear-gradient(180deg, var(--cd), color-mix(in srgb, var(--c1) 30%, var(--cd)) 50%, #06050d); }
+.bs-rain { background: repeating-linear-gradient(100deg, transparent 0 18px, color-mix(in srgb, var(--c2) 45%, transparent) 18px 19px, transparent 19px 46px) 0 0/200px 200px, repeating-linear-gradient(100deg, transparent 0 31px, color-mix(in srgb, var(--c1) 40%, transparent) 31px 32px, transparent 32px 70px) 0 0/260px 260px, linear-gradient(180deg, var(--cd), #06050d); --ba: rainb 1.2s linear infinite; }
+@keyframes rainb { to { background-position: -40px 200px, -50px 260px, 0 0; } }
+.bs-circuit { background: radial-gradient(circle at 20px 20px, var(--c1) 2px, transparent 3px) 0 0/60px 60px, linear-gradient(90deg, transparent 19px, color-mix(in srgb, var(--c1) 40%, transparent) 19px 21px, transparent 21px) 0 0/60px 60px, linear-gradient(transparent 19px, color-mix(in srgb, var(--c2) 35%, transparent) 19px 21px, transparent 21px) 0 0/60px 60px, linear-gradient(135deg, var(--cd), #06050d); }
+.bs-static::after { inset: -100%; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.9'/></svg>"); animation: noise .4s steps(4) infinite; opacity: .45; mix-blend-mode: screen; }
+.bs-static { background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 30%, #111), #111); }
+@keyframes noise { 25% { transform: translate(-5%, 3%); } 50% { transform: translate(4%, -6%); } 75% { transform: translate(-3%, 5%); } }
+.bs-drive { background: linear-gradient(transparent 62%, #06050d 62%), radial-gradient(circle at 50% 62%, var(--c3) 0 9%, var(--c1) 9% 14%, transparent 14.5%), linear-gradient(180deg, var(--cd) 0%, color-mix(in srgb, var(--c1) 45%, var(--cd)) 40%, var(--c1) 58%, var(--c3) 62%); }
+.bs-drive::after { left: -20%; right: -20%; bottom: 0; height: 38%; background-image: linear-gradient(var(--c1) 2px, transparent 2px), linear-gradient(90deg, var(--c1) 2px, transparent 2px); background-size: 40px 20px; transform: perspective(120px) rotateX(55deg); transform-origin: top; animation: gridmove 1s linear infinite; opacity: .8; }
+.bs-moon { background: radial-gradient(circle at 72% 38%, var(--c1) 0 8%, color-mix(in srgb, var(--c1) 50%, transparent) 8% 10%, transparent 24%), linear-gradient(transparent 72%, #000 72%), linear-gradient(180deg, var(--cd), color-mix(in srgb, var(--c2) 40%, var(--cd)) 70%); }
+.bs-moon::after { left: 0; right: 0; bottom: 28%; height: 18%; background: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 24px, #000 24px 29px, transparent 29px 52px); -webkit-mask: linear-gradient(transparent, #000); mask: linear-gradient(transparent, #000); }
+.bs-aurora { background: linear-gradient(180deg, #020818, var(--cd)); }
+.bs-aurora::after { inset: -50%; background: radial-gradient(ellipse at 30% 50%, color-mix(in srgb, var(--c1) 60%, transparent), transparent 40%), radial-gradient(ellipse at 70% 40%, color-mix(in srgb, var(--c2) 60%, transparent), transparent 40%), radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--c3) 45%, transparent), transparent 45%); filter: blur(20px); animation: aurora 9s ease-in-out infinite alternate; }
+@keyframes aurora { to { transform: translate(10%, -6%) rotate(8deg) scale(1.1); } }
+.bs-galaxy { background: radial-gradient(1px 1px at 10% 20%, #fff, transparent), radial-gradient(1px 1px at 30% 70%, #fff, transparent), radial-gradient(1.5px 1.5px at 55% 30%, #fff, transparent), radial-gradient(1px 1px at 80% 60%, #fff, transparent), radial-gradient(1.5px 1.5px at 90% 15%, #fff, transparent), radial-gradient(1px 1px at 65% 85%, #fff, transparent), radial-gradient(ellipse at 40% 50%, color-mix(in srgb, var(--c1) 60%, transparent), transparent 45%), radial-gradient(ellipse at 65% 45%, color-mix(in srgb, var(--c2) 45%, transparent), transparent 40%), linear-gradient(135deg, #05020f, var(--cd)); }
+.bs-city { background: linear-gradient(var(--cd), var(--cd)) 3% 100%/9% 55% no-repeat, linear-gradient(var(--cd), var(--cd)) 14% 100%/7% 75% no-repeat, linear-gradient(var(--cd), var(--cd)) 23% 100%/11% 45% no-repeat, linear-gradient(var(--cd), var(--cd)) 37% 100%/6% 85% no-repeat, linear-gradient(var(--cd), var(--cd)) 46% 100%/12% 60% no-repeat, linear-gradient(var(--cd), var(--cd)) 61% 100%/8% 92% no-repeat, linear-gradient(var(--cd), var(--cd)) 72% 100%/10% 50% no-repeat, linear-gradient(var(--cd), var(--cd)) 85% 100%/7% 70% no-repeat, linear-gradient(var(--cd), var(--cd)) 97% 100%/9% 58% no-repeat, linear-gradient(180deg, color-mix(in srgb, var(--c1) 55%, #06050d), color-mix(in srgb, var(--c2) 35%, #06050d)); }
+.bs-city::after { inset: 20% 0 0; background: radial-gradient(color-mix(in srgb, var(--c3) 80%, transparent) 1px, transparent 1.6px) 0 0/9px 11px; -webkit-mask: linear-gradient(transparent, #000 40%); mask: linear-gradient(transparent, #000 40%); opacity: .55; }
+.bs-waves { background: radial-gradient(circle at 50% 0, transparent 18px, color-mix(in srgb, var(--c1) 55%, transparent) 19px 21px, transparent 22px) 0 0/40px 20px, radial-gradient(circle at 50% 0, transparent 18px, color-mix(in srgb, var(--c2) 40%, transparent) 19px 21px, transparent 22px) 20px 10px/40px 20px, linear-gradient(180deg, var(--cd), #050a18); --ba: drift 18s linear infinite; }
+.bs-mountains { background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 40%, var(--cd)), var(--cd) 70%); }
+.bs-mountains::before { inset: 30% -5% 0; background: color-mix(in srgb, var(--c2) 45%, #06050d); clip-path: polygon(0 100%, 0 60%, 12% 25%, 22% 55%, 35% 10%, 50% 60%, 62% 30%, 75% 65%, 88% 20%, 100% 50%, 100% 100%); }
+.bs-mountains::after { inset: 55% -5% 0; background: #06050d; clip-path: polygon(0 100%, 0 50%, 18% 15%, 30% 60%, 45% 25%, 60% 70%, 72% 20%, 90% 55%, 100% 30%, 100% 100%); }
+.bs-stripes { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--c1) 50%, var(--cd)) 0 14px, var(--cd) 14px 28px, color-mix(in srgb, var(--c2) 40%, var(--cd)) 28px 42px, var(--cd) 42px 56px); --ba: drift 30s linear infinite; }
+.bs-hexgrid { background: radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--c1) 45%, transparent), transparent 60%), var(--cd); }
+.bs-hexgrid::before { inset: 0; background: var(--c1); opacity: .5; -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'><path d='M14 0l14 8v16l-14 8L0 24V8zM14 32v16' fill='none' stroke='black' stroke-width='1.5'/></svg>") 0 0/28px 48px; mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'><path d='M14 0l14 8v16l-14 8L0 24V8zM14 32v16' fill='none' stroke='black' stroke-width='1.5'/></svg>") 0 0/28px 48px; }
+.bs-bokeh { background: radial-gradient(circle at 15% 30%, color-mix(in srgb, var(--c1) 55%, transparent) 0 22px, transparent 30px), radial-gradient(circle at 40% 70%, color-mix(in srgb, var(--c2) 45%, transparent) 0 30px, transparent 40px), radial-gradient(circle at 65% 25%, color-mix(in srgb, var(--c3) 45%, transparent) 0 16px, transparent 24px), radial-gradient(circle at 85% 65%, color-mix(in srgb, var(--c1) 40%, transparent) 0 36px, transparent 48px), radial-gradient(circle at 55% 50%, color-mix(in srgb, var(--c2) 30%, transparent) 0 12px, transparent 18px), linear-gradient(135deg, var(--cd), #06050d); filter: saturate(1.2); }
+.bs-fireflies { background: radial-gradient(var(--c3) 1.5px, transparent 2.5px) 0 0/53px 41px, radial-gradient(var(--c1) 1px, transparent 2px) 20px 13px/37px 59px, linear-gradient(180deg, #050812, var(--cd)); --ba: flies 12s linear infinite; }
+@keyframes flies { to { background-position: 53px -41px, -17px 72px, 0 0; } }
+.bs-matrix { background: linear-gradient(transparent, color-mix(in srgb, var(--c1) 70%, transparent) 70%, transparent) 0 0/14px 60px, linear-gradient(transparent, color-mix(in srgb, var(--c1) 50%, transparent) 60%, transparent) 7px 20px/14px 90px, #020a05; --ba: matrixf 1.6s linear infinite; }
+@keyframes matrixf { to { background-position: 0 60px, 7px 110px, 0 0; } }
+.bs-scanbars { background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--c1) 35%, transparent) 0 6px, transparent 6px 22px), linear-gradient(180deg, var(--cd), #06050d); --ba: scanbars 2s linear infinite; }
+@keyframes scanbars { to { background-position: 0 -22px, 0 0; } }
+.bs-triangles { background: conic-gradient(from 45deg, color-mix(in srgb, var(--c1) 50%, var(--cd)) 25%, var(--cd) 0 50%, color-mix(in srgb, var(--c2) 40%, var(--cd)) 0 75%, color-mix(in srgb, var(--c3) 25%, var(--cd)) 0) 0 0/44px 44px; }
+.bs-diamonds { background: linear-gradient(45deg, color-mix(in srgb, var(--c1) 40%, transparent) 25%, transparent 25% 75%, color-mix(in srgb, var(--c1) 40%, transparent) 75%) 0 0/40px 40px, linear-gradient(-45deg, color-mix(in srgb, var(--c2) 35%, transparent) 25%, transparent 25% 75%, color-mix(in srgb, var(--c2) 35%, transparent) 75%) 0 0/40px 40px, var(--cd); }
+.bs-fog { background: linear-gradient(180deg, #06050d, var(--cd)); }
+.bs-fog::before, .bs-fog::after { inset: 20% -50% -20%; background: radial-gradient(ellipse at 30% 60%, color-mix(in srgb, var(--c2) 45%, transparent), transparent 50%), radial-gradient(ellipse at 70% 70%, color-mix(in srgb, var(--c1) 35%, transparent), transparent 50%); filter: blur(14px); animation: fogd 14s ease-in-out infinite alternate; }
+.bs-fog::after { animation-duration: 9s; animation-direction: alternate-reverse; opacity: .7; }
+@keyframes fogd { to { transform: translateX(18%); } }
+.bs-sakura { background: radial-gradient(ellipse 5px 3px, var(--c1) 60%, transparent 70%) 0 0/57px 43px, radial-gradient(ellipse 4px 2.5px, var(--c3) 60%, transparent 70%) 23px 17px/71px 61px, linear-gradient(180deg, var(--cd), color-mix(in srgb, var(--c2) 30%, #06050d)); --ba: sakura 8s linear infinite; }
+@keyframes sakura { to { background-position: -57px 86px, 48px 122px, 0 0; } }
+.bs-lavalamp { background: radial-gradient(circle, color-mix(in srgb, var(--c1) 70%, transparent) 0 18%, transparent 30%) 0 0/50% 120%, radial-gradient(circle, color-mix(in srgb, var(--c2) 60%, transparent) 0 14%, transparent 26%) 30% 50%/40% 100%, radial-gradient(circle, color-mix(in srgb, var(--c3) 55%, transparent) 0 12%, transparent 24%) 80% 20%/45% 110%, var(--cd); filter: blur(1px) saturate(1.3); --ba: lava 10s ease-in-out infinite alternate; }
+@keyframes lava { to { background-position: 30% 100%, 70% 0, 10% 80%, 0 0; } }
+.bs-rings { background: repeating-radial-gradient(circle at 50% 50%, transparent 0 14px, color-mix(in srgb, var(--c1) 45%, transparent) 14px 16px), var(--cd); --ba: ringsb 3s linear infinite; background-size: 100% 100%; }
+@keyframes ringsb { from { background-size: 100% 100%; } to { background-size: 115% 115%; } }
+.bs-lasers { background: linear-gradient(180deg, #06050d, var(--cd)); }
+.bs-lasers::before { inset: -60% -20% 0; background: repeating-conic-gradient(from 0deg at 50% 100%, color-mix(in srgb, var(--c1) 60%, transparent) 0 2deg, transparent 2deg 14deg, color-mix(in srgb, var(--c2) 50%, transparent) 14deg 16deg, transparent 16deg 30deg); animation: sweep 6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+@keyframes sweep { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+.bs-stars { background: radial-gradient(1px 1px at 20px 30px, #fff, transparent) 0 0/90px 70px, radial-gradient(1.5px 1.5px at 60px 10px, var(--c2), transparent) 0 0/120px 90px, radial-gradient(1px 1px at 40px 60px, var(--c1), transparent) 0 0/70px 80px, radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--c1) 35%, transparent), transparent 60%), #04030c; --ba: starsb 40s linear infinite; }
+@keyframes starsb { to { background-position: -90px 0, -240px 0, -70px 0, 0 0; } }
+.bs-chevrons { background: linear-gradient(135deg, color-mix(in srgb, var(--c1) 45%, transparent) 25%, transparent 25%) -20px 0/40px 40px, linear-gradient(225deg, color-mix(in srgb, var(--c1) 45%, transparent) 25%, transparent 25%) -20px 0/40px 40px, linear-gradient(315deg, color-mix(in srgb, var(--c2) 35%, transparent) 25%, transparent 25%) 0 0/40px 40px, linear-gradient(45deg, color-mix(in srgb, var(--c2) 35%, transparent) 25%, transparent 25%) 0 0/40px 40px, var(--cd); }
+.bs-polka { background: radial-gradient(color-mix(in srgb, var(--c1) 60%, transparent) 4px, transparent 5px) 0 0/26px 26px, radial-gradient(color-mix(in srgb, var(--c2) 45%, transparent) 3px, transparent 4px) 13px 13px/26px 26px, var(--cd); }
+.bs-zigzag { background: linear-gradient(135deg, color-mix(in srgb, var(--c1) 50%, var(--cd)) 25%, transparent 25%) -18px 0/36px 36px, linear-gradient(225deg, color-mix(in srgb, var(--c1) 50%, var(--cd)) 25%, transparent 25%) -18px 0/36px 36px, linear-gradient(315deg, color-mix(in srgb, var(--c2) 40%, var(--cd)) 25%, transparent 25%) 0 0/36px 36px, linear-gradient(45deg, color-mix(in srgb, var(--c2) 40%, var(--cd)) 25%, var(--cd) 25%) 0 0/36px 36px; }
+.bs-plasma { background: radial-gradient(circle at 20% 30%, var(--c1), transparent 45%), radial-gradient(circle at 80% 40%, var(--c2), transparent 45%), radial-gradient(circle at 50% 90%, var(--c3), transparent 45%), var(--cd); background-size: 160% 160%; --ba: plasma 8s ease-in-out infinite alternate; filter: saturate(1.3); }
+@keyframes plasma { to { background-position: 100% 100%, 0 50%, 50% 0, 0 0; } }
+.bs-sunburst { background: radial-gradient(circle at 50% 110%, var(--c3) 0 12%, transparent 13%), repeating-conic-gradient(from 0deg at 50% 110%, color-mix(in srgb, var(--c1) 55%, var(--cd)) 0 6deg, var(--cd) 6deg 12deg); }
+
+/* ---------- shop previews ---------- */
+.pv-banner { display: block; width: 100%; height: 80px; border-radius: 8px; }
+.pv-none { color: var(--dim); font-size: 30px; }
+.pv-font { font-size: calc(30px * var(--fs, 1)); color: #fff; text-shadow: 0 0 12px rgba(255,43,214,.5); white-space: nowrap; }
+.pv-cursor { display: grid; justify-items: center; gap: 4px; width: 100%; height: 100%; place-content: center; border-radius: 8px; background: rgba(0,0,0,.25); }
+.pv-cursor img { width: 40px; height: 40px; }
+.pv-cursor small, .pv-sound small { color: var(--dim); font-family: var(--f-m); font-size: 11px; }
+.pv-sys { font-size: 34px; transform: rotate(-30deg); }
+.pv-click { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 8px; background: radial-gradient(circle, color-mix(in srgb, var(--c1) 25%, transparent), transparent 70%); font-family: var(--f-m); color: var(--c1); }
+.pv-theme { display: flex; gap: 6px; padding: 12px; border-radius: 10px; background: var(--cd); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c1) 50%, transparent); }
+.pv-theme i { width: 22px; height: 44px; border-radius: 5px; background: var(--c1); box-shadow: 0 0 10px var(--c1); }
+.pv-theme i:nth-child(2) { background: var(--c2); box-shadow: 0 0 10px var(--c2); }
+.pv-theme i:nth-child(3) { background: var(--c3); box-shadow: 0 0 10px var(--c3); }
+.pv-theme.intro { font-family: var(--f-m); }
+.pv-theme.intro i { height: 6px; width: 50px; align-self: center; }
+.pv-theme.intro { flex-direction: column; }
+.pv-sound { display: grid; justify-items: center; font-size: 30px; color: var(--cyan); }
+
+/* boot themes */
+.boot { --b1: #22e6ff; --b2: #ff2bd6; }
+.boot .logo-top, .boot .hello-w, .boot .load-pct { color: var(--b1); text-shadow: 0 0 10px var(--b1); }
+.boot .bl { color: color-mix(in srgb, var(--b1) 70%, #fff); }
+.boot .bl.hi { color: var(--b2); text-shadow: 0 0 8px var(--b2); }
+.boot .load-bar i { background: linear-gradient(90deg, var(--b2), var(--b1)); box-shadow: 0 0 16px var(--b2); }
+.boot .hello-n { text-shadow: 0 0 30px var(--b2); }
+.boot .logo-name { background: linear-gradient(90deg, #fff, color-mix(in srgb, var(--b2) 40%, #fff) 40%, var(--b2)); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 18px color-mix(in srgb, var(--b2) 60%, transparent)); }

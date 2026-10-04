@@ -1,0 +1,74 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wrong Neighbour</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"wrong-neighbour","n":3,"title":"WRONG NEIGHBOUR","genre":"horror","desc":"It's 2 AM. Someone knocks. Compare them with the residents book: one tiny difference means it isn't who it says it is. Open for real neighbours, never for the others.","controls":"O or click OPEN · K or click KEEP SHUT","scoreLabel":"VISITORS","tasks":[{"stat":"score","target":10,"text":"Judge 10 visitors right in Wrong Neighbour"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/faces.js"></script>
+<script>
+function nextVisitor(s) {
+  const real = Math.random() < 0.5;
+  const base = K.pick(s.book);
+  if (real) s.v = { p: base, fake: false };
+  else if (Math.random() < 0.2) { const p = F.make(); s.v = { p, fake: true, diff: 'not a resident' }; }
+  else { const { p, diff } = F.variant(base); s.v = { p, fake: true, diff }; }
+  s.vt = Math.max(6, 13 - s.score * 0.4); s.vmax = s.vt; s.knock = 0.6; K.sfx('knock');
+  s.line = K.pick(['It\'s me, open up.', 'I locked myself out…', 'Can I borrow some sugar?', 'Did you hear that noise?', 'Please, it\'s cold out here.', 'Open the door. Now.']);
+}
+function decide(s, open) {
+  const v = s.v;
+  if (open && v.fake) { s.dead = 1.2; s.scareP = v.p; K.sfx('scare'); K.shake(22); K.flash('#300', 0.4); return; }
+  if (!open && !v.fake) { s.strikes++; K.sfx('wrong'); s.msg = `That was really ${v.p.name}. They're angry. (${s.strikes}/3)`; if (s.strikes >= 3) return K.end(s, { score: s.score, won: false, title: 'EVICTED', text: 'You left too many real neighbours outside.' }); }
+  else { s.score++; K.sfx(open ? 'select' : 'blip'); s.msg = v.fake ? `Good call. Its ${v.diff} was wrong.` : `${v.p.name} says thanks.`; }
+  s.msgT = 2.5; s.v = null; s.wait = 1.2;
+}
+K.game({
+  bg: '#0c0a10',
+  init(s) {
+    s.book = Array.from({ length: 4 }, F.make); s.score = 0; s.strikes = 0; s.v = null; s.wait = 1; s.msg = ''; s.msgT = 0; s.dead = 0;
+  },
+  update(s, dt) {
+    if (s.dead) { s.dead -= dt; if (s.dead <= 0) K.end(s, { score: s.score, won: false, title: 'IT CAME IN', text: `It was not ${s.v.p.name}. Its ${s.v.diff} gave it away.` }); return; }
+    s.msgT -= dt;
+    if (!s.v) { s.wait -= dt; if (s.wait <= 0) nextVisitor(s); return; }
+    s.knock -= dt; s.vt -= dt;
+    if (s.vt <= 0) { decide(s, false); return; }
+    if (K.tap('KeyO') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 600, y: 440, w: 150, h: 56 }))) decide(s, true);
+    else if (K.tap('KeyK') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 770, y: 440, w: 170, h: 56 }))) decide(s, false);
+  },
+  draw(s) {
+    // residents book
+    K.rect(16, 16, 330, 508, '#16121c', 10); K.stroke(16, 16, 330, 508, '#3a2f4a', 2, 10);
+    K.text('RESIDENTS', 181, 40, 20, '#c9b8ff', 'center', 'd');
+    s.book.forEach((p, i) => {
+      const y = 70 + i * 112; K.rect(28, y, 306, 102, '#1f1a28', 8);
+      F.draw(p, 80, y + 44, 0.42);
+      K.text(p.name, 140, y + 34, 20, '#fff', 'left'); K.text('APT ' + p.apt, 140, y + 60, 16, K.C.dim, 'left', 'm');
+    });
+    // door + peephole
+    K.rect(370, 16, 574, 508, '#120d10', 10);
+    const cx = 657, cy = 230, R = 175;
+    const c = K.ctx();
+    c.save(); c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.clip();
+    K.rect(cx - R, cy - R, R * 2, R * 2, '#2a2620');
+    K.rect(cx - R, cy + 60, R * 2, 120, '#1c1814');
+    K.alpha(0.6); K.circle(cx + 110, cy - 120, 30, '#ffe9b0'); K.alpha(1);
+    if (s.v) {
+      const look = s.v.fake ? Math.sin(K.time() * 0.7) * 3 : 0;
+      F.draw(s.v.p, cx, cy + 10 + (s.knock > 0 ? Math.sin(s.knock * 40) * 2 : 0), 1.25, { look, wrong: s.dead ? 'black' : null });
+    }
+    if (s.dead && s.scareP) { K.rect(cx - R, cy - R, R * 2, R * 2, 'rgba(40,0,0,0.5)'); F.draw(s.scareP, cx, cy + 20, 1.8, { wrong: 'black' }); F.draw(s.scareP, cx, cy + 20, 1.8, { wrong: 'smile' }); }
+    c.fillStyle = K.rgrad(cx, cy, R, ['rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.9)']); c.fillRect(cx - R, cy - R, R * 2, R * 2);
+    c.restore();
+    K.ring(cx, cy, R, '#3a3036', 10);
+    if (s.v) {
+      K.text('“' + s.line + '”', cx, 430, 18, '#e6dcff', 'center');
+      K.text(`says: ${s.v.p.name} · APT ${s.v.p.apt}`, cx, 412, 16, K.C.dim, 'center', 'm');
+      K.rect(390, 470, 190, 8, '#2a2030'); K.rect(390, 470, 190 * (s.vt / s.vmax), 8, s.vt < 3 ? K.C.red : K.C.cyan);
+      K.button(600, 440, 150, 56, 'OPEN (O)', { color: K.C.green });
+      K.button(770, 440, 170, 56, 'KEEP SHUT (K)', { color: K.C.red });
+    } else K.text('…waiting for a knock…', cx, 450, 18, K.C.dim, 'center', 'm');
+    if (s.msgT > 0) K.text(s.msg, cx, 505, 16, K.C.gold, 'center');
+    K.text(`CORRECT ${s.score}   ·   STRIKES ${s.strikes}/3`, cx, 34, 16, '#c9b8ff', 'center', 'd');
+  },
+  ai(s, dt) { if (s.v && s.vt < s.vmax - 3) { if (s.v.fake) K.vtap('KeyK'); else K.vtap('KeyO'); } },
+});
+</script></body></html>

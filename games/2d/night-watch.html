@@ -1,0 +1,91 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Night Watch</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"night-watch","n":5,"title":"NIGHT WATCH","genre":"horror","desc":"Night guard at an old toy factory. Three things walk the halls toward your office. Check the cameras, flash the door lights, slam the doors. The power won't last if you panic.","controls":"A / D close left / right door · Q / E door lights · SPACE cameras","scoreLabel":"HOURS","tasks":[{"stat":"score","target":6,"text":"Survive until 6 AM in Night Watch"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// map nodes: 0 stage, 1 party room, 2 west hall, 3 east hall, 4 west door, 5 east door
+const NODES = [{ n: 'STAGE', x: 480, y: 120 }, { n: 'PARTY ROOM', x: 480, y: 220 }, { n: 'WEST HALL', x: 330, y: 300 }, { n: 'EAST HALL', x: 630, y: 300 }, { n: 'WEST DOOR', x: 380, y: 400 }, { n: 'EAST DOOR', x: 580, y: 400 }];
+const NEXT = { 0: [1], 1: [2, 3], 2: [4, 1], 3: [5, 1], 4: [], 5: [] };
+const BOTS = [{ name: 'BEAR', col: '#a0662a' }, { name: 'BUNNY', col: '#9a7ad8' }, { name: 'CHICK', col: '#e8c83a' }];
+K.game({
+  bg: '#08070a',
+  init(s) {
+    s.t = 0; s.power = 100; s.doors = [false, false]; s.lights = [false, false]; s.cam = false; s.camSel = 1;
+    s.bots = BOTS.map((b, i) => ({ ...b, at: 0, t: K.rand(6, 14) + i * 4, wait: 0 })); s.dead = 0;
+  },
+  update(s, dt) {
+    if (s.dead) { s.dead -= dt; if (s.dead <= 0) K.end(s, { score: Math.floor(s.t / 45), won: false, title: s.killer + ' GOT YOU', text: `You lasted until ${Math.floor(s.t / 45) || 12} AM.` }); return; }
+    s.t += dt; const hour = Math.floor(s.t / 45);
+    if (hour >= 6) return K.end(s, { score: 6, won: true, title: '6:00 AM', text: 'The sun is up. They go back to the stage. For now.' });
+    if (s.power > 0) {
+      if (K.tap('KeyA')) { s.doors[0] = !s.doors[0]; K.sfx('hit'); }
+      if (K.tap('KeyD')) { s.doors[1] = !s.doors[1]; K.sfx('hit'); }
+      s.lights[0] = K.down('KeyQ'); s.lights[1] = K.down('KeyE');
+      if (K.tap('Space')) { s.cam = !s.cam; K.sfx('blip'); }
+      if (K.mouse.clicked) {
+        const m = K.mouse;
+        if (!s.cam && K.inRect(m.x, m.y, { x: 20, y: 380, w: 110, h: 50 })) { s.doors[0] = !s.doors[0]; K.sfx('hit'); }
+        if (!s.cam && K.inRect(m.x, m.y, { x: 830, y: 380, w: 110, h: 50 })) { s.doors[1] = !s.doors[1]; K.sfx('hit'); }
+        if (K.inRect(m.x, m.y, { x: 380, y: 490, w: 200, h: 40 })) { s.cam = !s.cam; K.sfx('blip'); }
+        if (s.cam) NODES.forEach((n, i) => { if (K.dist(m.x, m.y, n.x, n.y) < 40) s.camSel = i; });
+      }
+    } else { s.doors = [false, false]; s.lights = [false, false]; s.cam = false; }
+    const use = 1 + s.doors.filter(Boolean).length * 2 + s.lights.filter(Boolean).length + (s.cam ? 1 : 0);
+    s.power = Math.max(0, s.power - use * dt * 0.36);
+    s.bots.forEach((b) => {
+      if (b.at >= 4) {
+        b.wait -= dt;
+        if (b.wait <= 0) {
+          const side = b.at - 4;
+          if (s.doors[side]) { b.at = K.pick([0, 1]); b.t = K.rand(5, 10); K.sfx('step'); }
+          else { s.dead = 1.3; s.killer = b.name; K.sfx('scare'); K.shake(25); K.flash('#fff', 0.2); }
+        }
+        return;
+      }
+      b.t -= dt;
+      if (b.t <= 0) {
+        b.t = Math.max(3, 10 - hour * 1.2) + K.rand(0, 4);
+        if (Math.random() < 0.55 + hour * 0.06) { b.at = K.pick(NEXT[b.at]); if (b.at >= 4) { b.wait = K.rand(4, 7); if (Math.random() < 0.5) K.sfx('step'); } }
+      }
+    });
+  },
+  draw(s) {
+    const hour = Math.floor(s.t / 45);
+    if (s.dead) { const b = BOTS.find((x) => x.name === s.killer); K.bg('#000'); K.glow('#f00', 40); K.circle(480, 270, 200 + Math.random() * 10, b.col); K.circle(410, 230, 30, '#fff'); K.circle(550, 230, 30, '#fff'); K.circle(410, 230, 12, '#f00'); K.circle(550, 230, 12, '#f00'); K.rect(360, 330, 240, 50, '#200', 10); for (let i = 0; i < 8; i++) K.poly([[370 + i * 30, 330], [385 + i * 30, 360], [400 + i * 30, 330]], '#eee'); K.noGlow(); return; }
+    if (s.cam && s.power > 0) {
+      K.bg('#06120c');
+      for (let i = 0; i < 6; i++) { const a = NODES[i]; NEXT[i].forEach((j) => K.line(a.x, a.y, NODES[j].x, NODES[j].y, '#1f5a3a', 4)); }
+      K.line(380, 400, 480, 470, '#1f5a3a', 4); K.line(580, 400, 480, 470, '#1f5a3a', 4);
+      K.rect(440, 450, 80, 36, '#2a7a4a', 4); K.text('YOU', 480, 468, 14, '#000', 'center', 'd');
+      NODES.forEach((n, i) => { K.rect(n.x - 60, n.y - 26, 120, 52, i === s.camSel ? '#1f6a46' : '#0e2a1c', 6); K.text(n.n, n.x, n.y - 12, 12, '#9fffcf', 'center', 'm'); });
+      const here = s.bots.filter((b) => b.at === s.camSel);
+      K.rect(40, 40, 260, 180, '#0b1a12', 6); K.text('CAM · ' + NODES[s.camSel].n, 50, 54, 13, '#9fffcf', 'left', 'm');
+      here.forEach((b, i) => { const x = 100 + i * 70, y = 150; K.circle(x, y, 24, b.col); K.circle(x - 8, y - 4, 4, '#fff'); K.circle(x + 8, y - 4, 4, '#fff'); K.rect(x - 22, y + 20, 44, 40, b.col, 8); });
+      if (!here.length) K.text('empty', 170, 140, 16, '#3a6a50', 'center', 'm');
+      NODES.forEach((n, i) => s.bots.forEach((b, k) => { if (b.at === i) K.circle(n.x - 30 + k * 30, n.y + 12, 7, b.col); }));
+      for (let y = 0; y < 540; y += 3) K.rect(0, y, 960, 1, 'rgba(0,0,0,0.3)');
+    } else {
+      const dim = s.power > 0 ? 1 : 0.25;
+      K.rect(0, 0, 960, 540, `rgba(40,34,30,${dim})`);
+      K.rect(300, 60, 360, 220, '#1a1612'); K.text('NIGHT SHIFT', 480, 120, 30, `rgba(255,80,80,${0.5 * dim})`, 'center', 'd');
+      K.rect(250, 330, 460, 120, '#2a221c'); K.rect(420, 300, 120, 50, '#111'); K.rect(426, 306, 108, 38, s.power > 0 ? '#0b3a26' : '#000');
+      [0, 1].forEach((side) => {
+        const x = side ? 760 : 20, open = !s.doors[side];
+        K.rect(x, 60, 180, 300, '#000');
+        if (s.lights[side]) { K.rect(x, 60, 180, 300, '#3a3020'); const b = s.bots.find((b) => b.at === 4 + side); if (b) { K.circle(x + 90, 150, 46, b.col); K.circle(x + 72, 140, 8, '#fff'); K.circle(x + 108, 140, 8, '#fff'); K.rect(x + 46, 190, 88, 170, b.col, 20); } }
+        if (!open) { K.rect(x, 60, 180, 300, '#4a4a52'); for (let i = 0; i < 6; i++) K.rect(x, 70 + i * 50, 180, 6, '#3a3a40'); }
+        K.rect(side ? 830 : 20, 380, 110, 50, s.doors[side] ? '#a02030' : '#2a2a30', 6); K.text(side ? 'D DOOR' : 'A DOOR', side ? 885 : 75, 405, 14, '#fff', 'center', 'd');
+        K.rect(side ? 830 : 20, 440, 110, 34, s.lights[side] ? '#e0c060' : '#2a2a30', 6); K.text(side ? 'E LIGHT' : 'Q LIGHT', side ? 885 : 75, 457, 13, s.lights[side] ? '#000' : '#bbb', 'center', 'd');
+      });
+      if (s.power <= 0) K.vignette(0.95);
+    }
+    K.rect(380, 490, 200, 40, '#14202a', 6); K.text(s.cam ? 'CLOSE CAMS (SPACE)' : 'CAMERAS (SPACE)', 480, 510, 14, '#9fdfff', 'center', 'd');
+    K.text(`${hour === 0 ? 12 : hour} AM`, 940, 30, 26, '#fff', 'right', 'd');
+    K.text(`POWER ${Math.ceil(s.power)}%`, 20, 500, 18, s.power < 20 ? K.C.red : '#fff', 'left', 'd');
+    const use = 1 + s.doors.filter(Boolean).length * 2 + s.lights.filter(Boolean).length + (s.cam ? 1 : 0);
+    for (let i = 0; i < 5; i++) K.rect(20 + i * 22, 516, 18, 12, i < use ? (i > 2 ? K.C.red : K.C.green) : '#222');
+  },
+  ai(s, dt) { s.aiT = (s.aiT || 0) - dt; if (s.aiT <= 0) { s.aiT = 2.5; K.vtap('Space'); s.camSel = K.irand(0, 5); } },
+});
+</script></body></html>

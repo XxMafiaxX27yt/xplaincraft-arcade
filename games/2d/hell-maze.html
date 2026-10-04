@@ -1,0 +1,87 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hell Maze</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hell-maze","n":1,"title":"HELL MAZE","genre":"horror","desc":"Find the key, reach the exit. Something wakes up in the maze the moment you move, and it knows the way.","controls":"Arrow keys / WASD to move","scoreLabel":"MAZES","tasks":[{"stat":"score","target":3,"text":"Escape 3 mazes in Hell Maze"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CW = 31, CH = 17, T = 30, OX = (960 - CW * T) / 2, OY = (540 - CH * T) / 2;
+function maze() {
+  const g = Array.from({ length: CH }, () => Array(CW).fill(1));
+  const st = [[1, 1]]; g[1][1] = 0;
+  while (st.length) {
+    const [x, y] = st[st.length - 1];
+    const n = K.shuffle([[2, 0], [-2, 0], [0, 2], [0, -2]]).filter(([dx, dy]) => g[y + dy]?.[x + dx] === 1 && x + dx > 0 && x + dx < CW - 1 && y + dy > 0 && y + dy < CH - 1);
+    if (!n.length) { st.pop(); continue; }
+    const [dx, dy] = n[0]; g[y + dy / 2][x + dx / 2] = 0; g[y + dy][x + dx] = 0; st.push([x + dx, y + dy]);
+  }
+  for (let i = 0; i < 25; i++) { const x = K.irand(1, CW - 2), y = K.irand(1, CH - 2); if ((x + y) % 2) g[y][x] = 0; } // loops
+  return g;
+}
+function bfs(g, sx, sy, tx, ty) {
+  const prev = new Map(), q = [[sx, sy]], k = (x, y) => y * CW + x; prev.set(k(sx, sy), null);
+  while (q.length) {
+    const [x, y] = q.shift(); if (x === tx && y === ty) break;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!g[ny]?.[nx] && !prev.has(k(nx, ny))) { prev.set(k(nx, ny), [x, y]); q.push([nx, ny]); } }
+  }
+  const path = []; let c = [tx, ty]; if (!prev.has(k(tx, ty))) return [];
+  while (c && !(c[0] === sx && c[1] === sy)) { path.unshift(c); c = prev.get(k(c[0], c[1])); }
+  return path;
+}
+function level(s) {
+  s.g = maze(); s.p = { x: 1, y: 1, fx: 1, fy: 1 }; s.exit = { x: CW - 2, y: CH - 2 };
+  let kx, ky; do { kx = K.irand(1, CW - 2); ky = K.irand(1, CH - 2); } while (s.g[ky][kx] || kx + ky < 20);
+  s.key = { x: kx, y: ky }; s.hasKey = false;
+  s.d = { x: CW - 2, y: 1, fx: CW - 2, fy: 1, t: 0 }; s.awake = false; s.moveT = 0; s.dspeed = Math.max(0.12, 0.34 - s.level * 0.035);
+}
+K.game({
+  bg: '#0a0306',
+  init(s) { s.level = 0; s.heart = 0; level(s); },
+  update(s, dt) {
+    const p = s.p;
+    p.fx = K.lerp(p.fx, p.x, Math.min(1, dt * 18)); p.fy = K.lerp(p.fy, p.y, Math.min(1, dt * 18));
+    s.moveT -= dt;
+    const d = K.dir();
+    if (s.moveT <= 0 && (d.x || d.y)) {
+      const nx = p.x + (d.x || 0), ny = p.y + (d.x ? 0 : d.y);
+      if (!s.g[ny][nx]) { p.x = nx; p.y = ny; s.moveT = 0.11; s.awake = true; if (Math.random() < 0.3) K.sfx('step'); }
+    }
+    if (!s.hasKey && p.x === s.key.x && p.y === s.key.y) { s.hasKey = true; K.sfx('power'); K.burst(OX + p.x * T + 15, OY + p.y * T + 15, K.C.gold, 20); }
+    if (s.hasKey && p.x === s.exit.x && p.y === s.exit.y) { s.level++; K.sfx('win'); K.flash('#fff', 0.2); level(s); return; }
+    const dm = s.d;
+    dm.fx = K.lerp(dm.fx, dm.x, Math.min(1, dt * 10)); dm.fy = K.lerp(dm.fy, dm.y, Math.min(1, dt * 10));
+    if (s.awake) {
+      dm.t -= dt;
+      if (dm.t <= 0) { const path = bfs(s.g, dm.x, dm.y, p.x, p.y); if (path[0]) { dm.x = path[0][0]; dm.y = path[0][1]; } dm.t = s.dspeed; }
+    }
+    const dist = Math.abs(dm.x - p.x) + Math.abs(dm.y - p.y);
+    s.heart -= dt; if (s.awake && s.heart <= 0) { K.sfx('heart'); s.heart = K.clamp(dist / 12, 0.35, 1.4); }
+    if (dm.x === p.x && dm.y === p.y) { K.sfx('scare'); K.shake(18); K.flash('#ff0022', 0.4); K.end(s, { score: s.level, won: false, title: 'CAUGHT', text: `You escaped ${s.level} maze${s.level === 1 ? '' : 's'}.` }); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+      if (s.g[y][x]) { K.rect(OX + x * T, OY + y * T, T, T, '#2a0a10'); K.rect(OX + x * T, OY + y * T, T, 3, '#4a1420'); }
+      else K.rect(OX + x * T, OY + y * T, T, T, '#120407');
+    }
+    const ex = OX + s.exit.x * T, ey = OY + s.exit.y * T;
+    K.glow(s.hasKey ? K.C.green : '#550', 20); K.rect(ex + 4, ey + 2, T - 8, T - 4, s.hasKey ? K.C.green : '#443300', 3); K.noGlow();
+    if (!s.hasKey) { K.glow(K.C.gold, 16); K.text('⚷', OX + s.key.x * T + 15, OY + s.key.y * T + 16, 24, K.C.gold); K.noGlow(); }
+    const px = OX + s.p.fx * T + 15, py = OY + s.p.fy * T + 15;
+    K.glow('#fff', 10); K.circle(px, py, 9, '#f2f0ff'); K.noGlow();
+    const dx = OX + s.d.fx * T + 15, dy = OY + s.d.fy * T + 15;
+    K.glow('#ff0022', 25); K.circle(dx, dy, 12, '#1a0000'); K.circle(dx - 4, dy - 3, 2.5, '#ff2233'); K.circle(dx + 4, dy - 3, 2.5, '#ff2233'); K.noGlow();
+    const flick = 1 + Math.sin(K.time() * 13) * 0.04 + (Math.random() < 0.02 ? -0.3 : 0);
+    K.darkness([{ x: px, y: py, r: (K.attract ? 230 : 130) * flick }, ...(s.hasKey ? [{ x: ex + 15, y: ey + 15, r: 40 }] : [])], 0.95);
+    if (s.awake || K.attract) { const a = 0.5 + 0.5 * Math.sin(K.time() * 3); K.alpha(0.5 + a * 0.5); K.glow('#ff0022', 14); K.circle(dx - 4, dy - 3, 2.5, '#ff3344'); K.circle(dx + 4, dy - 3, 2.5, '#ff3344'); K.noGlow(); K.alpha(1); }
+    const dist = Math.abs(s.d.x - s.p.x) + Math.abs(s.d.y - s.p.y);
+    if (s.awake && dist < 9) { K.alpha((9 - dist) / 14); K.vignette(1); K.rect(0, 0, 960, 540, 'rgba(120,0,0,0.25)'); K.alpha(1); }
+    K.text(`MAZE ${s.level + 1}`, 20, 20, 18, '#ff6677', 'left', 'd');
+    K.text(s.hasKey ? 'KEY ✓  FIND THE EXIT' : 'FIND THE KEY ⚷', 940, 20, 16, s.hasKey ? K.C.green : K.C.gold, 'right', 'd');
+  },
+  ai(s, dt) {
+    s.aiT = (s.aiT || 0) - dt; ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false));
+    const tgt = s.hasKey ? s.exit : s.key; const path = bfs(s.g, s.p.x, s.p.y, tgt.x, tgt.y);
+    if (path[0]) { const [nx, ny] = path[0]; K.vhold(nx > s.p.x ? 'ArrowRight' : nx < s.p.x ? 'ArrowLeft' : ny > s.p.y ? 'ArrowDown' : 'ArrowUp'); }
+  },
+});
+</script></body></html>
