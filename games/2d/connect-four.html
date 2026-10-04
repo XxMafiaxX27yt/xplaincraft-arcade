@@ -1,0 +1,111 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Four</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"connect-four","n":15,"title":"CONNECT FOUR","genre":"mind","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Drop discs, get four in a row: across, down or diagonal. Solo against a CPU that looks 5 moves ahead, with a friend on one screen, or online.","controls":"Click / tap a column (or 1-7)","scoreLabel":"WINS","tasks":[{"stat":"won","target":1,"text":"Win a game of Connect Four"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = 7, ROWS = 6, S = 66, BX = 480 - (COLS * S) / 2, BY = 80;
+const COLOR = ['#ff3355', '#ffd93a'];
+const dropRow = (b, c) => { for (let r = ROWS - 1; r >= 0; r--) if (!b[r][c]) return r; return -1; };
+function winner(b) {
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const v = b[r][c]; if (!v) continue;
+    for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+      const line = [[r, c]];
+      for (let k = 1; k < 4; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || b[rr][cc] !== v) break; line.push([rr, cc]); }
+      if (line.length === 4) return { v, line };
+    }
+  }
+  return null;
+}
+function score(b, me) {
+  let sc = 0;
+  const op = 3 - me;
+  for (let r = 0; r < ROWS; r++) if (b[r][3] === me) sc += 3;
+  const windows = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const w = []; for (let k = 0; k < 4; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) break; w.push(b[rr][cc]); }
+    if (w.length === 4) windows.push(w);
+  }
+  for (const w of windows) {
+    const m = w.filter((x) => x === me).length, o = w.filter((x) => x === op).length, e = w.filter((x) => !x).length;
+    if (m === 4) sc += 1000; else if (m === 3 && e === 1) sc += 6; else if (m === 2 && e === 2) sc += 2;
+    if (o === 3 && e === 1) sc -= 8;
+  }
+  return sc;
+}
+function negamax(b, depth, me, a, bt) {
+  const w = winner(b);
+  if (w) return w.v === me ? 100000 + depth : -100000 - depth;
+  if (depth === 0) return score(b, me) - score(b, 3 - me);
+  let best = -Infinity;
+  for (const c of [3, 2, 4, 1, 5, 0, 6]) {
+    const r = dropRow(b, c); if (r < 0) continue;
+    b[r][c] = me; const v = -negamax(b, depth - 1, 3 - me, -bt, -a); b[r][c] = 0;
+    if (v > best) best = v; if (v > a) a = v; if (a >= bt) break;
+  }
+  return best === -Infinity ? 0 : best;
+}
+function cpuCol(b) {
+  let best = -Infinity, pick = 3;
+  for (const c of K.shuffle([0, 1, 2, 3, 4, 5, 6])) { const r = dropRow(b, c); if (r < 0) continue; b[r][c] = 2; const v = -negamax(b, 4, 1, -Infinity, Infinity); b[r][c] = 0; if (v > best) { best = v; pick = c; } }
+  return pick;
+}
+function play(s, c, from) {
+  if (s.over || s.drop) return false;
+  const r = dropRow(s.b, c); if (r < 0) return false;
+  s.drop = { r, c, v: s.turn, y: -1 };
+  K.sfx('click');
+  return true;
+}
+function land(s) {
+  const d = s.drop; s.b[d.r][d.c] = d.v; s.drop = null; K.sfx('knock');
+  const w = winner(s.b);
+  if (w) { s.over = true; s.line = w.line; s.wins[w.v - 1]++; setTimeout(() => finish(s, w.v), 1100); return; }
+  if (s.b.every((row) => row.every(Boolean))) { s.over = true; setTimeout(() => finish(s, 0), 900); return; }
+  s.turn = 3 - s.turn; s.think = 0;
+}
+function myColor() { return K.net ? K.net.index + 1 : 1; }
+function finish(s, v) {
+  const mine = myColor();
+  const title = !v ? 'DRAW' : K.local ? (v === 1 ? 'RED WINS' : 'YELLOW WINS') : v === mine ? 'YOU WIN' : 'YOU LOSE';
+  K.end(s, { score: v === mine ? 1 : 0, won: !v || K.local ? null : v === mine, stats: { won: v === mine && !K.local ? 1 : 0 }, title, text: K.net ? `${K.net.players[0].username} vs ${K.net.players[1]?.username || '?'}` : '' });
+}
+K.game({
+  bg: '#060a1e',
+  init(s) { s.b = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); s.turn = 1; s.over = false; s.drop = null; s.line = null; s.wins = [0, 0]; s.think = 0; s.hover = 3; },
+  onNet(s, d) { if (d.t === 'mv' && s.turn !== myColor()) play(s, d.c); },
+  onLeave(s) { if (!s.over) { s.over = true; K.end(s, { score: 1, won: true, stats: { won: 1 }, title: 'OPPONENT LEFT', text: 'You win by default.' }); } },
+  update(s, dt) {
+    if (s.drop) { s.drop.y += dt * 14; if (s.drop.y >= s.drop.r) land(s); return; }
+    if (s.over) return;
+    const cpuTurn = !K.net && !K.local && s.turn === 2;
+    if (cpuTurn) { s.think += dt; if (s.think > 0.5) play(s, cpuCol(s.b)); return; }
+    const mineTurn = K.local || !K.net || s.turn === myColor();
+    s.hover = K.clamp(Math.floor((K.mouse.x - BX) / S), 0, COLS - 1);
+    if (!mineTurn) return;
+    let c = -1;
+    for (let i = 0; i < 7; i++) if (K.tap('Digit' + (i + 1))) c = i;
+    if (K.mouse.clicked && K.mouse.x > BX && K.mouse.x < BX + COLS * S) c = s.hover;
+    if (c >= 0 && play(s, c) && K.net) K.net.send({ t: 'mv', c });
+  },
+  draw(s) {
+    const mine = myColor();
+    const label = K.net ? (s.turn === mine ? 'YOUR TURN' : `${K.net.players[s.turn - 1]?.username || 'THEM'}'S TURN`) : K.local ? (s.turn === 1 ? 'RED TO PLAY' : 'YELLOW TO PLAY') : s.turn === 1 ? 'YOUR TURN' : 'CPU THINKING…';
+    K.text(label, 480, 36, 22, COLOR[s.turn - 1], 'center', 'd', 12);
+    if (!s.over && !s.drop) { K.alpha(0.5); K.circle(BX + s.hover * S + S / 2, BY - 30, 24, COLOR[s.turn - 1]); K.alpha(1); }
+    K.rect(BX - 10, BY - 6, COLS * S + 20, ROWS * S + 16, '#1d3fd8', 16);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = BX + c * S + S / 2, y = BY + r * S + S / 2 + 2, v = s.b[r][c];
+      K.circle(x, y, 26, v ? COLOR[v - 1] : '#060a1e');
+      if (v) { K.circle(x, y, 18, v === 1 ? '#d61f40' : '#e0b82a'); }
+    }
+    if (s.drop) { const x = BX + s.drop.c * S + S / 2, y = BY + s.drop.y * S + S / 2 + 2; K.circle(x, y, 26, COLOR[s.drop.v - 1]); }
+    if (s.line) { K.glow('#fff', 18); s.line.forEach(([r, c]) => K.ring(BX + c * S + S / 2, BY + r * S + S / 2 + 2, 24, '#fff', 4)); K.noGlow(); }
+    const names = K.net ? K.net.players.map((p) => p.username) : K.local ? ['RED', 'YELLOW'] : ['YOU', 'CPU'];
+    K.circle(90, 200, 20, COLOR[0]); K.text(names[0] || '', 90, 240, 16, '#fff', 'center', 'd');
+    K.circle(870, 200, 20, COLOR[1]); K.text(names[1] || '', 870, 240, 16, '#fff', 'center', 'd');
+  },
+  ai(s) { if (s.turn === 1 && !s.drop && !s.over) { s.aw = (s.aw || 0) + 1; if (s.aw % 30 === 0) play(s, K.irand(0, 6)); } },
+});
+</script></body></html>

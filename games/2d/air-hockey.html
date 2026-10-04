@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Air Hockey</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"air-hockey","n":75,"title":"AIR HOCKEY","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Slam the puck into the other goal. Hit it hard with a fast mallet, bank it off the walls. First to 7, against the CPU, a friend on one screen, or online.","controls":"Mouse / touch moves your mallet · same screen: left WASD, right arrows","scoreLabel":"GOALS","tasks":[{"stat":"won","target":1,"text":"Win a game of Air Hockey"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const L = 60, R = 900, T = 40, B = 500, GOAL = 150, PR = 18, MR = 32, WIN = 7;
+function reset(s, toward) { s.pk = { x: 480, y: 270, vx: toward * 60, vy: K.rand(-40, 40) }; s.wait = 0.9; }
+const mine = () => (K.net ? K.net.index : 0);
+function moveMallet(m, tx, ty, side, dt) {
+  const minX = side === 0 ? L + MR : 480 + MR, maxX = side === 0 ? 480 - MR : R - MR;
+  const nx = K.clamp(tx, minX, maxX), ny = K.clamp(ty, T + MR, B - MR);
+  m.vx = (nx - m.x) / Math.max(dt, 1 / 120); m.vy = (ny - m.y) / Math.max(dt, 1 / 120); m.x = nx; m.y = ny;
+}
+function physics(s, dt) {
+  const p = s.pk;
+  if (s.wait > 0) { s.wait -= dt; return null; }
+  let fx = null;
+  const steps = 4;
+  for (let k = 0; k < steps; k++) {
+    const h = dt / steps;
+    p.x += p.vx * h; p.y += p.vy * h;
+    p.vx *= Math.pow(0.6, h); p.vy *= Math.pow(0.6, h);
+    if (p.y < T + PR) { p.y = T + PR; p.vy = Math.abs(p.vy) * 0.9; fx = 'click'; }
+    if (p.y > B - PR) { p.y = B - PR; p.vy = -Math.abs(p.vy) * 0.9; fx = 'click'; }
+    const inGoal = Math.abs(p.y - 270) < GOAL / 2;
+    if (p.x < L + PR && !inGoal) { p.x = L + PR; p.vx = Math.abs(p.vx) * 0.9; fx = 'click'; }
+    if (p.x > R - PR && !inGoal) { p.x = R - PR; p.vx = -Math.abs(p.vx) * 0.9; fx = 'click'; }
+    s.m.forEach((m) => {
+      const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy);
+      if (d < PR + MR && d > 0) {
+        const nx = dx / d, ny = dy / d;
+        p.x = m.x + nx * (PR + MR); p.y = m.y + ny * (PR + MR);
+        const rel = (p.vx - m.vx) * nx + (p.vy - m.vy) * ny;
+        if (rel < 0) { p.vx -= 1.9 * rel * nx; p.vy -= 1.9 * rel * ny; }
+        const sp = Math.hypot(p.vx, p.vy); if (sp > 1500) { p.vx *= 1500 / sp; p.vy *= 1500 / sp; }
+        fx = 'blip';
+      }
+    });
+    if (p.x < L - 10) { s.sc[1]++; return goal(s, 1); }
+    if (p.x > R + 10) { s.sc[0]++; return goal(s, 0); }
+  }
+  return fx;
+}
+function goal(s, who) { K.flash(who === 0 ? '#22e6ff' : '#ff2bd6', 0.2); K.shake(10); reset(s, who === 0 ? 1 : -1); if (s.sc[who] >= WIN) s.over = 'pending'; return 'coin'; }
+function finish(s) {
+  s.over = true;
+  const me = mine(), won = s.sc[me] >= WIN;
+  K.end(s, { score: s.sc[me], won: K.local ? null : won, stats: { won: won && !K.local ? 1 : 0 }, title: K.local ? (s.sc[0] >= WIN ? 'BLUE WINS' : 'PINK WINS') : won ? 'YOU WIN' : 'YOU LOSE', text: `${s.sc[0]} - ${s.sc[1]}` });
+}
+K.game({
+  bg: '#04101a',
+  init(s) { s.m = [{ x: 200, y: 270, vx: 0, vy: 0 }, { x: 760, y: 270, vx: 0, vy: 0 }]; s.sc = [0, 0]; s.over = false; s.sendT = 0; reset(s, Math.random() < 0.5 ? 1 : -1); },
+  onNet(s, d) {
+    if (d.t === 'm' && K.net.isHost) { s.m[1].vx = (d.x - s.m[1].x) * 20; s.m[1].vy = (d.y - s.m[1].y) * 20; s.m[1].x = d.x; s.m[1].y = d.y; }
+    if (d.t === 'st' && !K.net.isHost) { s.pk = d.p; s.m[0] = d.m; s.sc = d.sc; s.wait = d.w; if (d.fx) K.sfx(d.fx); if (d.end && !s.over) finish(s); }
+  },
+  onLeave(s) { if (!s.over) { s.over = true; K.end(s, { score: s.sc[mine()], won: true, stats: { won: 1 }, title: 'OPPONENT LEFT', text: 'You win by default.' }); } },
+  update(s, dt) {
+    const me = mine(), host = !K.net || K.net.isHost;
+    if (K.local) {
+      const a = s.m[0], b = s.m[1], sp = 560 * dt;
+      moveMallet(a, a.x + ((K.down('KeyD') ? 1 : 0) - (K.down('KeyA') ? 1 : 0)) * sp, a.y + ((K.down('KeyS') ? 1 : 0) - (K.down('KeyW') ? 1 : 0)) * sp, 0, dt);
+      moveMallet(b, b.x + ((K.down('ArrowRight') ? 1 : 0) - (K.down('ArrowLeft') ? 1 : 0)) * sp, b.y + ((K.down('ArrowDown') ? 1 : 0) - (K.down('ArrowUp') ? 1 : 0)) * sp, 1, dt);
+    } else {
+      moveMallet(s.m[me], K.mouse.x, K.mouse.y, me, dt);
+      if (!K.net) {
+        // CPU: defend, then attack when the puck is on its side
+        const c = s.m[1], p = s.pk, home = { x: R - 70, y: 270 + K.clamp(p.y - 270, -90, 90) };
+        const t = p.x > 480 ? { x: p.x + 26, y: p.y } : home;
+        moveMallet(c, c.x + K.clamp(t.x - c.x, -1, 1) * Math.min(Math.abs(t.x - c.x), 430 * dt), c.y + K.clamp(t.y - c.y, -1, 1) * Math.min(Math.abs(t.y - c.y), 430 * dt), 1, dt);
+      }
+    }
+    if (!host) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'm', x: Math.round(s.m[1].x), y: Math.round(s.m[1].y) }); s.sendT = 0.04; } if (s.wait <= 0) { s.pk.x += s.pk.vx * dt; s.pk.y += s.pk.vy * dt; } return; }
+    const fx = physics(s, dt);
+    if (fx) K.sfx(fx);
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || fx || s.over === 'pending') { const p = s.pk; K.net.send({ t: 'st', p: { x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy) }, m: { x: Math.round(s.m[0].x), y: Math.round(s.m[0].y), vx: 0, vy: 0 }, sc: s.sc, w: s.wait, fx, end: s.over === 'pending' }); s.sendT = 0.045; } }
+    if (s.over === 'pending') finish(s);
+  },
+  draw(s) {
+    K.rect(L - 20, T - 20, R - L + 40, B - T + 40, '#0a2236', 30);
+    K.stroke(L, T, R - L, B - T, '#22e6ff66', 3, 24);
+    K.line(480, T, 480, B, '#ffffff22', 3); K.ring(480, 270, 70, '#ffffff22', 3);
+    K.glow('#22e6ff', 16); K.rect(L - 8, 270 - GOAL / 2, 8, GOAL, '#22e6ff'); K.glow('#ff2bd6', 16); K.rect(R, 270 - GOAL / 2, 8, GOAL, '#ff2bd6'); K.noGlow();
+    for (let i = 0; i < 40; i++) K.circle(L + 20 + (i % 10) * 92, T + 30 + Math.floor(i / 10) * 140, 1.5, '#ffffff18');
+    K.text(String(s.sc[0]), 420, 20, 28, '#22e6ff', 'center', 'd'); K.text(String(s.sc[1]), 540, 20, 28, '#ff2bd6', 'center', 'd');
+    const names = K.net ? K.net.players.map((p) => p.username) : K.local ? ['BLUE', 'PINK'] : ['YOU', 'CPU'];
+    K.text(names[0] || '', 200, 20, 14, '#22e6ff', 'center', 'd'); K.text(names[1] || '', 760, 20, 14, '#ff2bd6', 'center', 'd');
+    K.glow('#fff', 14); K.circle(s.pk.x, s.pk.y, PR, '#ffd93a'); K.circle(s.pk.x, s.pk.y, PR - 6, '#ffb000'); K.noGlow();
+    [['#22e6ff', 0], ['#ff2bd6', 1]].forEach(([c, i]) => { const m = s.m[i]; K.glow(c, 22); K.circle(m.x, m.y, MR, c); K.noGlow(); K.circle(m.x, m.y, MR - 10, '#04101a'); K.circle(m.x, m.y, 10, c); });
+    if (s.wait > 0) K.text('READY', 480, 330, 18, '#fff', 'center', 'd');
+  },
+  ai(s, dt) { const p = s.pk; K.vmouse(p.x < 480 ? p.x - 26 : 200, p.x < 480 ? p.y : 270 + (p.y - 270) * 0.5); },
+});
+</script></body></html>

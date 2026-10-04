@@ -511,7 +511,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/pong-duel.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/pong-duel.png"
 },
 {
 "id": "flappy",
@@ -637,6 +638,110 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/neon-snake.png"
+},
+{
+"id": "air-hockey",
+"n": 75,
+"title": "AIR HOCKEY",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Slam the puck into the other goal. Hit it hard with a fast mallet, bank it off the walls. First to 7, against the CPU, a friend on one screen, or online.",
+"controls": "Mouse / touch moves your mallet · same screen: left WASD, right arrows",
+"scoreLabel": "GOALS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Air Hockey"
+}
+],
+"file": "games/2d/air-hockey.html",
+"dim": "2d"
+},
+{
+"id": "snake-arena",
+"n": 76,
+"title": "SNAKE ARENA",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Up to 8 snakes in one arena. Eat to grow, make others crash into you, and be the last one slithering. Fallen snakes turn into food. Bots fill empty seats.",
+"controls": "Arrow keys / WASD or swipe · same screen: P1 WASD, P2 arrows",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Be the last snake alive in Snake Arena"
+}
+],
+"file": "games/2d/snake-arena.html",
+"dim": "2d"
+},
+{
+"id": "reaction-duel",
+"n": 77,
+"title": "REACTION DUEL",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Wild-west quick draw for up to 8. Wait for DRAW!, then hit first. Jump early and you're out for that round. First to 5 round wins takes it.",
+"controls": "Online: click / tap / Space · same screen: P1 = A, P2 = L",
+"scoreLabel": "ROUNDS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Reaction Duel"
+}
+],
+"file": "games/2d/reaction-duel.html",
+"dim": "2d"
+},
+{
+"id": "typing-race",
+"n": 98,
+"title": "TYPING RACE",
+"genre": "fun",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Your car moves as fast as you type. Race up to 7 friends online on the same passage, or 3 ghost racers solo. Typos stop your car until you fix them.",
+"controls": "Type the passage · Backspace fixes mistakes",
+"scoreLabel": "WPM",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Typing Race"
+},
+{
+"stat": "score",
+"target": 40,
+"text": "Finish a Typing Race at 40 WPM"
+}
+],
+"file": "games/2d/typing-race.html",
+"dim": "2d"
 },
 {
 "id": "2048",
@@ -870,6 +975,31 @@ export const GAME_LIST = [
 "cover": "games/covers/typing-speed.png"
 },
 {
+"id": "connect-four",
+"n": 15,
+"title": "CONNECT FOUR",
+"genre": "mind",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Drop discs, get four in a row: across, down or diagonal. Solo against a CPU that looks 5 moves ahead, with a friend on one screen, or online.",
+"controls": "Click / tap a column (or 1-7)",
+"scoreLabel": "WINS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Connect Four"
+}
+],
+"file": "games/2d/connect-four.html",
+"dim": "2d"
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",
@@ -956,5 +1086,28 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/battleship.png"
+},
+{
+"id": "draw-guess",
+"n": 89,
+"title": "DRAW & GUESS",
+"genre": "mystery",
+"modes": [
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Party drawing game for 2-8. One player draws a secret word, everyone else races to guess it. Faster guesses score more, and the artist scores for every correct guess. Everyone draws once.",
+"controls": "Drawing: drag on the canvas, pick colours / sizes · Guessing: type (or tap) + Enter",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Draw & Guess"
+}
+],
+"file": "games/2d/draw-guess.html",
+"dim": "2d"
 }
 ];

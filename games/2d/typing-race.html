@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Typing Race</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"typing-race","n":98,"title":"TYPING RACE","genre":"fun","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"Your car moves as fast as you type. Race up to 7 friends online on the same passage, or 3 ghost racers solo. Typos stop your car until you fix them.","controls":"Type the passage · Backspace fixes mistakes","scoreLabel":"WPM","tasks":[{"stat":"won","target":1,"text":"Win a Typing Race"},{"stat":"score","target":40,"text":"Finish a Typing Race at 40 WPM"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+const CARS = ['#22e6ff', '#ff2bd6', '#ffd93a', '#3dffa0', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+function racers() {
+  if (K.net) return K.net.players.map((p) => ({ id: p.id, name: p.username }));
+  return [{ id: 'me', name: 'YOU' }, { id: 'g1', name: 'GHOST 32', wpm: 32 }, { id: 'g2', name: 'GHOST 45', wpm: 45 }, { id: 'g3', name: 'GHOST 60', wpm: 60 }];
+}
+K.game({
+  bg: '#0a0c18', touch: { stick: false, buttons: [] },
+  init(s) {
+    const words = []; for (let i = 0; i < 22; i++) words.push(WORDS.list(3, 7)[Math.floor(K.rng() * WORDS.list(3, 7).length)]);
+    s.text = words.join(' '); s.pos = 0; s.typo = ''; s.time = -3; s.done = null; s.sendT = 0; s.over = false; s.errors = 0;
+    s.r = racers().map((r) => ({ ...r, p: 0, fin: null }));
+    s.myId = K.net ? K.net.me : 'me';
+  },
+  onNet(s, d, from) { const r = s.r.find((x) => x.id === from); if (!r) return; if (d.t === 'pr') r.p = d.p; if (d.t === 'fin') { r.p = 1; r.fin = d.time; } },
+  onLeave(s, id) { s.r = s.r.filter((r) => r.id !== id); },
+  update(s, dt) {
+    s.time += dt;
+    const me = s.r.find((r) => r.id === s.myId);
+    if (s.time < 0) return;
+    s.r.filter((r) => r.wpm && !r.fin).forEach((r) => { r.p = Math.min(1, (s.time * r.wpm * 5) / 60 / s.text.length * (0.9 + Math.sin(s.time + r.wpm) * 0.1)); if (r.p >= 1) r.fin = s.time; });
+    if (!s.done) {
+      const kb = K.isTouch ? K.keyboard(255, 400, 450, {}, { h: 38 }) : null;
+      let typed = K.isTouch ? (kb && kb.length === 1 ? [kb.toLowerCase()] : []) : K.typed().map((c) => c.toLowerCase());
+      if (K.tap('Space') || kb === 'ENTER') typed.push(' ');
+      for (const ch of typed) {
+        if (s.typo) { s.typo += ch; continue; }
+        if (ch === s.text[s.pos]) { s.pos++; K.sfx('tick'); } else { s.typo = ch; s.errors++; K.sfx('wrong'); }
+      }
+      if (K.tap('Backspace') || kb === 'BACK') { if (s.typo) s.typo = s.typo.slice(0, -1); }
+      me.p = s.pos / s.text.length;
+      if (s.pos >= s.text.length) { s.done = s.time; me.fin = s.time; K.sfx('win'); if (K.net) K.net.send({ t: 'fin', time: s.time }); }
+      if (K.net) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'pr', p: me.p }); s.sendT = 0.25; } }
+    }
+    const allIn = s.r.every((r) => r.fin != null);
+    if (!s.over && ((s.done != null && (allIn || s.time - s.done > 12)) || s.time > 180)) {
+      s.over = true;
+      const order = s.r.slice().sort((a, b) => (a.fin ?? 1e9) - (b.fin ?? 1e9) || b.p - a.p);
+      const place = order.findIndex((r) => r.id === s.myId) + 1;
+      const wpm = Math.round((s.pos / 5) / (((s.done ?? s.time)) / 60));
+      K.end(s, { score: wpm, won: place === 1, stats: { won: place === 1 ? 1 : 0 }, title: place === 1 ? '1ST PLACE!' : `${place}${['', 'ST', 'ND', 'RD'][place] || 'TH'} PLACE`, text: `${wpm} WPM · ${s.errors} typos` });
+    }
+  },
+  draw(s) {
+    const n = s.r.length, lane = Math.min(44, 210 / n);
+    K.rect(40, 30, 880, n * lane + 20, '#11142a', 10);
+    K.rect(860, 30, 6, n * lane + 20, '#fff');
+    s.r.forEach((r, i) => {
+      const y = 46 + i * lane, x = 60 + r.p * 790, c = CARS[i % 8];
+      K.line(60, y + lane / 2 + 4, 860, y + lane / 2 + 4, '#ffffff11', 1);
+      K.glow(c, 10); K.rect(x - 34, y + 4, 40, lane - 14, c, 6); K.noGlow();
+      K.circle(x - 26, y + lane - 10, 4, '#111'); K.circle(x - 2, y + lane - 10, 4, '#111');
+      K.text(r.id === s.myId ? 'YOU' : r.name, x + 14, y + lane / 2 - 2, 11, c, 'left', 'd');
+      if (r.fin != null) K.text(`✓ ${r.fin.toFixed(1)}s`, 900, y + lane / 2 - 2, 11, '#3dffa0', 'right', 'm');
+    });
+    // passage
+    const top = 60 + n * lane;
+    K.rect(40, top, 880, 120, '#0f1224', 10);
+    const c = K.ctx(); c.font = K.font(22, 'm', 400);
+    let x = 60, y = top + 30;
+    const words = s.text.split(' ');
+    let idx = 0;
+    for (const w of words) {
+      const ww = c.measureText(w + ' ').width;
+      if (x + ww > 900) { x = 60; y += 34; }
+      for (let k = 0; k <= w.length; k++) {
+        const ch = k < w.length ? w[k] : ' ', gi = idx + k;
+        const col = gi < s.pos ? '#3dffa0' : gi === s.pos ? (s.typo ? '#ff3355' : '#fff') : '#5d5a80';
+        if (gi === s.pos) K.rect(x - 1, y + 13, c.measureText(ch).width + 2, 3, s.typo ? '#ff3355' : '#22e6ff');
+        K.text(ch, x, y, 22, col, 'left', 'm');
+        x += c.measureText(ch).width;
+      }
+      idx += w.length + 1;
+    }
+    if (s.typo) K.text(`typo! press Backspace (${s.typo.length})`, 480, top + 140, 14, '#ff3355', 'center', 'd');
+    if (s.time < 0) K.text(String(Math.ceil(-s.time)), 480, 270, 90, '#ffd93a', 'center', 'd', 20);
+    const wpm = s.time > 1 ? Math.round((s.pos / 5) / ((s.done ?? s.time) / 60)) : 0;
+    K.text(`${wpm} WPM`, 480, 16, 16, '#fff', 'center', 'd');
+    if (K.isTouch) K.keyboard(255, 400, 450, {}, { h: 38 });
+  },
+  ai(s) { if (s.time > 0 && !s.done) { s.aw = (s.aw || 0) + 1; if (s.aw % 6 === 0) { const ch = s.text[s.pos]; K.vtap(ch === ' ' ? 'Space' : 'Key' + ch.toUpperCase()); } } },
+});
+</script></body></html>

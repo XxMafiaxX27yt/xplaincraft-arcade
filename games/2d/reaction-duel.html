@@ -1,0 +1,87 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reaction Duel</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"reaction-duel","n":77,"title":"REACTION DUEL","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":8,"desc":"Wild-west quick draw for up to 8. Wait for DRAW!, then hit first. Jump early and you're out for that round. First to 5 round wins takes it.","controls":"Online: click / tap / Space · same screen: P1 = A, P2 = L","scoreLabel":"ROUNDS","tasks":[{"stat":"won","target":1,"text":"Win a Reaction Duel"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const TARGET = 5, COL = ['#22e6ff', '#ff2bd6', '#ffd93a', '#3dffa0', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+function seats() { if (K.net) return K.net.players.map((p) => ({ id: p.id, name: p.username })); if (K.local) return [{ id: 'p0', name: 'P1 (A)' }, { id: 'p1', name: 'P2 (L)' }]; return [{ id: 'p0', name: 'YOU' }, { id: 'cpu', name: 'CPU', cpu: true }]; }
+function round(s) { s.phase = 'wait'; s.t = 1.5 + K.rng() * 3.5; s.fakes = K.rng() < 0.5 ? 1 + K.rint(0, 1) : 0; s.hits = {}; s.out = {}; s.winner = null; s.goAt = 0; s.fake = 0; }
+function decide(s) {
+  // host: the fastest valid hit wins the round
+  const valid = Object.entries(s.hits).filter(([id]) => !s.out[id]).sort((a, b) => a[1] - b[1]);
+  const w = valid[0]?.[0] || null;
+  return w;
+}
+function award(s, w) {
+  s.phase = 'show'; s.t = 2; s.winner = w;
+  if (w) { const p = s.p.find((x) => x.id === w); p.wins++; K.sfx(w === s.myId ? 'coin' : 'hit'); }
+  const champ = s.p.find((x) => x.wins >= TARGET);
+  if (champ) s.champ = champ.id;
+}
+K.game({
+  bg: '#140b06', touch: { stick: false, buttons: [] },
+  init(s) { s.p = seats().map((p) => ({ ...p, wins: 0 })); s.myId = K.net ? K.net.me : 'p0'; s.champ = null; s.over = false; round(s); },
+  onNet(s, d, from) {
+    const host = K.net.isHost;
+    if (d.t === 'hit' && host) { if (s.phase === 'go') { if (s.hits[from] == null) s.hits[from] = d.ms; } else if (s.phase === 'wait') s.out[from] = true; }
+    if (d.t === 'phase' && !host) { s.phase = d.ph; if (d.ph === 'go') { s.goAt = performance.now(); K.sfx('laser'); } if (d.ph === 'fake') { s.fake = 0.4; s.phase = 'wait'; K.sfx('click'); } if (d.ph === 'show') { s.out = d.out; s.hits = d.hits; s.p.forEach((p, i) => (p.wins = d.wins[i])); s.winner = d.w; s.t = 2; s.champ = d.champ; K.sfx(d.w === s.myId ? 'coin' : 'hit'); } if (d.ph === 'wait') round(s); }
+  },
+  onLeave(s, id) { s.p = s.p.filter((p) => p.id !== id); if (s.p.length < 2 && !s.over) { s.over = true; K.end(s, { score: 1, won: true, stats: { won: 1 }, title: 'EVERYONE ELSE LEFT' }); } },
+  update(s, dt) {
+    const host = !K.net || K.net.isHost;
+    s.fake = Math.max(0, s.fake - dt);
+    // input
+    const press = (id) => {
+      if (s.phase === 'wait' && !s.out[id]) { s.out[id] = true; K.sfx('wrong'); if (!host) K.net.send({ t: 'hit', ms: 0 }); }
+      else if (s.phase === 'go' && s.hits[id] == null) { const ms = performance.now() - s.goAt; s.hits[id] = ms; if (!host) K.net.send({ t: 'hit', ms }); K.sfx('boom'); }
+    };
+    if (K.local) { if (K.tap('KeyA')) press('p0'); if (K.tap('KeyL')) press('p1'); }
+    else if (K.action()) press(s.myId);
+    if (!host) { if (s.phase === 'show') { s.t -= dt; if (s.t <= 0 && s.champ) finish(s); } return; }
+    s.t -= dt;
+    const send = (o) => K.net && K.net.send(o);
+    if (s.phase === 'wait') {
+      if (s.fakes && s.t < s.fakes * 0.9 && !s.fakeDone) { s.fakeDone = true; s.fake = 0.4; K.sfx('click'); send({ t: 'phase', ph: 'fake' }); }
+      if (s.t <= 0) { s.phase = 'go'; s.goAt = performance.now(); s.t = 1.6; s.fakeDone = false; K.sfx('laser'); send({ t: 'phase', ph: 'go' }); }
+      s.p.filter((p) => p.cpu).forEach((p) => { if (s.phase === 'go') p.react = 0.22 + Math.random() * 0.25; });
+    } else if (s.phase === 'go') {
+      s.p.filter((p) => p.cpu).forEach((p) => { if (s.hits[p.id] == null && 1.6 - s.t > p.react) s.hits[p.id] = (1.6 - s.t) * 1000; });
+      const everyone = s.p.every((p) => s.out[p.id] || s.hits[p.id] != null);
+      if (s.t <= 0 || everyone) { const w = decide(s); award(s, w); send({ t: 'phase', ph: 'show', w, out: s.out, hits: s.hits, wins: s.p.map((p) => p.wins), champ: s.champ }); }
+    } else if (s.phase === 'show') {
+      if (s.t <= 0) {
+        if (s.champ) return finish(s);
+        round(s); s.t = 1.5 + Math.random() * 3.5; s.fakes = Math.random() < 0.5 ? 1 : 0; send({ t: 'phase', ph: 'wait' });
+      }
+    }
+  },
+  draw(s) {
+    const sky = s.phase === 'go' ? ['#ff6a1a', '#3a1206'] : ['#2a1408', '#120804'];
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, sky));
+    K.circle(480, 330, 120, s.phase === 'go' ? '#ffd93a' : '#a0461a');
+    K.rect(0, 380, 960, 160, '#1a0d05');
+    const big = s.phase === 'go' ? 'DRAW!' : s.phase === 'show' ? (s.winner ? (s.winner === s.myId ? 'YOU WERE FASTEST' : `${s.p.find((p) => p.id === s.winner)?.name} WAS FASTEST`) : 'NOBODY HIT IN TIME') : s.fake > 0 ? '…' : 'WAIT FOR IT…';
+    K.text(big, 480, 120, s.phase === 'go' ? 90 : 40, s.phase === 'go' ? '#fff' : '#ffd59a', 'center', 'd', s.phase === 'go' ? 24 : 6);
+    const n = s.p.length, gap = 900 / n;
+    s.p.forEach((p, i) => {
+      const x = 30 + gap * i + gap / 2, y = 420, c = COL[i % 8];
+      K.rect(x - 14, y - 70, 28, 60, '#120804', 6); K.circle(x, y - 84, 16, '#120804');
+      K.rect(x - 22, y - 104, 44, 8, '#120804', 3); K.rect(x - 14, y - 116, 28, 14, '#120804', 3);
+      if (s.hits[p.id] != null && s.phase !== 'wait') { K.glow('#ffd93a', 16); K.rect(x + 12, y - 52, 26, 6, '#ffd93a'); K.noGlow(); }
+      K.text(p.id === s.myId ? 'YOU' : p.name, x, y + 24, 14, c, 'center', 'd');
+      K.text('★'.repeat(p.wins) + '☆'.repeat(Math.max(0, TARGET - p.wins)), x, y + 48, 14, '#ffd93a', 'center');
+      if (s.out[p.id]) K.text('TOO EARLY', x, y - 140, 12, '#ff3355', 'center', 'd');
+      if (s.phase === 'show' && s.hits[p.id] != null && !s.out[p.id]) K.text(`${Math.round(s.hits[p.id])} ms`, x, y - 140, 14, '#fff', 'center', 'd');
+    });
+    if (!K.local) K.text('click / tap / space when it says DRAW!', 480, 520, 13, '#ffd59a99', 'center', 'm');
+  },
+});
+function finish(s) {
+  if (s.over) return;
+  s.over = true;
+  const me = s.p.find((p) => p.id === s.myId) || s.p[0], won = s.champ === s.myId;
+  const champ = s.p.find((p) => p.id === s.champ);
+  K.end(s, { score: me.wins, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'FASTEST IN THE WEST' : `${champ?.name || '?'} WINS`, text: s.p.map((p) => `${p.name} ${p.wins}`).join(' · ') });
+}
+</script></body></html>

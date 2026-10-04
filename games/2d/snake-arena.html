@@ -1,0 +1,126 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Snake Arena</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"snake-arena","n":76,"title":"SNAKE ARENA","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":8,"desc":"Up to 8 snakes in one arena. Eat to grow, make others crash into you, and be the last one slithering. Fallen snakes turn into food. Bots fill empty seats.","controls":"Arrow keys / WASD or swipe · same screen: P1 WASD, P2 arrows","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Be the last snake alive in Snake Arena"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 20, GW = 48, GH = 25, OY = 8;
+const COLS = ['#3dffa0', '#ff2bd6', '#22e6ff', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const STARTS = [[6, 6, 'right'], [41, 19, 'left'], [41, 6, 'left'], [6, 19, 'right'], [24, 3, 'down'], [24, 22, 'up'], [14, 13, 'right'], [33, 13, 'left']];
+function seats() {
+  if (K.net) return K.net.players.map((p, i) => ({ id: p.id, name: p.username, bot: false }));
+  const n = K.local ? 2 : 1, list = [];
+  for (let i = 0; i < n; i++) list.push({ id: 'p' + i, name: K.local ? 'P' + (i + 1) : 'YOU', bot: false });
+  return list;
+}
+function spawnFood(s, n = 1) { for (let k = 0; k < n; k++) { let x, y, t = 0; do { x = K.irand(1, GW - 2); y = K.irand(1, GH - 2); t++; } while (t < 200 && occupied(s, x, y)); s.food.push([x, y]); } }
+const occupied = (s, x, y) => s.sn.some((n) => n.alive && n.c.some((c) => c[0] === x && c[1] === y));
+function botDir(s, n) {
+  const h = n.c[0];
+  const safe = (x, y) => x >= 0 && y >= 0 && x < GW && y < GH && !occupied(s, x, y);
+  const opts = Object.entries(DIRS).filter(([k, [dx, dy]]) => !(dx === -DIRS[n.d][0] && dy === -DIRS[n.d][1]) && safe(h[0] + dx, h[1] + dy));
+  if (!opts.length) return n.d;
+  let tgt = s.food[0] || [24, 13], best = 1e9;
+  s.food.forEach((f) => { const d = Math.abs(f[0] - h[0]) + Math.abs(f[1] - h[1]); if (d < best) { best = d; tgt = f; } });
+  const space = ([k, [dx, dy]]) => { let free = 0; for (const [ex, ey] of Object.values(DIRS)) if (safe(h[0] + dx + ex, h[1] + dy + ey)) free++; return free; };
+  opts.sort((a, b) => space(b) - space(a) || Math.abs(h[0] + a[1][0] - tgt[0]) + Math.abs(h[1] + a[1][1] - tgt[1]) - (Math.abs(h[0] + b[1][0] - tgt[0]) + Math.abs(h[1] + b[1][1] - tgt[1])));
+  const good = opts.filter((o) => space(o) >= 1);
+  return (Math.random() < 0.08 ? K.pick(opts) : (good[0] || opts[0]))[0];
+}
+function tick(s) {
+  s.sn.forEach((n) => { if (!n.alive) return; if (n.bot) n.d = botDir(s, n); else if (n.q.length) n.d = n.q.shift(); });
+  const heads = s.sn.map((n) => (n.alive ? [n.c[0][0] + DIRS[n.d][0], n.c[0][1] + DIRS[n.d][1]] : null));
+  s.sn.forEach((n, i) => {
+    if (!n.alive) return;
+    const h = heads[i];
+    let dead = h[0] < 0 || h[1] < 0 || h[0] >= GW || h[1] >= GH;
+    if (!dead) for (const o of s.sn) if (o.alive && o.c.slice(0, o === n ? -1 : o.c.length).some((c) => c[0] === h[0] && c[1] === h[1])) { dead = true; if (o !== n) o.kills++; break; }
+    if (!dead) heads.forEach((h2, j) => { if (j !== i && h2 && h2[0] === h[0] && h2[1] === h[1]) dead = true; });
+    n.dead = dead;
+  });
+  s.sn.forEach((n, i) => {
+    if (!n.alive) return;
+    if (n.dead) { n.alive = false; n.c.forEach((c, k) => k % 2 === 0 && s.food.push([c[0], c[1]])); s.fx.push('hit'); return; }
+    n.c.unshift(heads[i]);
+    const fi = s.food.findIndex((f) => f[0] === heads[i][0] && f[1] === heads[i][1]);
+    if (fi >= 0) { s.food.splice(fi, 1); n.grow += 2; n.pts++; s.fx.push('pop'); }
+    if (n.grow > 0) n.grow--; else n.c.pop();
+  });
+  while (s.food.length < 6) spawnFood(s);
+  s.food = s.food.slice(-60);
+}
+function result(s) {
+  const alive = s.sn.filter((n) => n.alive);
+  if (alive.length <= 1 || s.time > 120) {
+    const win = alive.length === 1 ? alive[0] : s.sn.slice().sort((a, b) => b.c.length - a.c.length)[0];
+    return win;
+  }
+  return null;
+}
+function finish(s, winId) {
+  if (s.over) return;
+  s.over = true;
+  const me = s.sn.find((n) => n.id === s.myId) || s.sn[0], w = s.sn.find((n) => n.id === winId);
+  const won = !K.local && winId === s.myId;
+  K.end(s, { score: me.pts * 10 + me.kills * 25 + (won ? 50 : 0), won: K.local ? null : won, stats: { won: won ? 1 : 0, kills: me.kills }, title: K.local ? `${w?.name || '?'} WINS` : won ? 'LAST SNAKE STANDING' : `${w?.name || '?'} WINS`, text: `${me.pts} food · ${me.kills} kills` });
+}
+K.game({
+  bg: '#040a08',
+  init(s) {
+    const st = seats();
+    while (st.length < 4) st.push({ id: 'b' + st.length, name: 'BOT ' + (st.length + 1), bot: true });
+    s.sn = st.map((p, i) => { const [x, y, d] = STARTS[i]; const [dx, dy] = DIRS[d]; return { ...p, c: [[x, y], [x - dx, y - dy], [x - 2 * dx, y - 2 * dy]], d, q: [], alive: true, grow: 0, pts: 0, kills: 0, col: COLS[i] }; });
+    s.myId = K.net ? K.net.me : 'p0';
+    s.food = []; spawnFood(s, 8); s.t = 0; s.time = 0; s.fx = []; s.over = false; s.sendT = 0;
+  },
+  onNet(s, d, from) {
+    if (d.t === 'dir' && K.net.isHost) { const n = s.sn.find((x) => x.id === from); if (n && n.q.length < 3) n.q.push(d.d); }
+    if (d.t === 'st' && !K.net.isHost) {
+      d.sn.forEach((o, i) => { const n = s.sn[i]; if (!n) return; n.alive = o.a; n.c = o.c; n.pts = o.p; n.kills = o.k; n.d = o.d; });
+      s.food = d.f; s.time = d.tm; (d.fx || []).forEach((f) => K.sfx(f));
+      if (d.win) finish(s, d.win);
+    }
+  },
+  onLeave(s, id) { const n = s.sn.find((x) => x.id === id); if (n) { n.bot = true; n.name += ' (BOT)'; } },
+  update(s, dt) {
+    const host = !K.net || K.net.isHost;
+    const push = (n, d) => { const last = n.q[n.q.length - 1] || n.d; if (DIRS[d][0] !== -DIRS[last][0] || DIRS[d][1] !== -DIRS[last][1]) if (n.q.length < 3) n.q.push(d); };
+    if (K.local) {
+      const a = s.sn[0], b = s.sn[1];
+      if (K.tap('KeyW')) push(a, 'up'); if (K.tap('KeyS')) push(a, 'down'); if (K.tap('KeyA')) push(a, 'left'); if (K.tap('KeyD')) push(a, 'right');
+      if (K.tap('ArrowUp')) push(b, 'up'); if (K.tap('ArrowDown')) push(b, 'down'); if (K.tap('ArrowLeft')) push(b, 'left'); if (K.tap('ArrowRight')) push(b, 'right');
+    } else {
+      const d = K.tapDir();
+      const me = s.sn.find((n) => n.id === s.myId);
+      if (d && me) { if (host) push(me, d); else K.net.send({ t: 'dir', d }); }
+    }
+    if (!host || s.over) return;
+    s.time += dt; s.t += dt;
+    if (s.t < 0.11) return;
+    s.t = 0;
+    tick(s);
+    const w = result(s);
+    const fx = s.fx.splice(0); fx.slice(0, 3).forEach((f) => K.sfx(f));
+    if (K.net) K.net.send({ t: 'st', sn: s.sn.map((n) => ({ a: n.alive, c: n.c, p: n.pts, k: n.kills, d: n.d })), f: s.food, tm: Math.round(s.time), fx: fx.slice(0, 3), win: w ? w.id : null });
+    if (w) finish(s, w.id);
+  },
+  draw(s) {
+    K.rect(0, OY, GW * T, GH * T, '#06120d');
+    for (let x = 0; x < GW; x += 2) for (let y = 0; y < GH; y += 2) K.rect(x * T, OY + y * T, T, T, '#081a12');
+    s.food.forEach(([x, y]) => { K.glow('#ffd93a', 10); K.circle(x * T + 10, OY + y * T + 10, 5, '#ffd93a'); });
+    K.noGlow();
+    s.sn.forEach((n) => {
+      K.alpha(n.alive ? 1 : 0.18);
+      n.c.forEach((c, i) => { K.glow(n.col, i ? 0 : 14); K.rect(c[0] * T + 2, OY + c[1] * T + 2, T - 4, T - 4, i ? n.col + 'bb' : n.col, 5); });
+      K.noGlow();
+      if (n.alive && n.c[0]) K.text(n.id === s.myId ? 'YOU' : n.name, n.c[0][0] * T + 10, OY + n.c[0][1] * T - 8, 10, n.col, 'center', 'd');
+      K.alpha(1);
+    });
+    const alive = s.sn.filter((n) => n.alive).length;
+    K.text(`${alive} ALIVE · ${Math.max(0, 120 - Math.floor(s.time))}s`, 950, OY + GH * T + 12, 12, '#8e88b8', 'right', 'm');
+    s.sn.forEach((n, i) => K.text(`${n.name} ${n.c.length}`, 10 + i * 118, OY + GH * T + 12, 11, n.alive ? n.col : '#444', 'left', 'd'));
+  },
+  ai(s) { const me = s.sn[0]; if (me.alive && !me.bot) { const d = botDir(s, me); if (d !== me.d) me.q = [d]; } },
+});
+</script></body></html>

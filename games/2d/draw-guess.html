@@ -1,0 +1,175 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draw &amp; Guess</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"draw-guess","n":89,"title":"DRAW & GUESS","genre":"mystery","modes":["online"],"minPlayers":2,"maxPlayers":8,"desc":"Party drawing game for 2-8. One player draws a secret word, everyone else races to guess it. Faster guesses score more, and the artist scores for every correct guess. Everyone draws once.","controls":"Drawing: drag on the canvas, pick colours / sizes · Guessing: type (or tap) + Enter","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Draw & Guess"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const THINGS = 'apple banana pizza burger cake cookie donut carrot tree flower cactus mushroom sun moon star cloud rain snowman rainbow volcano mountain island beach wave boat ship anchor rocket plane car bus train bicycle truck tractor helicopter robot alien ghost dragon unicorn dinosaur shark whale fish octopus crab turtle frog snake spider butterfly bee ladybug snail bird owl penguin duck chicken cow pig horse sheep rabbit cat dog mouse lion tiger elephant giraffe monkey bear panda zebra camel kangaroo house castle tent bridge tower lighthouse church school door window ladder chair table bed lamp clock phone laptop camera guitar piano drum trumpet book pencil scissors key lock umbrella glasses hat crown shoe sock shirt dress glove ring necklace sword shield bow arrow hammer axe saw bucket broom candle balloon kite gift trophy medal football basketball tennis dice puzzle mask skull bone heart eye nose ear hand foot tooth brain snowflake fire lightning tornado bomb magnet battery bulb ghost pumpkin witch wizard pirate ninja king queen mermaid vampire zombie mummy'.split(' ');
+const PAL = ['#111111', '#ffffff', '#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '#22e6ff', '#4f8bff', '#c45cff', '#ff9bc8', '#8a5a2a'];
+const CX = 20, CY = 70, CW = 640, CH = 400, TURN = 75;
+const inCanvas = (x, y) => x >= CX && x <= CX + CW && y >= CY && y <= CY + CH;
+K.game({
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.players = (K.net ? K.net.players : [{ id: 'me', username: 'YOU' }]).map((p) => ({ id: p.id, name: p.username, pts: 0, got: false }));
+    s.myId = K.net ? K.net.me : 'me';
+    s.turn = -1; s.drawer = null; s.word = null; s.len = 0; s.hint = []; s.choices = null; s.t = 0; s.ink = []; s.cur = null; s.buf = [];
+    s.col = '#111111'; s.size = 6; s.chat = []; s.typed = ''; s.phase = 'wait'; s.sendT = 0; s.revealed = ''; s.over = false; s.order = s.players.map((p) => p.id);
+    s.turns = s.order.length * (s.order.length <= 3 ? 2 : 1); s.startT = 0;
+  },
+  onNet(s, d, from) {
+    if (d.t === 'turn') startTurn(s, d);
+    if (d.t === 'len' && s.drawer !== s.myId) { s.len = d.n; s.hint = Array(d.n).fill('_'); s.phase = 'draw'; s.t = TURN; }
+    if (d.t === 'ink') { if (d.clear) s.ink = []; (d.strokes || []).forEach((st) => { if (st.newStroke) s.ink.push({ c: st.c, w: st.w, pts: [] }); const last = s.ink[s.ink.length - 1]; if (last) last.pts.push(...st.pts); }); }
+    if (d.t === 'guess' && s.drawer === s.myId) checkGuess(s, from, d.g);
+    if (d.t === 'chat') s.chat.push({ who: name(s, d.id), text: d.g });
+    if (d.t === 'ok') { award(s, d.id, d.pts, d.dpts); }
+    if (d.t === 'hint' && s.drawer !== s.myId) s.hint[d.i] = d.ch;
+    if (d.t === 'reveal') reveal(s, d.word);
+  },
+  onLeave(s, id) {
+    s.players = s.players.filter((p) => p.id !== id); s.order = s.order.filter((x) => x !== id);
+    if (id === s.drawer && K.net.isHost && s.phase !== 'reveal') { reveal(s, '(the artist left)'); K.net.send({ t: 'reveal', word: '(the artist left)' }); }
+    if (s.players.length < 2 && !s.over) finish(s);
+  },
+  update(s, dt) {
+    if (s.over) return;
+    if (s.turn === -1 && s.phase === 'wait' && (!K.net || K.net.isHost)) { s.startT += dt; if (s.startT > 0.8) nextTurn(s); return; }
+    const me = s.drawer === s.myId;
+    if (s.phase === 'draw' || s.phase === 'pick') s.t -= dt;
+    if (s.phase === 'pick' && me) {
+      s.choices.forEach((w, i) => { if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 120 + i * 180, y: 250, w: 160, h: 60 })) choose(s, w); });
+      if (s.t <= TURN - 10) choose(s, s.choices[0]);
+      return;
+    }
+    if (s.phase === 'draw' && me) {
+      // tools
+      if (K.mouse.clicked) {
+        PAL.forEach((c, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + i * 36, y: CY + CH + 12, w: 30, h: 30 })) s.col = c; });
+        [3, 7, 14, 28].forEach((w, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + 420 + i * 40, y: CY + CH + 12, w: 34, h: 30 })) s.size = w; });
+        if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + 580, y: CY + CH + 12, w: 60, h: 30 })) { s.ink = []; s.buf = []; K.net && K.net.send({ t: 'ink', clear: true }); K.sfx('whoosh'); }
+      }
+      if (K.mouse.down && inCanvas(K.mouse.x, K.mouse.y)) {
+        const p = [Math.round(K.mouse.x - CX), Math.round(K.mouse.y - CY)];
+        if (!s.cur) { s.cur = { c: s.col, w: s.size, pts: [] }; s.ink.push(s.cur); s.buf.push({ newStroke: true, c: s.col, w: s.size, pts: [] }); }
+        const last = s.cur.pts.slice(-2);
+        if (!last.length || Math.hypot(last[0] - p[0], last[1] - p[1]) > 2) { s.cur.pts.push(...p); s.buf[s.buf.length - 1].pts.push(...p); }
+      } else if (s.cur) { s.cur = null; }
+      s.sendT -= dt;
+      if (s.sendT <= 0 && s.buf.some((b) => b.pts.length || b.newStroke)) { K.net && K.net.send({ t: 'ink', strokes: s.buf }); s.buf = s.cur ? [{ newStroke: false, c: s.col, w: s.size, pts: [] }] : []; s.sendT = 0.09; }
+      // hints at half and quarter time
+      if (!s.h1 && s.t < TURN / 2) { s.h1 = true; giveHint(s); }
+      if (!s.h2 && s.t < TURN / 4 && s.word.length > 4) { s.h2 = true; giveHint(s); }
+      const guessers = s.players.filter((p) => p.id !== s.myId);
+      if (s.t <= 0 || (guessers.length && guessers.every((p) => p.got))) { reveal(s, s.word); K.net && K.net.send({ t: 'reveal', word: s.word }); }
+      return;
+    }
+    if (s.phase === 'draw' && !me) {
+      const myP = s.players.find((p) => p.id === s.myId);
+      if (myP?.got) return;
+      const kb = K.isTouch ? K.keyboard(230, 414, 420, {}, { h: 30 }) : null;
+      const letters = K.isTouch ? (kb && kb.length === 1 ? [kb] : []) : K.typed();
+      letters.forEach((ch) => s.typed.length < 20 && (s.typed += ch.toLowerCase()));
+      if (K.tap('Space')) s.typed += ' ';
+      if (K.tap('Backspace') || kb === 'BACK') s.typed = s.typed.slice(0, -1);
+      if ((K.tap('Enter') || kb === 'ENTER') && s.typed.trim()) { const g = s.typed.trim(); s.typed = ''; K.net.send({ t: 'guess', g }, s.drawer); s.chat.push({ who: 'YOU', text: g, mine: true }); }
+    }
+    if (s.phase === 'reveal') { s.t -= dt; if (s.t <= 0 && (!K.net || K.net.isHost)) nextTurn(s); }
+  },
+  draw(s) {
+    const me = s.drawer === s.myId;
+    K.rect(CX, CY, CW, CH, '#f4f1ea', 8);
+    s.ink.forEach((st) => {
+      const c = K.ctx(); c.strokeStyle = st.c; c.lineWidth = st.w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath();
+      for (let i = 0; i < st.pts.length; i += 2) (i ? c.lineTo : c.moveTo).call(c, CX + st.pts[i], CY + st.pts[i + 1]);
+      if (st.pts.length === 2) c.lineTo(CX + st.pts[0] + 0.1, CY + st.pts[1]);
+      c.stroke();
+    });
+    // header: word / hint
+    const dname = name(s, s.drawer);
+    if (s.phase === 'draw' || s.phase === 'pick') {
+      K.text(me ? (s.word ? `DRAW: ${s.word.toUpperCase()}` : 'PICK A WORD') : s.phase === 'pick' ? `${dname} is picking a word…` : s.hint.join(' ').toUpperCase(), CX + CW / 2, 36, me || s.phase === 'pick' ? 22 : 30, me ? '#ffd93a' : '#fff', 'center', 'd');
+      K.text(`${Math.max(0, Math.ceil(s.t))}`, CX + CW - 10, 36, 22, s.t < 10 ? '#ff3355' : '#22e6ff', 'right', 'd');
+      K.text(me ? 'YOU ARE DRAWING' : `${dname} is drawing`, CX + 10, 36, 13, '#8e88b8', 'left', 'm');
+    }
+    if (s.phase === 'reveal') K.text(`THE WORD WAS: ${String(s.revealed).toUpperCase()}`, CX + CW / 2, 36, 22, '#3dffa0', 'center', 'd');
+    if (s.phase === 'wait') K.text('GETTING READY…', CX + CW / 2, 36, 22, '#fff', 'center', 'd');
+    if (me && s.phase === 'draw') {
+      PAL.forEach((c, i) => { K.rect(CX + i * 36, CY + CH + 12, 30, 30, c, 6); if (s.col === c) K.stroke(CX + i * 36 - 2, CY + CH + 10, 34, 34, '#22e6ff', 3, 7); });
+      [3, 7, 14, 28].forEach((w, i) => { K.rect(CX + 420 + i * 40, CY + CH + 12, 34, 30, s.size === w ? '#22e6ff44' : '#ffffff11', 6); K.circle(CX + 437 + i * 40, CY + CH + 27, Math.min(13, w / 2 + 1), '#fff'); });
+      K.button(CX + 580, CY + CH + 12, 60, 30, 'CLEAR', { color: '#ff3355', size: 11 });
+    }
+    if (me && s.phase === 'pick') { K.rect(CX, CY, CW, CH, 'rgba(10,8,25,.85)', 8); K.text('CHOOSE WHAT TO DRAW', CX + CW / 2, 200, 24, '#fff', 'center', 'd'); s.choices.forEach((w, i) => K.button(120 + i * 180, 250, 160, 60, w.toUpperCase(), { color: '#ffd93a', size: 15 })); }
+    // scores
+    const sorted = s.players.slice().sort((a, b) => b.pts - a.pts);
+    K.rect(680, 20, 260, 200, '#15122c', 10);
+    sorted.forEach((p, i) => { K.text(`${p.id === s.drawer ? '✎ ' : p.got ? '✓ ' : ''}${p.id === s.myId ? 'YOU' : p.name}`, 694, 42 + i * 22, 14, p.got ? '#3dffa0' : p.id === s.drawer ? '#ffd93a' : '#fff', 'left', 'd'); K.text(String(p.pts), 926, 42 + i * 22, 14, '#ffd93a', 'right', 'd'); });
+    // chat
+    K.rect(680, 230, 260, 240, '#15122c', 10);
+    s.chat.slice(-9).forEach((c, i) => K.text(`${c.who}: ${c.text}`.slice(0, 30), 692, 250 + i * 24, 13, c.sys ? '#3dffa0' : c.mine ? '#22e6ff' : '#d6d2f5', 'left', 'u'));
+    if (s.phase === 'draw' && !me) {
+      const got = s.players.find((p) => p.id === s.myId)?.got;
+      K.rect(680, 478, 260, 40, '#0b0a18', 8); K.stroke(680, 478, 260, 40, got ? '#3dffa0' : '#22e6ff', 2, 8);
+      K.text(got ? 'YOU GOT IT! ✓' : (s.typed || 'type your guess + Enter') + (Math.sin(K.time() * 8) > 0 && !got ? '|' : ''), 692, 498, 15, got ? '#3dffa0' : s.typed ? '#fff' : '#5d5a80', 'left', 'u');
+      if (K.isTouch && !got) K.keyboard(230, 414, 420, {}, { h: 30 });
+    }
+  },
+});
+const name = (s, id) => (s.players.find((p) => p.id === id) || {}).name || '?';
+function nextTurn(s) {
+  s.turn++;
+  if (s.turn >= s.turns || s.order.length < 1) { K.net && K.net.send({ t: 'turn', end: true }); return finish(s); }
+  const drawer = s.order[s.turn % s.order.length];
+  const d = { t: 'turn', k: s.turn, drawer };
+  K.net && K.net.send(d);
+  startTurn(s, d);
+}
+function startTurn(s, d) {
+  if (d.end) return finish(s);
+  s.drawer = d.drawer; s.turn = d.k; s.ink = []; s.buf = []; s.cur = null; s.word = null; s.hint = []; s.len = 0; s.typed = ''; s.h1 = s.h2 = false;
+  s.players.forEach((p) => (p.got = false));
+  s.phase = 'pick'; s.t = TURN;
+  s.chat.push({ who: '★', text: `${s.drawer === s.myId ? 'Your' : name(s, s.drawer) + "'s"} turn to draw`, sys: true });
+  if (s.drawer === s.myId) { s.choices = K.shuffle(THINGS.slice()).slice(0, 3); K.sfx('chime'); }
+}
+function choose(s, w) {
+  s.word = w; s.choices = null; s.phase = 'draw'; s.t = TURN;
+  s.hint = Array(w.length).fill('_');
+  K.net && K.net.send({ t: 'len', n: w.length });
+}
+function giveHint(s) {
+  const free = [...s.word].map((c, i) => i).filter((i) => s.hint[i] === '_');
+  if (free.length <= 1) return;
+  const i = K.pick(free); s.hint[i] = s.word[i];
+  K.net && K.net.send({ t: 'hint', i, ch: s.word[i] });
+}
+function checkGuess(s, from, g) {
+  const p = s.players.find((x) => x.id === from);
+  if (!p || p.got || s.phase !== 'draw') return;
+  if (g.toLowerCase().replace(/\s+/g, '') === s.word) {
+    const order = s.players.filter((x) => x.got).length;
+    const pts = Math.max(40, 100 - order * 15) + Math.round(s.t / 2), dpts = 25;
+    award(s, from, pts, dpts);
+    K.net && K.net.send({ t: 'ok', id: from, pts, dpts });
+  } else {
+    const close = g.length === s.word.length && [...g].filter((c, i) => c === s.word[i]).length >= s.word.length - 1;
+    s.chat.push({ who: name(s, from), text: close ? g + ' (close!)' : g });
+    K.net && K.net.send({ t: 'chat', id: from, g: close ? g + ' (close!)' : g });
+  }
+}
+function award(s, id, pts, dpts) {
+  const p = s.players.find((x) => x.id === id), d = s.players.find((x) => x.id === s.drawer);
+  if (!p || p.got) return;
+  p.got = true; p.pts += pts; if (d) d.pts += dpts;
+  s.chat.push({ who: '✓', text: `${id === s.myId ? 'YOU' : p.name} guessed it! +${pts}`, sys: true });
+  K.sfx(id === s.myId ? 'win' : 'coin');
+}
+function reveal(s, word) { if (s.phase === 'reveal') return; s.phase = 'reveal'; s.revealed = word; s.t = 4; K.sfx('chime'); }
+function finish(s) {
+  if (s.over) return;
+  s.over = true;
+  const sorted = s.players.slice().sort((a, b) => b.pts - a.pts), me = s.players.find((p) => p.id === s.myId) || { pts: 0 };
+  const won = sorted[0]?.id === s.myId && s.players.length > 1;
+  K.end(s, { score: me.pts, won, stats: { won: won ? 1 : 0 }, title: won ? 'BEST ARTIST & GUESSER' : `${sorted[0]?.name || '?'} WINS`, text: sorted.map((p) => `${p.name} ${p.pts}`).join(' · ') });
+}
+</script></body></html>
