@@ -5,6 +5,7 @@ import { api, store } from './store.js';
 import { cursorCSS } from './cosmetics/render.js';
 import { rewardPopup, toast, errToast } from './ui.js';
 import { sfx } from './sfx.js';
+import { party, gameSend, onGameMessage, endPlaying, setStatus } from './party.js';
 
 let current = null; // { game, frame, startedAt, onMsg }
 
@@ -12,10 +13,13 @@ export function isPlaying() {
   return !!current;
 }
 
-export function launch(gameId) {
+// opts: { net: party start payload } for an online party game, { local: n } for same-screen multiplayer
+export function launch(gameId, opts = {}) {
   const g = GAME[gameId];
   if (!g) return;
   closeGame(true);
+  const net = opts.net || null;
+  const src = g.file + (opts.local ? `?local=${opts.local}` : '');
   sfx.whoosh();
   const layer = $('#game-layer');
   layer.innerHTML = `
@@ -25,7 +29,7 @@ export function launch(gameId) {
       <div class="gl-best">BEST <b data-best>${fmtBest(g)}</b></div>
     </div>
     <div class="gl-load"><div class="spinner"></div>LOADING ${esc(g.title)}...</div>
-    <iframe class="gl-frame" title="${esc(g.title)}" allow="autoplay; fullscreen; gamepad" src="${esc(g.file)}"></iframe>`;
+    <iframe class="gl-frame" title="${esc(g.title)}" allow="autoplay; fullscreen; gamepad" src="${esc(src)}"></iframe>`;
   layer.classList.remove('hidden');
   requestAnimationFrame(() => layer.classList.add('in'));
   document.body.classList.add('playing');
@@ -52,6 +56,9 @@ export function launch(gameId) {
             best: me.stats.games[g.id]?.best ?? null,
             cursor: cursorCSS(me.equipped.cursor),
             volume: me.settings.sfx ? me.settings.volume : 0,
+            net: net
+              ? { me: me.id, seed: net.seed, players: net.order.map((id) => { const m = party.members.find((x) => x.id === id); return { id, username: m?.username || 'PLAYER', equipped: m?.equipped || {} }; }) }
+              : null,
           },
         },
         '*'
@@ -75,12 +82,25 @@ export function launch(gameId) {
       } catch (ex) {
         errToast(ex);
       }
+    } else if (m.type === 'net') {
+      if (net) gameSend(m.data.d, m.data.to);
     } else if (m.type === 'exit') {
       closeGame();
     }
   };
   window.addEventListener('message', onMsg);
-  current = { game: g, frame, startedAt: null, onMsg };
+  let offNet = null;
+  if (net) {
+    setStatus('playing:' + g.id);
+    offNet = onGameMessage((e) => {
+      if (!current) return;
+      if (e.type === 'msg' && e.d?.__bye) frame.contentWindow?.postMessage({ __xc: 1, type: 'netleave', data: { id: e.from } }, '*');
+      else if (e.type === 'msg') frame.contentWindow?.postMessage({ __xc: 1, type: 'net', data: { d: e.d, from: e.from } }, '*');
+      if (e.type === 'leave') frame.contentWindow?.postMessage({ __xc: 1, type: 'netleave', data: { id: e.id } }, '*');
+    });
+  }
+  current = { game: g, frame, startedAt: null, onMsg, offNet, net };
+  window.dispatchEvent(new Event('xc-game'));
 }
 
 function fmtBest(g) {
@@ -91,10 +111,17 @@ function fmtBest(g) {
 export function closeGame(instant = false) {
   if (!current) return;
   window.removeEventListener('message', current.onMsg);
+  if (current.net) {
+    current.offNet?.();
+    gameSend({ __bye: 1 });
+    endPlaying();
+    setStatus('lobby');
+  }
   current = null;
   const layer = $('#game-layer');
   layer.classList.remove('in');
   document.body.classList.remove('playing');
+  window.dispatchEvent(new Event('xc-game'));
   const finish = () => {
     layer.classList.add('hidden');
     layer.innerHTML = '';

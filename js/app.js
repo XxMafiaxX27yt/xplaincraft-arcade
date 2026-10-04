@@ -14,6 +14,8 @@ import * as VS from './views-shop.js';
 import * as VP from './views-pass.js';
 import * as VO from './views-op.js';
 import { toast } from './ui.js';
+import { initParty, mpButtons, wireMpButtons } from './views-party.js';
+import { leaveParty, stopSocial, startSocial } from './party.js';
 
 // ---------- router ----------
 const routes = [
@@ -331,13 +333,19 @@ export async function openGame(id) {
         <div class="gd-lb">
           ${lb.slice(0, 5).map((r, i) => `<div class="lb-mini ${r.id === me.id ? 'me' : ''}"><i>${i + 1}</i>${avatarHTML(r.equipped, 24)}${callsignHTML(r.username, r.equipped, 'sm')}<b>${r.value}</b></div>`).join('') || '<div class="empty-sm">No scores yet. Be the first.</div>'}
         </div>
-        <button class="btn primary big" data-start>▶ PLAY</button>
+        <div class="gd-play">
+          ${g.modes.includes('sp') ? `<button class="btn primary big" data-start>▶ PLAY${g.modes.length > 1 ? ' SOLO' : ''}</button>` : ''}
+          ${mpButtons(g)}
+        </div>
       </div>
     </div>`, { wide: true });
-  m.el.querySelector('[data-start]').onclick = () => {
-    m.close();
-    launch(g.id);
-  };
+  const st = m.el.querySelector('[data-start]');
+  if (st)
+    st.onclick = () => {
+      m.close();
+      launch(g.id);
+    };
+  wireMpButtons(m.el, g, () => m.close());
 }
 
 // ---------- live game preview: hovering a cover plays the game's demo ----------
@@ -385,9 +393,12 @@ async function start() {
     if (e.target.closest?.('.btn, .nav a, .mode-card, .portal, .chip, .shop-item')) sfx.hover();
   });
   livePreviews();
+  initParty();
 }
 
 export async function logoutFlow() {
+  await leaveParty().catch(() => {});
+  stopSocial();
   await api.logOut();
   store.set(null);
   $('#app').classList.add('hidden');
@@ -398,6 +409,7 @@ export async function logoutFlow() {
   requestAnimationFrame(() => $('#app').classList.add('reveal'));
   await renderTopbar();
   await render();
+  if (api.MODE === 'online') startSocial();
 }
 
 // ---------- gifts from operators ----------

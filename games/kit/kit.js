@@ -9,6 +9,15 @@
  *   noTitleSim         optional: don't run the game behind the title screen
  * })
  * End a run with K.end(s, { score, won, stats, title, text }).
+ *
+ * Online party games (launched from a party): K.net is set.
+ *   K.net.players [{id, username, equipped}] (index 0 = host), K.net.me, K.net.index, K.net.isHost
+ *   K.net.send(data, toId?)            to everyone (or one player)
+ *   onNet(s, data, fromId)             K.game option: called for every message from another player
+ *   onLeave(s, id)                     K.game option: a player left the game
+ *   The kit waits until everyone has loaded, then the host starts the round for all (and restarts it).
+ *   K.rng() is a random number generator seeded the same for every player in the round.
+ * Same-screen multiplayer (launched as SAME SCREEN): K.local = number of players on this device.
  */
 (function () {
   const W = 960, H = 540;
@@ -23,6 +32,9 @@
   let cfg = null, s = null, state = 'boot', stateT = 0, result = null, reward = null, best = null;
   let canvas, ctx, scale = 1, ox = 0, oy = 0, dpr = 1, last = 0, time = 0;
   let shakeA = 0, flashC = null, flashT = 0;
+  let NET = null, readySet = new Set(), lobbyT = 0;
+  const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  let rng = Math.random;
   const parts = [];
   const keys = new Set(), tapped = new Set(), vkeys = new Set(), vtapped = new Set();
   const mouse = { x: W / 2, y: H / 2, down: false, clicked: false, released: false, right: false, wheel: 0, moved: false };
@@ -123,6 +135,10 @@
   K.angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
   K.wrap = (v, n) => ((v % n) + n) % n;
   K.time = () => time;
+  K.rng = () => rng();
+  K.rpick = (arr) => arr[Math.floor(rng() * arr.length)];
+  K.rint = (a, b) => a + Math.floor(rng() * (b - a + 1));
+  K.local = Number(Q.get('local')) || 0;
 
   // ---------- drawing ----------
   K.ctx = () => ctx;
@@ -308,7 +324,7 @@
 
   // ---------- flow ----------
   K.end = (st, r = {}) => {
-    if (state !== 'play' || ATTRACT) { if (ATTRACT) restartAttract(); return; }
+    if ((state !== 'play' && !(NET && state === 'pause')) || ATTRACT) { if (ATTRACT) restartAttract(); return; }
     stopDrones();
     result = { score: Math.round(r.score || 0), won: r.won ?? null, stats: r.stats || {}, title: r.title || (r.won === true ? 'YOU WIN' : r.won === false ? 'GAME OVER' : 'RUN OVER'), text: r.text || '' };
     reward = null;
@@ -328,12 +344,49 @@
       if (p) p.then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
     } catch {}
   }
-  function startRun() {
+  function startRun(seed) {
     phoneFullscreen();
+    rng = mulberry(seed ?? Math.floor(Math.random() * 1e9));
     stopDrones(); parts.length = 0;
     s = {}; cfg.init(s);
     state = 'play'; stateT = 0;
     if (window.XC) XC.start();
+  }
+
+
+  // ---------- online party games ----------
+  function setupNet(n) {
+    NET = n;
+    K.net = {
+      get players() { return NET.players; },
+      me: NET.me,
+      get index() { return NET.players.findIndex((p) => p.id === NET.me); },
+      isHost: NET.host,
+      send: (d, to) => NET.send(d, to),
+      name: (id) => (NET.players.find((p) => p.id === id) || {}).username || 'PLAYER',
+    };
+    readySet.add(NET.me);
+    NET.on((d, from) => {
+      if (d && d.__k) {
+        if (d.__k === 'hello' && !NET.host) NET.send({ __k: 'ready' });
+        if (d.__k === 'ready' && NET.host) { readySet.add(from); maybeGo(); }
+        if (d.__k === 'go' && !NET.host) { clearInput(); startRun(d.seed); }
+        return;
+      }
+      if (s && cfg.onNet) cfg.onNet(s, d, from);
+    });
+    NET.onLeave((id) => { readySet.delete(id); if (s && cfg.onLeave) cfg.onLeave(s, id); if (NET.host) maybeGo(); });
+    if (NET.host) NET.send({ __k: 'hello' }); else NET.send({ __k: 'ready' });
+  }
+  function maybeGo() {
+    if (state !== 'lobby' || !NET.host) return;
+    if (NET.players.every((p) => readySet.has(p.id)) || lobbyT > 8) hostGo();
+  }
+  function hostGo() {
+    const seed = Math.floor(Math.random() * 1e9);
+    NET.send({ __k: 'go', seed });
+    clearInput();
+    startRun(seed);
   }
 
   K.game = (c) => {
@@ -345,9 +398,11 @@
         const ctxXC = await XC.ready();
         best = ctxXC.best;
         XC.onResult((r) => { reward = r; if (r.best != null) best = r.best; });
+        if (XC.net) setupNet(XC.net);
+        if (XC.local) K.local = XC.local;
       }
       s = {}; cfg.init(s);
-      state = ATTRACT ? 'attract' : 'title';
+      state = ATTRACT ? 'attract' : NET ? 'lobby' : 'title';
       last = performance.now();
       requestAnimationFrame(frame);
     };
@@ -360,6 +415,9 @@
     try {
       if (state === 'attract') {
         cfg.ai?.(s, dt); cfg.update(s, dt);
+      } else if (state === 'lobby') {
+        lobbyT += dt;
+        if (NET.host) { if (lobbyT > 8) hostGo(); else if (Math.floor(lobbyT * 2) !== Math.floor((lobbyT - dt) * 2)) NET.send({ __k: 'hello' }); }
       } else if (state === 'title') {
         const want = stateT > 0.3 && (tapped.has('Space') || tapped.has('Enter') || mouse.clicked);
         if (want) { clearInput(); startRun(); }
@@ -368,9 +426,10 @@
         if (K.tap('Escape', 'KeyP')) { state = 'pause'; stateT = 0; }
         else cfg.update(s, dt);
       } else if (state === 'pause') {
+        if (NET) cfg.update(s, dt);
         if (K.tap('Escape', 'KeyP', 'Space')) state = 'play';
       } else if (state === 'over') {
-        if (stateT > 0.7 && K.tap('Space', 'Enter', 'KeyR')) startRun();
+        if (stateT > 0.7 && K.tap('Space', 'Enter', 'KeyR') && (!NET || NET.host)) NET ? hostGo() : startRun();
         else if (stateT > 0.3 && K.tap('Escape')) K.exit();
       }
       stepParts(dt);
@@ -420,6 +479,13 @@
       }
       return;
     }
+    if (state === 'lobby') {
+      panel(0.75);
+      K.text(cfg.title, W / 2, 150, cfg.title.length > 16 ? 46 : 58, '#fff', 'center', 'd', 20);
+      K.text('WAITING FOR EVERYONE TO LOAD…', W / 2, 250, 22, gc(), 'center', 'd', 10);
+      NET.players.forEach((p, i) => K.text((readySet.has(p.id) || !NET.host ? '● ' : '○ ') + p.username + (i === 0 ? '  (LEADER)' : ''), W / 2, 300 + i * 26, 18, readySet.has(p.id) ? C.green : C.dim, 'center', 'd'));
+      return;
+    }
     if (state === 'title') {
       panel(cfg.ai && !cfg.noTitleSim ? 0.55 : 0.7);
       K.text(cfg.title, W / 2, 150, cfg.title.length > 16 ? 50 : 64, '#fff', 'center', 'd', 22);
@@ -434,7 +500,8 @@
       panel(0.8);
       K.text('PAUSED', W / 2, 180, 56, '#fff', 'center', 'd', 18);
       if (K.button(W / 2 - 120, 260, 240, 50, 'RESUME', { color: gc() })) state = 'play';
-      if (K.button(W / 2 - 120, 325, 240, 50, 'RESTART', { color: C.white })) startRun();
+      if (!NET && K.button(W / 2 - 120, 325, 240, 50, 'RESTART', { color: C.white })) startRun();
+      if (NET) K.text('the game keeps running while this menu is open', W / 2, 350, 14, C.dim, 'center', 'm');
       if (K.button(W / 2 - 120, 390, 240, 50, 'EXIT', { color: C.red })) K.exit();
     } else if (state === 'over') {
       panel(Math.min(0.82, stateT * 2));
@@ -447,9 +514,10 @@
       else if (best != null) K.text(`BEST ${best}`, W / 2, 345, 18, C.gold, 'center', 'm');
       if (reward && (reward.xp || reward.coins)) K.text(`+${reward.xp} XP   +${reward.coins} COINS`, W / 2, 378, 20, C.cyan, 'center', 'd');
       if (stateT > 0.7) {
-        if (K.button(W / 2 - 250, 420, 230, 54, 'PLAY AGAIN', { color: col })) startRun();
+        if (NET && !NET.host) K.text('WAITING FOR THE LEADER…', W / 2 - 135, 447, 16, C.dim, 'center', 'd');
+        else if (K.button(W / 2 - 250, 420, 230, 54, 'PLAY AGAIN', { color: col })) NET ? hostGo() : startRun();
         if (K.button(W / 2 + 20, 420, 230, 54, 'EXIT', { color: C.white })) K.exit();
-        K.text('SPACE = again · ESC = exit', W / 2, 500, 14, C.dim, 'center', 'm');
+        K.text(NET ? 'ESC = leave the game' : 'SPACE = again · ESC = exit', W / 2, 500, 14, C.dim, 'center', 'm');
       }
     }
   }

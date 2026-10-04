@@ -490,6 +490,30 @@ export const GAME_LIST = [
 "cover": "games/covers/breakout.png"
 },
 {
+"id": "pong-duel",
+"n": 1,
+"title": "PONG DUEL",
+"genre": "fun",
+"modes": [
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Neon pong against a real person: online with a friend, or two players on one keyboard. Edge hits curve the ball, and every 5 hits it speeds up. First to 7.",
+"controls": "Online: mouse / touch or ↑ ↓ · Same screen: left W S, right ↑ ↓",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Pong Duel"
+}
+],
+"file": "games/2d/pong-duel.html",
+"dim": "2d"
+},
+{
 "id": "flappy",
 "n": 2,
 "title": "FLAPPY",

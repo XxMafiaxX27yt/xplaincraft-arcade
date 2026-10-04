@@ -1,0 +1,74 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pong Duel</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pong-duel","n":1,"title":"PONG DUEL","genre":"fun","modes":["online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Neon pong against a real person: online with a friend, or two players on one keyboard. Edge hits curve the ball, and every 5 hits it speeds up. First to 7.","controls":"Online: mouse / touch or ↑ ↓ · Same screen: left W S, right ↑ ↓","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a Pong Duel"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PH = 100, WIN = 7;
+// host simulates; the other player sends its paddle; host sends the whole state ~20 times a second
+function serve(s, dir) { s.b = { x: 480, y: 270, vx: 380 * dir, vy: K.rand(-150, 150) }; s.wait = 1; s.hits = 0; }
+function myY(s, keysUp, keysDown, y, dt) {
+  let d = (K.down(...keysDown) ? 1 : 0) - (K.down(...keysUp) ? 1 : 0);
+  if (!K.local && K.mouse.moved && !d) { y = K.mouse.y; K.mouse.moved = false; }
+  return K.clamp(y + d * 620 * dt, PH / 2, 540 - PH / 2);
+}
+K.game({
+  bg: '#05030f',
+  init(s) { s.p = [270, 270]; s.sc = [0, 0]; s.trail = []; s.sendT = 0; s.over = false; serve(s, Math.random() < 0.5 ? 1 : -1); s.solo = !K.net && !K.local; },
+  onNet(s, d) {
+    if (d.t === 'pad' && K.net.isHost) s.p[1] = d.y;
+    if (d.t === 'st' && !K.net.isHost) { s.b = d.b; s.p[0] = d.p0; s.sc = d.sc; s.wait = d.w; if (d.fx) K.sfx(d.fx); if (d.end && !s.over) finish(s); }
+  },
+  onLeave(s) { if (!s.over) { s.over = true; K.end(s, { score: s.sc[K.net.index] || 0, won: true, stats: { won: 1 }, title: 'OPPONENT LEFT', text: 'You win by default.' }); } },
+  update(s, dt) {
+    const net = K.net, host = !net || net.isHost, idx = net ? net.index : 0;
+    if (K.local) { s.p[0] = myY(s, ['KeyW'], ['KeyS'], s.p[0], dt); s.p[1] = myY(s, ['ArrowUp'], ['ArrowDown'], s.p[1], dt); }
+    else s.p[idx] = myY(s, ['ArrowUp', 'KeyW'], ['ArrowDown', 'KeyS'], s.p[idx], dt);
+    if (s.solo) s.p[1] += K.clamp(s.b.y - s.p[1], -1, 1) * Math.min(Math.abs(s.b.y - s.p[1]), 330 * dt);
+    if (!host) { if (s.wait <= 0) { s.b.x += s.b.vx * dt; s.b.y += s.b.vy * dt; } s.sendT -= dt; if (s.sendT <= 0) { net.send({ t: 'pad', y: Math.round(s.p[1]) }); s.sendT = 0.05; } s.trail.push({ x: s.b.x, y: s.b.y }); if (s.trail.length > 12) s.trail.shift(); return; }
+    let fx = null;
+    if (s.wait > 0) s.wait -= dt;
+    else {
+      const b = s.b;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.y < 10 || b.y > 530) { b.vy *= -1; b.y = K.clamp(b.y, 10, 530); fx = 'click'; }
+      const hit = (px, py, side) => {
+        if (Math.abs(b.x - px) < 14 && Math.abs(b.y - py) < PH / 2 + 10 && Math.sign(b.vx) === side) {
+          const off = (b.y - py) / (PH / 2); s.hits++;
+          const sp = Math.min(1100, Math.abs(b.vx) * (s.hits % 5 === 0 ? 1.15 : 1.03));
+          b.vx = -side * sp; b.vy = off * 420; b.x = px - side * 14; fx = 'blip';
+        }
+      };
+      hit(40, s.p[0], -1); hit(920, s.p[1], 1);
+      if (b.x < -20 || b.x > 980) {
+        const who = b.x > 980 ? 0 : 1; s.sc[who]++; fx = 'coin';
+        if (s.sc[who] >= WIN) s.over = 'pending';
+        serve(s, who ? -1 : 1);
+      }
+    }
+    s.trail.push({ x: s.b.x, y: s.b.y }); if (s.trail.length > 12) s.trail.shift();
+    if (fx) K.sfx(fx);
+    if (net) { s.sendT -= dt; if (s.sendT <= 0 || fx || s.over === 'pending') { net.send({ t: 'st', b: { x: Math.round(s.b.x), y: Math.round(s.b.y), vx: s.b.vx, vy: s.b.vy }, p0: Math.round(s.p[0]), sc: s.sc, w: s.wait, fx, end: s.over === 'pending' }); s.sendT = 0.05; } }
+    if (s.over === 'pending') finish(s);
+  },
+  draw(s) {
+    for (let y = 10; y < 540; y += 30) K.rect(478, y, 4, 16, '#ffffff22');
+    const names = K.net ? [K.net.players[0]?.username, K.net.players[1]?.username] : K.local ? ['PLAYER 1', 'PLAYER 2'] : ['YOU', 'CPU'];
+    K.text(String(s.sc[0]), 400, 70, 64, '#22e6ff', 'center', 'd', 18); K.text(String(s.sc[1]), 560, 70, 64, '#ff2bd6', 'center', 'd', 18);
+    K.text(names[0] || '', 240, 30, 16, '#22e6ff', 'center', 'd'); K.text(names[1] || '', 720, 30, 16, '#ff2bd6', 'center', 'd');
+    s.trail.forEach((t, i) => { K.alpha((i / s.trail.length) * 0.5); K.circle(t.x, t.y, 4 + i * 0.4, '#ffd93a'); }); K.alpha(1);
+    K.glow('#22e6ff', 20); K.rect(30, s.p[0] - PH / 2, 12, PH, '#22e6ff', 6);
+    K.glow('#ff2bd6', 20); K.rect(918, s.p[1] - PH / 2, 12, PH, '#ff2bd6', 6);
+    K.glow('#ffd93a', 22); K.circle(s.b.x, s.b.y, 10, '#fff'); K.noGlow();
+    if (s.wait > 0) K.text('READY', 480, 300, 20, '#fff', 'center', 'd');
+    if (K.net) K.text(K.net.index === 0 ? 'YOU ARE BLUE (LEFT)' : 'YOU ARE PINK (RIGHT)', 480, 520, 13, '#8e88b8', 'center', 'm');
+  },
+  ai(s) { s.p[0] += K.clamp(s.b.y - s.p[0], -10, 10); s.p[1] += K.clamp(s.b.y - s.p[1], -9, 9); },
+});
+function finish(s) {
+  s.over = true;
+  const idx = K.net ? K.net.index : 0, mine = s.sc[idx] || 0, won = mine >= WIN;
+  const title = K.local ? (s.sc[0] >= WIN ? 'PLAYER 1 WINS' : 'PLAYER 2 WINS') : won ? 'YOU WIN' : 'YOU LOSE';
+  K.end(s, { score: mine, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title, text: `${s.sc[0]} - ${s.sc[1]}` });
+}
+</script></body></html>
