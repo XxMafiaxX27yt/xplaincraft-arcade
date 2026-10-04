@@ -21,7 +21,13 @@ export const DEFAULT_SETTINGS = { sfx: true, volume: 0.6, scanlines: true, reduc
 function fresh() {
   return { users: {}, names: {}, requests: [], scores: {}, session: null, overrides: {}, customEvents: [], opLog: [] };
 }
+// Storage is pluggable: the online backend swaps in its own (server-backed) store.
+let IO = null;
+export function setIO(io) {
+  IO = io;
+}
 function load() {
+  if (IO) return IO.load();
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
     if (!d || !d.users) return fresh();
@@ -35,13 +41,17 @@ function load() {
   }
 }
 function save(db) {
+  if (IO) return IO.save(db);
   localStorage.setItem(KEY, JSON.stringify(db));
 }
+// read-only access (no copy) for the sync helpers that run while drawing lists
+const peek = () => (IO?.peek ? IO.peek() : load());
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const fail = (msg) => {
   throw new Error(msg);
 };
 const live = (db) => E.liveEvents(new Date(), db.customEvents, db.overrides);
+export const fail_ = fail;
 
 async function sha(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -51,10 +61,10 @@ const hashPass = (pass, salt) => sha(salt + '::' + pass);
 const randId = (p) => p + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 const NAME_RE = /^[A-Za-z0-9_\-]{3,16}$/;
-const checkName = (n) => NAME_RE.test(n) || fail('Callsign must be 3-16 letters, numbers, _ or -');
+export const checkName = (n) => NAME_RE.test(n) || fail('Callsign must be 3-16 letters, numbers, _ or -');
 
 // Fill missing fields (older saves) and drop items that no longer exist.
-function normalize(u) {
+export function normalize(u) {
   u.stats ||= { plays: 0, wins: 0, time: 0, games: {} };
   u.eco ||= { earned: 0, spent: 0, crates: 0, tasksDone: 0, streakMax: 0, eventDone: 0 };
   u.owned = [...new Set([...(u.owned || []).filter((k) => ITEM[k]), ...STARTER_OWNED])];
@@ -100,7 +110,7 @@ function spend(u, n) {
   u.coins -= n;
   u.eco.spent += n;
 }
-function syncPass(u) {
+export function syncPass(u) {
   const s = E.seasonFor();
   if (s && u.pass.season !== s.id) u.pass = { season: s.id, xp: 0, premium: false, free: [], prem: [] };
   return s;
@@ -141,7 +151,7 @@ function grantReward(db, u, r) {
   return null;
 }
 
-function ensureTasks(u) {
+export function ensureTasks(u) {
   const d = todayKey();
   if (u.tasks?.date !== d) u.tasks = { date: d, list: generateTasks(u.id, d), bonusClaimed: false };
 }
@@ -191,6 +201,15 @@ export async function me() {
   return out(db, u);
 }
 
+export function newUserObject(username, extra = {}) {
+  const u = normalize({
+    id: randId('u_'), username, created: Date.now(), lastSeen: Date.now(), bio: '', xp: 0, coins: CONFIG.economy.startCoins, ...extra,
+  });
+  ensureTasks(u);
+  syncPass(u);
+  return u;
+}
+
 export async function signUp(username, password) {
   username = username.trim();
   checkName(username);
@@ -198,12 +217,7 @@ export async function signUp(username, password) {
   const db = load();
   if (db.names[username.toLowerCase()]) fail('That callsign is taken');
   const salt = randId('s');
-  const u = normalize({
-    id: randId('u_'), username, salt, passHash: await hashPass(password, salt), created: Date.now(), lastSeen: Date.now(),
-    bio: '', xp: 0, coins: CONFIG.economy.startCoins,
-  });
-  ensureTasks(u);
-  syncPass(u);
+  const u = newUserObject(username, { salt, passHash: await hashPass(password, salt) });
   db.users[u.id] = u;
   db.names[username.toLowerCase()] = u.id;
   db.session = u.id;
@@ -295,10 +309,10 @@ export async function getProfile(username) {
 
 // ---------- shop / locker ----------
 export function liveEventsNow() {
-  return live(load());
+  return live(peek());
 }
 export function price(key) {
-  return E.priceFor(key, { live: live(load()) });
+  return E.priceFor(key, { live: live(peek()) });
 }
 
 export async function buy(key) {
@@ -517,7 +531,7 @@ export async function claimAchievement(id) {
 
 // ---------- events ----------
 export function eventsState(u) {
-  const db = load();
+  const db = peek();
   return E.eventList(new Date(), db.customEvents, db.overrides).map((ev) => {
     const p = u.events[ev.id] || { claimed: [] };
     const ch = E.challengesFor(ev).map((c) => ({ ...c, value: Math.min(c.target, p[c.id] || 0), claimed: (p.claimed || []).includes(c.id) }));
@@ -684,12 +698,99 @@ export async function incomingCount() {
 }
 
 // ======================= OPERATOR =======================
+// Every operator change to a player is a "patch" applied with applyPatch(). Here (this device) it is applied
+// straight away; online it is queued on the server and applied by that player's own arcade.
+export const OP_ITEMS = ['skin:knight-operator', 'skin:visor-operator', 'frame:crown-operator', 'banner:matrix-operator', 'nameplate:glitch-operator', 'effect:glitch-operator', 'cursor:cross-operator', 'pet:owl-operator', 'title:t-operator', 'badge:operator'];
+
+export function xpForLevel(level) {
+  level = Math.max(1, Math.min(200, Math.round(Number(level) || 1)));
+  let xp = 0;
+  for (let l = 1; l < level; l++) xp += 100 + (l - 1) * 50;
+  return xp;
+}
+
+export function applyPatch(db, u, p) {
+  if (p.coins) (p.coins > 0 ? earn(u, p.coins) : (u.coins = Math.max(0, u.coins + p.coins)));
+  if (p.xp > 0) addXp(db, u, p.xp);
+  if (p.setXp != null) u.xp = Math.max(0, Number(p.setXp) || 0);
+  (p.grant || []).forEach((k) => grant(u, k));
+  if (p.revoke?.length) {
+    u.owned = u.owned.filter((k) => !p.revoke.includes(k) || STARTER_OWNED.includes(k));
+    normalize(u);
+  }
+  if (p.unlockAll) u.owned = ALL_ITEMS.map((i) => i.key);
+  if (p.gift && !u.inbox.some((g) => g.id === p.gift.id)) {
+    u.inbox.push({ id: p.gift.id || randId('g_'), from: p.gift.from, msg: String(p.gift.msg || '').slice(0, 140), coins: p.gift.coins || 0, xp: p.gift.xp || 0, items: (p.gift.items || []).filter((k) => ITEM[k]), ts: p.gift.ts || Date.now() });
+  }
+  if (p.reset) {
+    const what = p.reset;
+    if (what === 'daily') u.daily = { last: null, streak: u.daily.streak };
+    if (what === 'tasks') (u.tasks = null), ensureTasks(u);
+    if (what === 'complete') {
+      ensureTasks(u);
+      u.tasks.list.forEach((t) => (t.progress = t.target));
+    }
+    if (what === 'events') u.events = {};
+    if (what === 'levelroad') u.levelClaimed = [];
+    if (what === 'achievements') u.achClaimed = [];
+  }
+  if (p.pass && syncPass(u)) {
+    const { tier = null, premium = null, reset = false } = p.pass;
+    if (reset) u.pass = { season: u.pass.season, xp: 0, premium: false, free: [], prem: [] };
+    if (tier != null) u.pass.xp = Math.max(0, Math.min(E.PASS_TIERS, Number(tier))) * E.PASS_XP_PER_TIER;
+    if (premium != null) u.pass.premium = !!premium;
+  }
+  return u;
+}
+
+// builds a custom event from the operator console form
+export function makeCustomEvent({ name, tagline = '', days = 3, discount = 0, boost = 1, gift = 0, color = '#ff2bd6', decor = '✦' }) {
+  name = String(name || '').trim().slice(0, 32);
+  if (!name) fail('Give the event a name');
+  const start = Date.now();
+  return {
+    id: randId('ce_'), name: name.toUpperCase(), tagline: String(tagline).slice(0, 120), start, end: start + Math.max(1, Math.min(60, Number(days) || 1)) * 86400000,
+    discount: Math.max(0, Math.min(90, Number(discount) || 0)), boost: Math.max(1, Math.min(5, Number(boost) || 1)), gift: Math.max(0, Math.round(Number(gift) || 0)),
+    color, decor: [...String(decor || '✦')].slice(0, 3), pals: [],
+  };
+}
+
+// operator form values -> patch (+ how many coins / XP it may add, for the server's jump check)
+export const OP_PATCH = {
+  coins: (n) => {
+    n = Math.round(Number(n) || 0);
+    if (!n) fail('Enter an amount');
+    return { data: { coins: n }, coins: Math.max(0, n), log: (who) => `${n > 0 ? 'gave' : 'took'} ${Math.abs(n)} coins ${n > 0 ? 'to' : 'from'} ${who}` };
+  },
+  xp: (n) => {
+    n = Math.round(Number(n) || 0);
+    if (n <= 0) fail('Enter a positive amount');
+    return { data: { xp: n }, xp: n, log: (who) => `gave ${n} XP to ${who}` };
+  },
+  level: (level) => ({ data: { setXp: xpForLevel(level) }, xp: 1e12, log: (who) => `set ${who} to level ${Math.round(Number(level) || 1)}` }),
+  item: (key, give = true) => {
+    if (!ITEM[key]) fail('Unknown item');
+    return { data: give ? { grant: [key] } : { revoke: [key] }, log: (who) => `${give ? 'gave' : 'removed'} ${ITEM[key].name} ${give ? 'to' : 'from'} ${who}` };
+  },
+  unlockAll: () => ({ data: { unlockAll: true }, log: (who) => `unlocked every cosmetic for ${who}` }),
+  gift: ({ coins = 0, xp = 0, items = [], msg = '' }) => {
+    coins = Math.max(0, Math.round(Number(coins) || 0));
+    xp = Math.max(0, Math.round(Number(xp) || 0));
+    items = items.filter((k) => ITEM[k]);
+    if (!coins && !xp && !items.length) fail('Add coins, XP or an item to the gift');
+    return { gift: { coins, xp, items, msg: String(msg).slice(0, 140) }, coins, xp, log: (who) => `sent a gift to ${who}` };
+  },
+  reset: (what) => ({ data: { reset: what }, log: (who) => `reset ${what} for ${who}` }),
+  pass: (opts) => ({ data: { pass: opts }, log: (who) => `changed pass for ${who}` }),
+};
+export const whoName = (who) => (who === '*' ? 'everyone' : who);
+
 export async function unlockOperator(code) {
   if ((await sha('xc-op::' + String(code).toUpperCase())) !== OP_HASH) return null;
   const db = load();
   const u = sessionUser(db);
   u.operator = true;
-  ['skin:knight-operator', 'skin:visor-operator', 'frame:crown-operator', 'banner:matrix-operator', 'nameplate:glitch-operator', 'effect:glitch-operator', 'cursor:cross-operator', 'pet:owl-operator', 'title:t-operator', 'badge:operator'].forEach((k) => grant(u, k));
+  OP_ITEMS.forEach((k) => grant(u, k));
   oplog(db, u, 'entered operator mode');
   return out(db, u);
 }
@@ -706,6 +807,13 @@ function targets(db, who) {
   if (who === '*') return Object.values(db.users);
   return [byName(db, who)];
 }
+function opApply(who, pk) {
+  const db = load();
+  const op = opUser(db);
+  targets(db, who).forEach((u) => applyPatch(db, u, pk.gift ? { gift: { ...pk.gift, from: op.username } } : pk.data));
+  oplog(db, op, pk.log(whoName(who)));
+  return out(db, db.users[op.id]);
+}
 
 export async function opPlayers() {
   const db = load();
@@ -721,66 +829,18 @@ export async function opLog() {
   return db.opLog;
 }
 
-export async function opCoins(who, n) {
-  const db = load();
-  const op = opUser(db);
-  n = Math.round(Number(n) || 0);
-  if (!n) fail('Enter an amount');
-  targets(db, who).forEach((u) => (n > 0 ? earn(u, n) : (u.coins = Math.max(0, u.coins + n))));
-  oplog(db, op, `${n > 0 ? 'gave' : 'took'} ${Math.abs(n)} coins ${n > 0 ? 'to' : 'from'} ${who === '*' ? 'everyone' : who}`);
-  return out(db, db.users[op.id]);
-}
-export async function opXp(who, n) {
-  const db = load();
-  const op = opUser(db);
-  n = Math.round(Number(n) || 0);
-  if (n <= 0) fail('Enter a positive amount');
-  targets(db, who).forEach((u) => addXp(db, u, n));
-  oplog(db, op, `gave ${n} XP to ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
-export async function opSetLevel(who, level) {
-  const db = load();
-  const op = opUser(db);
-  level = Math.max(1, Math.min(200, Math.round(Number(level) || 1)));
-  let xp = 0;
-  for (let l = 1; l < level; l++) xp += 100 + (l - 1) * 50;
-  targets(db, who).forEach((u) => (u.xp = xp));
-  oplog(db, op, `set ${who === '*' ? 'everyone' : who} to level ${level}`);
-  return out(db, op);
-}
-export async function opItem(who, key, give = true) {
-  const db = load();
-  const op = opUser(db);
-  if (!ITEM[key]) fail('Unknown item');
-  targets(db, who).forEach((u) => {
-    if (give) grant(u, key);
-    else if (!STARTER_OWNED.includes(key)) {
-      u.owned = u.owned.filter((k) => k !== key);
-      normalize(u);
-    }
-  });
-  oplog(db, op, `${give ? 'gave' : 'removed'} ${ITEM[key].name} ${give ? 'to' : 'from'} ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
-export async function opUnlockAll(who) {
-  const db = load();
-  const op = opUser(db);
-  targets(db, who).forEach((u) => (u.owned = ALL_ITEMS.map((i) => i.key)));
-  oplog(db, op, `unlocked every cosmetic for ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
-export async function opGift(who, { coins = 0, xp = 0, items = [], msg = '' }) {
-  const db = load();
-  const op = opUser(db);
-  coins = Math.max(0, Math.round(Number(coins) || 0));
-  xp = Math.max(0, Math.round(Number(xp) || 0));
-  items = items.filter((k) => ITEM[k]);
-  if (!coins && !xp && !items.length) fail('Add coins, XP or an item to the gift');
-  targets(db, who).forEach((u) => u.inbox.push({ id: randId('g_'), from: op.username, msg: String(msg).slice(0, 140), coins, xp, items, ts: Date.now() }));
-  oplog(db, op, `sent a gift to ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
+export const opCoins = async (who, n) => opApply(who, OP_PATCH.coins(n));
+export const opXp = async (who, n) => opApply(who, OP_PATCH.xp(n));
+export const opSetLevel = async (who, level) => opApply(who, OP_PATCH.level(level));
+export const opItem = async (who, key, give = true) => opApply(who, OP_PATCH.item(key, give));
+export const opUnlockAll = async (who) => opApply(who, OP_PATCH.unlockAll());
+export const opGift = async (who, g) => opApply(who, OP_PATCH.gift(g));
+export const opReset = async (who, what) => opApply(who, OP_PATCH.reset(what));
+export const opPass = async (who, opts) => {
+  if (!E.seasonFor()) fail('No season is running');
+  return opApply(who, OP_PATCH.pass(opts));
+};
+
 export async function opSetFlag(who, flag, value) {
   const db = load();
   const op = opUser(db);
@@ -801,35 +861,6 @@ export async function opDelete(who) {
   oplog(db, op, `deleted player ${who}`);
   return out(db, op);
 }
-export async function opReset(who, what) {
-  const db = load();
-  const op = opUser(db);
-  targets(db, who).forEach((u) => {
-    if (what === 'daily') u.daily = { last: null, streak: u.daily.streak };
-    if (what === 'tasks') u.tasks = null, ensureTasks(u);
-    if (what === 'complete') {
-      ensureTasks(u);
-      u.tasks.list.forEach((t) => (t.progress = t.target));
-    }
-    if (what === 'events') u.events = {};
-    if (what === 'levelroad') u.levelClaimed = [];
-    if (what === 'achievements') u.achClaimed = [];
-  });
-  oplog(db, op, `reset ${what} for ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
-export async function opPass(who, { tier = null, premium = null, reset = false }) {
-  const db = load();
-  const op = opUser(db);
-  targets(db, who).forEach((u) => {
-    if (!syncPass(u)) fail('No season is running');
-    if (reset) u.pass = { season: u.pass.season, xp: 0, premium: false, free: [], prem: [] };
-    if (tier != null) u.pass.xp = Math.max(0, Math.min(E.PASS_TIERS, Number(tier))) * E.PASS_XP_PER_TIER;
-    if (premium != null) u.pass.premium = !!premium;
-  });
-  oplog(db, op, `changed pass for ${who === '*' ? 'everyone' : who}`);
-  return out(db, op);
-}
 export async function opEventOverride(id, state) {
   const db = load();
   const op = opUser(db);
@@ -838,17 +869,10 @@ export async function opEventOverride(id, state) {
   oplog(db, op, `event ${id}: ${state}`);
   return out(db, op);
 }
-export async function opCreateEvent({ name, tagline = '', days = 3, discount = 0, boost = 1, gift = 0, color = '#ff2bd6', decor = '✦' }) {
+export async function opCreateEvent(form) {
   const db = load();
   const op = opUser(db);
-  name = String(name || '').trim().slice(0, 32);
-  if (!name) fail('Give the event a name');
-  const start = Date.now();
-  const ev = {
-    id: randId('ce_'), name: name.toUpperCase(), tagline: String(tagline).slice(0, 120), start, end: start + Math.max(1, Math.min(60, Number(days) || 1)) * 86400000,
-    discount: Math.max(0, Math.min(90, Number(discount) || 0)), boost: Math.max(1, Math.min(5, Number(boost) || 1)), gift: Math.max(0, Math.round(Number(gift) || 0)),
-    color, decor: [...String(decor || '✦')].slice(0, 3), pals: [],
-  };
+  const ev = makeCustomEvent(form);
   db.customEvents.push(ev);
   oplog(db, op, `created event ${ev.name}`);
   return out(db, op);

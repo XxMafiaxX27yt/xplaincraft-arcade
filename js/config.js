@@ -8,8 +8,9 @@ export const CONFIG = {
     version: '3.0.0',
   },
   supabase: {
-    url: '',
-    anonKey: '',
+    url: 'https://ptfaeeskjeohklyiupil.supabase.co',
+    // publishable key: safe in the browser, every table is protected by row level security (supabase/schema.sql)
+    anonKey: 'sb_publishable_FdygXuoBmYGo3JM_48ltBQ_D86faHRV',
   },
   economy: {
     startCoins: 150,

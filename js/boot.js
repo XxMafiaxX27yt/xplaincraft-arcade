@@ -102,7 +102,7 @@ function authPanel(root) {
           ${tab === 'new' ? `<label class="fld"><span>CONFIRM PASSWORD</span><input name="p2" type="password" autocomplete="new-password" placeholder="type it again" required></label>` : ''}
           <div class="auth-err" aria-live="polite"></div>
           <button class="btn primary big" type="submit">${tab === 'new' ? 'CREATE ACCOUNT' : 'LOG IN'}</button>
-          <div class="auth-note">${api.MODE === 'local' ? 'Accounts are saved on this device for now.' : 'Online account.'}</div>
+          <div class="auth-note">${api.MODE === 'local' ? 'Accounts are saved on this device for now.' : 'Online account: log in from any device with your callsign + password.'}</div>
         </form>
       </div>`;
       const f = $('form', root);
