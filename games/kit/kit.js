@@ -82,15 +82,20 @@
   const anyOf = (set, codes) => codes.some((c) => set.has(c));
   const K = {};
   K.W = W; K.H = H; K.C = C; K.FONT = FONT; K.attract = ATTRACT; K.meta = META;
-  K.down = (...codes) => anyOf(keys, codes) || anyOf(vkeys, codes);
-  K.tap = (...codes) => anyOf(tapped, codes) || anyOf(vtapped, codes);
+  // remember which keys the game reads while playing -> the phone controls show exactly those
+  const usedKeys = new Set();
+  let usedDir = false;
+  const note = (codes) => { if (state === 'play') codes.forEach((c) => usedKeys.add(c)); };
+  K.down = (...codes) => (note(codes), anyOf(keys, codes) || anyOf(vkeys, codes));
+  K.tap = (...codes) => (note(codes), anyOf(tapped, codes) || anyOf(vtapped, codes));
   K.mouse = mouse;
   K.swipe = () => { const d = swipeDir; swipeDir = null; return d; };
-  K.dir = () => ({
+  K.dir = () => (state === 'play' && (usedDir = true), {
     x: (K.down('ArrowRight', 'KeyD') ? 1 : 0) - (K.down('ArrowLeft', 'KeyA') ? 1 : 0),
     y: (K.down('ArrowDown', 'KeyS') ? 1 : 0) - (K.down('ArrowUp', 'KeyW') ? 1 : 0),
   });
   K.tapDir = () => {
+    if (state === 'play') usedDir = 'tap';
     if (K.tap('ArrowUp', 'KeyW')) return 'up';
     if (K.tap('ArrowDown', 'KeyS')) return 'down';
     if (K.tap('ArrowLeft', 'KeyA')) return 'left';
@@ -283,7 +288,16 @@
     K.sfx(result.won === false ? 'lose' : 'win');
   };
   function restartAttract() { s = {}; cfg.init(s); }
+  function phoneFullscreen() {
+    if (!K.isTouch || document.fullscreenElement) return;
+    try {
+      const el = document.documentElement;
+      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
+      if (p) p.then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    } catch {}
+  }
   function startRun() {
+    phoneFullscreen();
     stopDrones(); parts.length = 0;
     s = {}; cfg.init(s);
     state = 'play'; stateT = 0;
@@ -329,6 +343,7 @@
       }
       stepParts(dt);
       render(dt);
+      touchUI();
     } catch (err) {
       console.error(err);
       throw err;
@@ -340,7 +355,10 @@
     tapped.clear(); vtapped.clear(); mouse.clicked = false; mouse.released = false; mouse.right = false; mouse.wheel = 0; swipeDir = null;
     if (ATTRACT || state === 'title') mouse.down = false;
   }
-  K.exit = () => (window.XC ? XC.exit() : history.back());
+  K.exit = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    window.XC ? XC.exit() : history.back();
+  };
 
   function render(dt) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -403,6 +421,98 @@
       }
     }
   }
+
+  // ---------- phone / tablet controls ----------
+  // A joystick (if the game reads arrows / WASD / K.dir) and one button per other key the game reads.
+  // A game can set its own with K.game({ touch: { stick: true|'tap'|false, buttons: [['Space', 'JUMP'], ...] } }).
+  const IS_TOUCH = !ATTRACT && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || Q.has('touch'));
+  const DIR_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+  const WASD = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
+  const SKIP = new Set(['Escape', 'KeyP', 'Tab', 'ShiftRight', 'NumpadEnter']);
+  const LABEL = { Space: 'SPACE', Enter: 'OK', ShiftLeft: 'RUN', ControlLeft: 'CTRL', Backspace: '⌫' };
+  const label = (c) => LABEL[c] || (c.startsWith('Key') ? c.slice(3) : c.startsWith('Digit') ? c.slice(5) : c.startsWith('Numpad') ? c.slice(6) : c.replace(/Left|Right/, '').slice(0, 4).toUpperCase());
+  let tui = null, tuiSig = '';
+  const press = (code) => { if (!keys.has(code)) tapped.add(code); keys.add(code); audio(); };
+  const release = (code) => keys.delete(code);
+  function touchUI() {
+    if (!IS_TOUCH || !canvas) return;
+    if (!tui) {
+      tui = document.createElement('div');
+      tui.className = 'xt';
+      tui.innerHTML = '<button class="xt-pause" aria-label="Pause">II</button><div class="xt-stick"><i></i></div><div class="xt-btns"></div><div class="xt-rot">↻ Turn your phone sideways</div>';
+      document.body.appendChild(tui);
+      const pb = tui.querySelector('.xt-pause');
+      pb.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); tapped.add('Escape'); });
+      stickInput(tui.querySelector('.xt-stick'));
+    }
+    const playing = state === 'play';
+    tui.classList.toggle('on', playing || state === 'pause');
+    tui.classList.toggle('paused', state === 'pause');
+    if (!playing) return;
+    const own = cfg.touch || {};
+    const stick = own.stick ?? (usedDir || [...usedKeys].some((c) => DIR_KEYS.has(c)) ? (usedDir === 'tap' ? 'tap' : true) : false);
+    let btns = own.buttons || [...usedKeys].filter((c) => !SKIP.has(c) && !DIR_KEYS.has(c) && !(stick && WASD.has(c))).map((c) => [c, label(c)]);
+    if (!own.buttons) {
+      if (btns.some(([c]) => c === 'Space')) btns = btns.filter(([c]) => c !== 'Enter');
+      btns = btns.slice(0, 6);
+    }
+    const sig = stick + '|' + btns.map((b) => b.join(':')).join(',');
+    if (sig === tuiSig) return;
+    tuiSig = sig;
+    const st = tui.querySelector('.xt-stick');
+    st.style.display = stick ? '' : 'none';
+    st.dataset.mode = stick === 'tap' ? 'tap' : 'hold';
+    const box = tui.querySelector('.xt-btns');
+    box.innerHTML = '';
+    btns.forEach(([code, text]) => {
+      const b = document.createElement('button');
+      b.className = 'xt-b' + (String(text).length > 2 ? ' wide' : '');
+      b.textContent = text;
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); b.classList.add('down'); press(code); });
+      const up = (e) => { e.preventDefault(); b.classList.remove('down'); release(code); };
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', up);
+      box.appendChild(b);
+    });
+  }
+  function stickInput(el) {
+    const knob = el.querySelector('i');
+    let id = null, cx = 0, cy = 0, held = new Set(), rep = null;
+    const set = (want) => {
+      held.forEach((k) => { if (!want.has(k)) release(k); });
+      want.forEach((k) => { if (!held.has(k)) press(k); });
+      held = want;
+    };
+    const move = (e) => {
+      const r = el.getBoundingClientRect(), R = r.width / 2;
+      let dx = e.clientX - cx, dy = e.clientY - cy;
+      const d = Math.hypot(dx, dy), m = Math.min(d, R * 0.8);
+      if (d > 0) { dx = (dx / d) * m; dy = (dy / d) * m; }
+      knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      const want = new Set();
+      if (d > R * 0.28) {
+        const a = Math.atan2(dy, dx), th = el.dataset.mode === 'tap' ? 0.7071 : 0.42;
+        const sx = Math.cos(a), sy = Math.sin(a);
+        if (sx > th) want.add('ArrowRight'); else if (sx < -th) want.add('ArrowLeft');
+        if (sy > th) want.add('ArrowDown'); else if (sy < -th) want.add('ArrowUp');
+      }
+      set(want);
+    };
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      id = e.pointerId; el.setPointerCapture(id);
+      const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+      move(e);
+      clearInterval(rep);
+      // grid games read single taps: repeat the tap while the stick is held
+      rep = setInterval(() => { if (el.dataset.mode === 'tap') held.forEach((k) => tapped.add(k)); }, 190);
+    });
+    el.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
+    const end = (e) => { if (e.pointerId !== id) return; id = null; clearInterval(rep); knob.style.transform = ''; set(new Set()); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+  K.isTouch = IS_TOUCH;
 
   window.K = K;
 })();

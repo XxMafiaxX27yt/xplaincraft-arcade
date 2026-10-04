@@ -1,3 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 canvas { display: block; }
+/* phone controls (kit.js touchUI) */
+.xt { position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0; transition: opacity .2s; font-family: 'Orbitron', sans-serif; }
+.xt.on { opacity: 1; }
+.xt.on .xt-pause, .xt.on:not(.paused) .xt-stick, .xt.on:not(.paused) .xt-b { pointer-events: auto; }
+.xt.paused .xt-stick, .xt.paused .xt-btns { opacity: 0; }
+.xt-pause { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: rgba(10,8,30,.45); color: #fff; font: 700 14px 'Orbitron', sans-serif; touch-action: none; }
+.xt-stick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); width: min(34vmin, 170px); height: min(34vmin, 170px); border-radius: 50%; background: radial-gradient(circle, rgba(34,230,255,.10), rgba(34,230,255,.04)); border: 2px solid rgba(34,230,255,.35); touch-action: none; }
+.xt-stick i { position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; margin: -22% 0 0 -22%; border-radius: 50%; background: rgba(34,230,255,.35); border: 2px solid rgba(34,230,255,.8); box-shadow: 0 0 18px rgba(34,230,255,.5); }
+.xt-btns { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap-reverse; flex-direction: row-reverse; gap: 12px; max-width: 46vw; }
+.xt-b { width: min(17vmin, 78px); height: min(17vmin, 78px); border-radius: 50%; border: 2px solid rgba(255,43,214,.75); background: rgba(255,43,214,.16); color: #fff; font: 700 16px 'Orbitron', sans-serif; touch-action: none; box-shadow: 0 0 14px rgba(255,43,214,.35); }
+.xt-b.wide { font-size: 12px; }
+.xt-b.down { background: rgba(255,43,214,.55); transform: scale(.94); }
+.xt-rot { display: none; position: absolute; left: 50%; top: 12px; transform: translateX(-50%); padding: 8px 14px; border-radius: 20px; background: rgba(10,8,30,.75); border: 1px solid rgba(34,230,255,.5); color: #bff6ff; font: 600 13px 'Rajdhani', sans-serif; letter-spacing: .5px; white-space: nowrap; }
+@media (orientation: portrait) { .xt .xt-rot { display: block; } }

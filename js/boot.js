@@ -50,7 +50,7 @@ function pressStart(root) {
   return new Promise((resolve) => {
     root.innerHTML = `<div class="boot-stage">
       ${logoHTML('logo-boot')}
-      <div class="press">PRESS ANY KEY TO START</div>
+      <div class="press">${matchMedia('(pointer: coarse)').matches ? 'TAP TO START' : 'PRESS ANY KEY TO START'}</div>
       <div class="boot-ver">v${esc(B.version)} · build ${new Date().getFullYear()}</div>
     </div>`;
     const go = () => {

@@ -1,0 +1,16 @@
+{
+  "name": "XplainCraft's Gaming Arcade",
+  "short_name": "XC Arcade",
+  "description": "NOVEX × XPLAINCRAFT'S GAMING ARCADE - hundreds of 2D games, solo and with friends.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#06050d",
+  "theme_color": "#06050d",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
