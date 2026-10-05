@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bubble Shooter</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bubble-shooter","n":12,"title":"BUBBLE SHOOTER","genre":"relax","desc":"Aim, bounce off the walls, and pop groups of three or more matching bubbles. Anything left hanging falls for bonus points. Every few shots the ceiling drops a row, so plan ahead.","controls":"Aim with the mouse / touch, click to shoot · Space swaps the next bubble","scoreLabel":"POINTS","tasks":[{"stat":"score","target":1500,"text":"Score 1500 in Bubble Shooter"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const R = 18, COLS = 14, LX = 480 - COLS * R, SX = 480, SY = 500;
+const PAL = ['#ff3355', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff', '#ff8a3a'];
+let PAR = 0; // flips each time a new row is pushed in from the top, so existing bubbles keep their place
+const cell = (r, c) => ({ x: LX + R + c * R * 2 + ((r + PAR) % 2 ? R : 0), y: 30 + R + r * R * 1.74 });
+const rowCols = (r) => ((r + PAR) % 2 ? COLS - 1 : COLS);
+function nbs(r, c) { const odd = (r + PAR) % 2, o = [[r, c - 1], [r, c + 1], [r - 1, c - (odd ? 0 : 1)], [r - 1, c + (odd ? 1 : 0)], [r + 1, c - (odd ? 0 : 1)], [r + 1, c + (odd ? 1 : 0)]]; return o.filter(([a, b]) => a >= 0 && b >= 0 && b < rowCols(a)); }
+const colorsLeft = (s) => [...new Set(s.g.flat().filter((x) => x != null))];
+function nextBall(s) { const left = colorsLeft(s); return left.length ? K.pick(left) : K.irand(0, s.nc - 1); }
+K.game({
+  bg: '#0a1426', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.nc = 5; s.g = []; PAR = 0;
+    for (let r = 0; r < 18; r++) s.g.push(Array.from({ length: rowCols(r) }, () => (r < 6 ? K.irand(0, s.nc - 1) : null)));
+    s.cur = nextBall(s); s.next = nextBall(s); s.shot = null; s.score = 0; s.shots = 0; s.falling = []; s.aim = -Math.PI / 2;
+  },
+  update(s, dt) {
+    s.falling.forEach((f) => { f.vy += 1200 * dt; f.y += f.vy * dt; f.x += f.vx * dt; }); s.falling = s.falling.filter((f) => f.y < 600);
+    const a = Math.atan2(K.mouse.y - SY, K.mouse.x - SX); s.aim = K.clamp(a, -Math.PI + 0.12, -0.12);
+    if (K.tap('Space')) [s.cur, s.next] = [s.next, s.cur];
+    if (!s.shot && K.mouse.clicked && K.mouse.y < SY - 20) { s.shot = { x: SX, y: SY, vx: Math.cos(s.aim) * 900, vy: Math.sin(s.aim) * 900, c: s.cur }; s.cur = s.next; s.next = nextBall(s); K.sfx('whoosh'); }
+    if (!s.shot) return;
+    const b = s.shot;
+    for (let k = 0; k < 4; k++) {
+      b.x += (b.vx * dt) / 4; b.y += (b.vy * dt) / 4;
+      if (b.x < LX + R || b.x > LX + COLS * R * 2 - R) { b.vx *= -1; b.x = K.clamp(b.x, LX + R, LX + COLS * R * 2 - R); K.sfx('tick'); }
+      let stick = b.y < 30 + R;
+      if (!stick) for (let r = 0; r < s.g.length && !stick; r++) for (let c = 0; c < s.g[r].length; c++) if (s.g[r][c] != null) { const p = cell(r, c); if (Math.hypot(p.x - b.x, p.y - b.y) < R * 1.8) { stick = true; break; } }
+      if (stick) { land(s, b); return; }
+    }
+  },
+  draw(s) {
+    K.rect(LX - 6, 20, COLS * R * 2 + 12, 520, '#0e1c34', 10);
+    const danger = 30 + R + 14 * R * 1.74; K.line(LX, danger, LX + COLS * R * 2, danger, '#ff335555', 2);
+    s.g.forEach((row, r) => row.forEach((v, c) => { if (v == null) return; const p = cell(r, c); bubble(p.x, p.y, PAL[v]); }));
+    s.falling.forEach((f) => bubble(f.x, f.y, PAL[f.c]));
+    // aim guide with one bounce
+    let x = SX, y = SY, vx = Math.cos(s.aim), vy = Math.sin(s.aim);
+    for (let i = 0; i < 40; i++) { x += vx * 14; y += vy * 14; if (x < LX + R || x > LX + COLS * R * 2 - R) vx *= -1; if (y < 40) break; if (i % 2) K.circle(x, y, 2.5, '#ffffff66'); }
+    if (s.shot) bubble(s.shot.x, s.shot.y, PAL[s.shot.c]); else bubble(SX, SY, PAL[s.cur]);
+    bubble(SX + 70, SY + 14, PAL[s.next], 0.7); K.text('NEXT', SX + 70, SY - 14, 11, '#8e88b8', 'center', 'm');
+    K.text(String(s.score), 120, 60, 30, '#ffd93a', 'center', 'd'); K.text('POINTS', 120, 90, 12, '#8e88b8', 'center', 'm');
+    K.text(`ROW DROPS IN ${6 - (s.shots % 6)}`, 120, 140, 13, '#22e6ff', 'center', 'm');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0 && !s.shot) K.vmouse(K.rand(320, 640), 200, true); else if (!s.shot) K.vmouse(480 + Math.sin(K.time()) * 150, 200); },
+});
+function bubble(x, y, c, k = 1) { K.glow(c, 8); K.circle(x, y, (R - 1) * k, c); K.noGlow(); K.alpha(0.45); K.circle(x - 5 * k, y - 6 * k, 5 * k, '#fff'); K.alpha(1); }
+function land(s, b) {
+  // nearest empty cell
+  let best = null, bd = 1e9;
+  for (let r = 0; r < s.g.length; r++) for (let c = 0; c < s.g[r].length; c++) if (s.g[r][c] == null) { const p = cell(r, c); const d = Math.hypot(p.x - b.x, p.y - b.y); if (d < bd) { bd = d; best = [r, c]; } }
+  s.shot = null; s.shots++;
+  if (!best) return;
+  const [r, c] = best; s.g[r][c] = b.c;
+  // match
+  const seen = new Set([r + ',' + c]), q = [[r, c]], group = [];
+  while (q.length) { const [a, d] = q.pop(); group.push([a, d]); for (const [x, y] of nbs(a, d)) if (s.g[x]?.[y] === b.c && !seen.has(x + ',' + y)) { seen.add(x + ',' + y); q.push([x, y]); } }
+  if (group.length >= 3) {
+    group.forEach(([a, d]) => { const p = cell(a, d); K.burst(p.x, p.y, PAL[s.g[a][d]], 6, 160, 0.4); s.g[a][d] = null; });
+    s.score += group.length * 10; K.tone(500 + group.length * 40, 0.15, 'triangle', 0.07);
+    // floating bubbles fall
+    const keep = new Set(), q2 = []; s.g[0].forEach((v, d) => v != null && (keep.add('0,' + d), q2.push([0, d])));
+    while (q2.length) { const [a, d] = q2.pop(); for (const [x, y] of nbs(a, d)) if (s.g[x]?.[y] != null && !keep.has(x + ',' + y)) { keep.add(x + ',' + y); q2.push([x, y]); } }
+    let dropped = 0;
+    s.g.forEach((row, a) => row.forEach((v, d) => { if (v != null && !keep.has(a + ',' + d)) { const p = cell(a, d); s.falling.push({ x: p.x, y: p.y, vx: K.rand(-60, 60), vy: K.rand(-150, 0), c: v }); s.g[a][d] = null; dropped++; } }));
+    if (dropped) { s.score += dropped * 20; K.floatText(`+${dropped * 20} DROP`, 480, 300, '#ffd93a'); K.sfx('coin'); }
+  } else K.sfx('click');
+  if (s.shots % 6 === 0) { PAR ^= 1; s.g.unshift(Array.from({ length: rowCols(0) }, () => K.irand(0, s.nc - 1))); s.g.pop(); K.sfx('knock'); }
+  if (!colorsLeft(s).length) { s.score += 1000; K.sfx('win'); return K.end(s, { score: s.score, won: true, title: 'BOARD CLEARED', text: 'Every bubble popped.' }); }
+  if (s.g.slice(14).some((row) => row.some((v) => v != null))) { K.sfx('lose'); K.end(s, { score: s.score, won: null, title: 'THE CEILING CAME DOWN', text: 'Nice popping.' }); }
+}
+</script></body></html>

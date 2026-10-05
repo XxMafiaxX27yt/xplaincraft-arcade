@@ -1,0 +1,107 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solitaire</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"solitaire","n":7,"title":"SOLITAIRE","genre":"relax","desc":"Classic Klondike. Build the four suits up from Ace to King, stack the table down in alternating colours. Drag cards, or just tap one and it jumps to the best spot. No timer, undo as much as you like.","controls":"Drag cards · tap a card to auto-move · tap the deck to draw · U = undo","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Solitaire"},{"stat":"score","target":300,"text":"Score 300 in Solitaire"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CW = 70, CH = 98, GX = 88, X0 = 175, TY = 150, SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const red = (c) => c.s === 1 || c.s === 2;
+function deal(s) {
+  const deck = []; for (let su = 0; su < 4; su++) for (let r = 0; r < 13; r++) deck.push({ s: su, r, up: false });
+  K.shuffle(deck);
+  s.tab = Array.from({ length: 7 }, () => []);
+  for (let i = 0; i < 7; i++) for (let j = 0; j <= i; j++) { const c = deck.pop(); c.up = j === i; s.tab[i].push(c); }
+  s.stock = deck; s.waste = []; s.found = [[], [], [], []]; s.hist = []; s.score = 0; s.drag = null; s.won = false;
+}
+const snap = (s) => JSON.stringify({ tab: s.tab, stock: s.stock, waste: s.waste, found: s.found, score: s.score });
+function save(s) { s.hist.push(snap(s)); if (s.hist.length > 200) s.hist.shift(); }
+const pos = { stock: [X0, 26], waste: [X0 + GX, 26], found: (i) => [X0 + GX * (3 + i), 26], tab: (i, j, col) => { let y = TY; for (let k = 0; k < j; k++) y += col[k].up ? 26 : 12; return [X0 + GX * i, y]; } };
+function canFound(c, f) { const top = f[f.length - 1]; return top ? top.s === c.s && c.r === top.r + 1 : c.r === 0; }
+function canTab(c, col) { const top = col[col.length - 1]; return top ? top.up && red(top) !== red(c) && c.r === top.r - 1 : c.r === 12; }
+function flip(s) { s.tab.forEach((col) => { const t = col[col.length - 1]; if (t && !t.up) { t.up = true; s.score += 5; } }); }
+function checkWin(s) { if (s.found.every((f) => f.length === 13) && !s.won) { s.won = true; K.sfx('win'); K.end(s, { score: s.score + 200, won: true, stats: { won: 1 }, title: 'YOU WIN!', text: 'Every card is home.' }); } }
+// where is the card at x,y?
+function hit(s, x, y) {
+  for (let i = 0; i < 7; i++) { const col = s.tab[i]; for (let j = col.length - 1; j >= 0; j--) { const [cx, cy] = pos.tab(i, j, col); const h = j === col.length - 1 ? CH : col[j].up ? 26 : 12; if (x >= cx && x <= cx + CW && y >= cy && y <= cy + h) return { from: 'tab', i, j }; } }
+  if (K.inRect(x, y, { x: pos.waste[0], y: pos.waste[1], w: CW, h: CH }) && s.waste.length) return { from: 'waste' };
+  for (let i = 0; i < 4; i++) { const [fx, fy] = pos.found(i); if (K.inRect(x, y, { x: fx, y: fy, w: CW, h: CH }) && s.found[i].length) return { from: 'found', i }; }
+  if (K.inRect(x, y, { x: pos.stock[0], y: pos.stock[1], w: CW, h: CH })) return { from: 'stock' };
+  return null;
+}
+function take(s, h) {
+  if (h.from === 'tab') { const col = s.tab[h.i]; if (!col[h.j] || !col[h.j].up) return null; return col.slice(h.j); }
+  if (h.from === 'waste') return s.waste.length ? [s.waste[s.waste.length - 1]] : null;
+  if (h.from === 'found') return s.found[h.i].length ? [s.found[h.i][s.found[h.i].length - 1]] : null;
+  return null;
+}
+function remove(s, h, n) { if (h.from === 'tab') s.tab[h.i].splice(s.tab[h.i].length - n, n); if (h.from === 'waste') s.waste.pop(); if (h.from === 'found') s.found[h.i].pop(); }
+function place(s, h, cards, dest) {
+  save(s); remove(s, h, cards.length);
+  if (dest.to === 'found') { s.found[dest.i].push(cards[0]); s.score += h.from === 'found' ? 0 : 10; }
+  else { s.tab[dest.i].push(...cards); if (h.from === 'waste') s.score += 5; if (h.from === 'found') s.score = Math.max(0, s.score - 15); }
+  flip(s); K.sfx('click'); checkWin(s);
+}
+function autoMove(s, h) {
+  const cards = take(s, h); if (!cards) return false;
+  if (cards.length === 1 && h.from !== 'found') for (let i = 0; i < 4; i++) if (canFound(cards[0], s.found[i])) { place(s, h, cards, { to: 'found', i }); return true; }
+  for (let i = 0; i < 7; i++) if (!(h.from === 'tab' && h.i === i) && canTab(cards[0], s.tab[i]) && !(cards[0].r === 12 && h.from === 'tab' && h.j === 0)) { place(s, h, cards, { to: 'tab', i }); return true; }
+  return false;
+}
+function drawCard(s) {
+  save(s);
+  if (!s.stock.length) { s.stock = s.waste.reverse().map((c) => ({ ...c, up: false })); s.waste = []; s.score = Math.max(0, s.score - 20); K.sfx('whoosh'); return; }
+  const c = s.stock.pop(); c.up = true; s.waste.push(c); K.sfx('tick');
+}
+function drawCardAt(c, x, y) {
+  if (!c.up) { K.rect(x, y, CW, CH, '#3a2f8e', 7); K.stroke(x + 4, y + 4, CW - 8, CH - 8, '#8b5cf6', 2, 5); K.text('✦', x + CW / 2, y + CH / 2, 22, '#8b5cf6'); return; }
+  K.rect(x, y, CW, CH, '#f8f6ff', 7); K.stroke(x, y, CW, CH, '#00000033', 1, 7);
+  const col = red(c) ? '#d8213e' : '#141428';
+  K.text(RANKS[c.r], x + 6, y + 13, 16, col, 'left', 'd'); K.text(SUITS[c.s], x + 7, y + 31, 15, col, 'left');
+  K.text(SUITS[c.s], x + CW / 2, y + CH / 2 + 12, 34, col);
+}
+K.game({
+  bg: '#0d3a26', touch: { stick: false, buttons: [] },
+  init(s) { deal(s); s.clickT = 0; },
+  update(s, dt) {
+    const m = K.mouse;
+    if (K.tap('KeyU') || (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 300, w: 110, h: 40 }))) { const h = s.hist.pop(); if (h) { Object.assign(s, JSON.parse(h)); K.sfx('whoosh'); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 350, w: 110, h: 40 })) return K.end(s, { score: s.score, won: null, title: 'NICE GAME', text: `${s.found.reduce((a, f) => a + f.length, 0)} cards home` });
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 400, w: 110, h: 40 })) { let moved = true; while (moved) { moved = false; for (const src of [{ from: 'waste' }, ...s.tab.map((c, i) => ({ from: 'tab', i, j: c.length - 1 }))]) { const cards = take(s, src); if (cards && cards.length === 1) for (let i = 0; i < 4; i++) if (canFound(cards[0], s.found[i])) { place(s, src, cards, { to: 'found', i }); moved = true; break; } } } return; }
+    if (m.clicked) {
+      const h = hit(s, m.x, m.y);
+      if (!h) return;
+      if (h.from === 'stock') return drawCard(s);
+      const cards = take(s, h); if (!cards) return;
+      const [ox, oy] = h.from === 'tab' ? pos.tab(h.i, h.j, s.tab[h.i]) : h.from === 'waste' ? pos.waste : pos.found(h.i);
+      s.drag = { h, cards, dx: m.x - ox, dy: m.y - oy, sx: m.x, sy: m.y, moved: false };
+    }
+    if (s.drag && m.down) { if (Math.hypot(m.x - s.drag.sx, m.y - s.drag.sy) > 6) s.drag.moved = true; }
+    if (s.drag && !m.down) {
+      const d = s.drag; s.drag = null;
+      if (!d.moved) { if (!autoMove(s, d.h)) K.sfx('wrong'); return; }
+      const cx = m.x - d.dx + CW / 2, cy = m.y - d.dy + 20;
+      for (let i = 0; i < 4; i++) { const [fx, fy] = pos.found(i); if (d.cards.length === 1 && K.inRect(cx, cy, { x: fx - 10, y: fy - 10, w: CW + 20, h: CH + 20 }) && canFound(d.cards[0], s.found[i])) return place(s, d.h, d.cards, { to: 'found', i }); }
+      for (let i = 0; i < 7; i++) { const col = s.tab[i]; const [tx, ty] = pos.tab(i, col.length, col); if (cx > tx - 20 && cx < tx + CW + 20 && cy > TY - 20 && cy < ty + CH + 40 && canTab(d.cards[0], col) && !(d.h.from === 'tab' && d.h.i === i)) return place(s, d.h, d.cards, { to: 'tab', i }); }
+      K.sfx('wrong');
+    }
+  },
+  draw(s) {
+    const hidden = new Set(s.drag?.moved ? s.drag.cards : []);
+    K.stroke(pos.stock[0], pos.stock[1], CW, CH, '#ffffff33', 2, 7);
+    if (s.stock.length) drawCardAt({ up: false }, ...pos.stock); else K.text('↻', pos.stock[0] + CW / 2, pos.stock[1] + CH / 2, 30, '#ffffff55');
+    const wt = s.waste.filter((c) => !hidden.has(c)); if (wt.length) drawCardAt(wt[wt.length - 1], ...pos.waste);
+    s.found.forEach((f, i) => { const [x, y] = pos.found(i); K.stroke(x, y, CW, CH, '#ffffff33', 2, 7); K.text(SUITS[i], x + CW / 2, y + CH / 2, 30, '#ffffff22'); const v = f.filter((c) => !hidden.has(c)); if (v.length) drawCardAt(v[v.length - 1], x, y); });
+    s.tab.forEach((col, i) => { const [x] = pos.tab(i, 0, col); K.stroke(x, TY, CW, CH, '#ffffff22', 2, 7); col.forEach((c, j) => { if (!hidden.has(c)) drawCardAt(c, ...pos.tab(i, j, col)); }); });
+    if (s.drag?.moved) s.drag.cards.forEach((c, k) => drawCardAt(c, K.mouse.x - s.drag.dx, K.mouse.y - s.drag.dy + k * 26));
+    K.text(String(s.score), 85, 60, 28, '#ffd93a', 'center', 'd'); K.text('POINTS', 85, 90, 12, '#cfe9dc', 'center', 'm');
+    K.button(30, 300, 110, 40, 'UNDO', { color: '#cfe9dc', size: 13 });
+    K.button(30, 350, 110, 40, 'FINISH', { color: '#cfe9dc', size: 13 });
+    K.button(30, 400, 110, 40, 'AUTO ▲', { color: '#ffd93a', size: 13 });
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 20) return;
+    for (const src of [{ from: 'waste' }, ...s.tab.map((c, i) => ({ from: 'tab', i, j: c.findIndex((x) => x.up) }))]) { if (src.j === -1) continue; if (take(s, src) && autoMove(s, src)) return; }
+    drawCard(s);
+  },
+});
+</script></body></html>

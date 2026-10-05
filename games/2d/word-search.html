@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Word Search</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"word-search","n":15,"title":"WORD SEARCH","genre":"relax","desc":"Find the hidden words in the letter grid: across, down, diagonal and backwards. Each puzzle has a theme. Drag across a word to circle it. No timer, five puzzles.","controls":"Drag from the first letter to the last","scoreLabel":"WORDS","tasks":[{"stat":"score","target":20,"text":"Find 20 words in Word Search"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const THEMES = {
+  ANIMALS: 'TIGER ZEBRA PANDA KOALA OTTER EAGLE SHARK WHALE HORSE CAMEL LLAMA RAVEN SLOTH BISON GECKO',
+  SPACE: 'COMET ORBIT PLANET GALAXY NEBULA ROCKET MOON STAR SATURN VENUS METEOR ALIEN COSMOS',
+  FOOD: 'PIZZA PASTA BREAD MANGO LEMON SUSHI TACO CURRY HONEY CHEESE NOODLE BURGER COOKIE',
+  OCEAN: 'CORAL WAVE TIDE SHELL OCTOPUS SQUID REEF ANCHOR PEARL SEAWEED DOLPHIN CRAB',
+  MUSIC: 'PIANO DRUM GUITAR VIOLIN FLUTE TEMPO CHORD RHYTHM SONG BASS TRUMPET MELODY',
+  WEATHER: 'STORM CLOUD RAIN SNOW THUNDER BREEZE FROST SUNNY MIST HAIL RAINBOW TORNADO',
+  GAMES: 'ARCADE PIXEL LEVEL SCORE PLAYER QUEST BOSS COMBO JOYSTICK PUZZLE RACER TETRIS',
+};
+const N = 12, T = 38, BX = 60, BY = 40;
+const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1], [-1, -1], [-1, 1]];
+function puzzle(s) {
+  const names = Object.keys(THEMES); s.theme = names[(s.idx + s.off) % names.length];
+  const pool = K.shuffle(THEMES[s.theme].split(' ').filter((w) => w.length <= N)).slice(0, 9);
+  s.g = Array.from({ length: N }, () => Array(N).fill(''));
+  s.words = [];
+  const dirs = s.idx < 2 ? DIRS.slice(0, 4) : DIRS;
+  for (const w of pool) {
+    for (let t = 0; t < 200; t++) {
+      const [dx, dy] = K.pick(dirs), x = K.irand(0, N - 1), y = K.irand(0, N - 1), ex = x + dx * (w.length - 1), ey = y + dy * (w.length - 1);
+      if (ex < 0 || ey < 0 || ex >= N || ey >= N) continue;
+      let ok = true; for (let i = 0; i < w.length; i++) { const c = s.g[y + dy * i][x + dx * i]; if (c && c !== w[i]) { ok = false; break; } }
+      if (!ok) continue;
+      for (let i = 0; i < w.length; i++) s.g[y + dy * i][x + dx * i] = w[i];
+      s.words.push({ w, x, y, ex, ey, found: false, col: `hsl(${s.words.length * 40},80%,60%)` }); break;
+    }
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!s.g[y][x]) s.g[y][x] = String.fromCharCode(65 + K.irand(0, 25));
+  s.drag = null;
+}
+const cellAt = (mx, my) => { const x = Math.floor((mx - BX) / T), y = Math.floor((my - BY) / T); return x >= 0 && y >= 0 && x < N && y < N ? [x, y] : null; };
+K.game({
+  bg: '#14101f', touch: { stick: false, buttons: [] },
+  init(s) { s.idx = 0; s.off = K.irand(0, 6); s.score = 0; puzzle(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (m.clicked) { const c = cellAt(m.x, m.y); if (c) s.drag = { a: c, b: c }; }
+    if (s.drag && m.down) { const c = cellAt(m.x, m.y); if (c) { const dx = c[0] - s.drag.a[0], dy = c[1] - s.drag.a[1]; if (!dx || !dy || Math.abs(dx) === Math.abs(dy)) s.drag.b = c; } }
+    if (s.drag && !m.down) {
+      const { a, b } = s.drag; s.drag = null;
+      const w = s.words.find((w) => !w.found && ((w.x === a[0] && w.y === a[1] && w.ex === b[0] && w.ey === b[1]) || (w.x === b[0] && w.y === b[1] && w.ex === a[0] && w.ey === a[1])));
+      if (w) { w.found = true; s.score++; K.tone(520 + s.words.filter((x) => x.found).length * 60, 0.25, 'triangle', 0.07); if (s.words.every((x) => x.found)) { K.sfx('win'); s.idx++; if (s.idx >= 5) return K.end(s, { score: s.score, won: true, title: 'ALL FOUND', text: `${s.score} words in 5 puzzles` }); setTimeout(() => puzzle(s), 900); } }
+      else if (a[0] !== b[0] || a[1] !== b[1]) K.sfx('wrong');
+    }
+  },
+  draw(s) {
+    K.rect(BX - 10, BY - 10, N * T + 20, N * T + 20, '#1e1830', 12);
+    const line = (a, b, col, wd = T - 10) => { const c = K.ctx(); c.strokeStyle = col; c.lineWidth = wd; c.lineCap = 'round'; c.beginPath(); c.moveTo(BX + a[0] * T + T / 2, BY + a[1] * T + T / 2); c.lineTo(BX + b[0] * T + T / 2, BY + b[1] * T + T / 2); c.stroke(); };
+    K.alpha(0.45); s.words.filter((w) => w.found).forEach((w) => line([w.x, w.y], [w.ex, w.ey], w.col)); if (s.drag) line(s.drag.a, s.drag.b, '#22e6ff'); K.alpha(1);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) K.text(s.g[y][x], BX + x * T + T / 2, BY + y * T + T / 2 + 2, 20, '#f0ecff', 'center', 'd');
+    K.text(s.theme, 720, 50, 26, '#ffd93a', 'center', 'd', 10);
+    K.text(`PUZZLE ${s.idx + 1} / 5`, 720, 84, 14, '#8e88b8', 'center', 'm');
+    s.words.forEach((w, i) => { const x = 620 + (i % 2) * 190, y = 130 + Math.floor(i / 2) * 40; K.text(w.w, x, y, 18, w.found ? w.col : '#fff', 'left', 'd'); if (w.found) K.line(x - 4, y, x + w.w.length * 15, y, w.col, 2); });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 45 === 0) { const w = s.words.find((x) => !x.found); if (w) { w.found = true; } } },
+});
+</script></body></html>

@@ -1367,6 +1367,143 @@ export const GAME_LIST = [
 "cover": "games/covers/battleship.png"
 },
 {
+"id": "solitaire",
+"n": 7,
+"title": "SOLITAIRE",
+"genre": "relax",
+"desc": "Classic Klondike. Build the four suits up from Ace to King, stack the table down in alternating colours. Drag cards, or just tap one and it jumps to the best spot. No timer, undo as much as you like.",
+"controls": "Drag cards · tap a card to auto-move · tap the deck to draw · U = undo",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Solitaire"
+},
+{
+"stat": "score",
+"target": 300,
+"text": "Score 300 in Solitaire"
+}
+],
+"file": "games/2d/solitaire.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/solitaire.png"
+},
+{
+"id": "block-blast",
+"n": 11,
+"title": "BLOCK BLAST",
+"genre": "relax",
+"desc": "Drag the three pieces onto the 8×8 board. Fill a whole row or column and it clears. Clear several at once for a combo. When none of your pieces fit anywhere, it's over. No timer.",
+"controls": "Drag pieces onto the board",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 800,
+"text": "Score 800 in Block Blast"
+}
+],
+"file": "games/2d/block-blast.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/block-blast.png"
+},
+{
+"id": "bubble-shooter",
+"n": 12,
+"title": "BUBBLE SHOOTER",
+"genre": "relax",
+"desc": "Aim, bounce off the walls, and pop groups of three or more matching bubbles. Anything left hanging falls for bonus points. Every few shots the ceiling drops a row, so plan ahead.",
+"controls": "Aim with the mouse / touch, click to shoot · Space swaps the next bubble",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 1500,
+"text": "Score 1500 in Bubble Shooter"
+}
+],
+"file": "games/2d/bubble-shooter.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/bubble-shooter.png"
+},
+{
+"id": "zen-sand",
+"n": 14,
+"title": "ZEN SAND",
+"genre": "relax",
+"desc": "A quiet sand garden. Rake flowing lines around the stones, change rake width, drop new stones and moss, smooth it all out and start again. Soft wind and water in the background. No goals, no timer.",
+"controls": "Drag to rake · 1/2/3 rake width · S = place a stone · M = moss · C = smooth the sand · DONE when you finish",
+"scoreLabel": "MINUTES",
+"tasks": [
+{
+"stat": "score",
+"target": 2,
+"text": "Rake the Zen Sand garden for 2 minutes"
+}
+],
+"file": "games/2d/zen-sand.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/zen-sand.png"
+},
+{
+"id": "word-search",
+"n": 15,
+"title": "WORD SEARCH",
+"genre": "relax",
+"desc": "Find the hidden words in the letter grid: across, down, diagonal and backwards. Each puzzle has a theme. Drag across a word to circle it. No timer, five puzzles.",
+"controls": "Drag from the first letter to the last",
+"scoreLabel": "WORDS",
+"tasks": [
+{
+"stat": "score",
+"target": 20,
+"text": "Find 20 words in Word Search"
+}
+],
+"file": "games/2d/word-search.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/word-search.png"
+},
+{
+"id": "ball-sort",
+"n": 16,
+"title": "BALL SORT",
+"genre": "relax",
+"desc": "Sort the coloured balls so every tube holds one colour. You can only put a ball on top of the same colour or into an empty tube. Levels add colours; undo is free.",
+"controls": "Click / tap a tube to lift its top ball, then tap where it goes · U = undo",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Clear 5 Ball Sort levels"
+}
+],
+"file": "games/2d/ball-sort.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/ball-sort.png"
+},
+{
 "id": "draw-guess",
 "n": 89,
 "title": "DRAW & GUESS",

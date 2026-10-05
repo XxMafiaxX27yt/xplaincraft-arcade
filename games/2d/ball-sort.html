@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ball Sort</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"ball-sort","n":16,"title":"BALL SORT","genre":"relax","desc":"Sort the coloured balls so every tube holds one colour. You can only put a ball on top of the same colour or into an empty tube. Levels add colours; undo is free.","controls":"Click / tap a tube to lift its top ball, then tap where it goes · U = undo","scoreLabel":"LEVELS","tasks":[{"stat":"score","target":5,"text":"Clear 5 Ball Sort levels"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CAP = 4, PAL = ['#ff3355', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff', '#ff8a3a', '#ff9bc8', '#4f8bff', '#b6ff3a', '#ffffff'];
+function level(s) {
+  const nc = Math.min(10, 3 + s.lv);
+  // scramble by random reverse moves from a solved state so every level is solvable
+  let tubes = Array.from({ length: nc }, (_, i) => Array(CAP).fill(i)).concat([[], []]);
+  for (let k = 0; k < 400 + nc * 60; k++) {
+    const from = K.irand(0, tubes.length - 1), to = K.irand(0, tubes.length - 1);
+    if (from === to || !tubes[from].length || tubes[to].length >= CAP) continue;
+    tubes[to].push(tubes[from].pop());
+  }
+  if (tubes.every((t) => !t.length || (t.length === CAP && t.every((v) => v === t[0])))) return level(s);
+  s.t = tubes; s.sel = -1; s.hist = []; s.lift = 0;
+}
+const tubeX = (s, i) => { const per = Math.min(s.t.length, 8), row = Math.floor(i / per), col = i % per, n = row ? s.t.length - per : per; return { x: 480 - (n * 90) / 2 + col * 90 + 45, y: row ? 330 : 90 }; };
+const done = (s) => s.t.every((t) => !t.length || (t.length === CAP && t.every((v) => v === t[0])));
+K.game({
+  bg: '#101626', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.moves = 0; level(s); },
+  update(s, dt) {
+    s.lift = K.lerp(s.lift, s.sel >= 0 ? 1 : 0, dt * 16);
+    if ((K.tap('KeyU') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 20, y: 470, w: 110, h: 44 }))) && s.hist.length) { s.t = JSON.parse(s.hist.pop()); s.sel = -1; K.sfx('whoosh'); return; }
+    if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 830, y: 470, w: 110, h: 44 })) { level(s); K.sfx('whoosh'); return; }
+    if (!K.mouse.clicked) return;
+    const i = s.t.findIndex((_, k) => { const p = tubeX(s, k); return Math.abs(K.mouse.x - p.x) < 34 && K.mouse.y > p.y - 50 && K.mouse.y < p.y + 200; });
+    if (i < 0) { s.sel = -1; return; }
+    if (s.sel < 0) { if (s.t[i].length) { s.sel = i; K.sfx('tick'); } return; }
+    const from = s.t[s.sel], to = s.t[i], ball = from[from.length - 1];
+    if (i !== s.sel && to.length < CAP && (!to.length || to[to.length - 1] === ball)) {
+      s.hist.push(JSON.stringify(s.t)); to.push(from.pop()); s.moves++; K.tone(400 + ball * 50, 0.1, 'sine', 0.07);
+      if (to.length === CAP && to.every((v) => v === ball)) { K.sfx('chime'); const p = tubeX(s, i); K.burst(p.x, p.y, PAL[ball], 14); }
+      if (done(s)) { s.lv++; K.sfx('win'); if (s.lv >= 12) return K.end(s, { score: s.lv, won: true, title: 'ALL SORTED', text: `${s.moves} moves` }); setTimeout(() => level(s), 700); }
+    } else if (i !== s.sel) K.sfx('wrong');
+    s.sel = -1;
+  },
+  draw(s) {
+    s.t.forEach((t, i) => {
+      const p = tubeX(s, i);
+      K.rect(p.x - 26, p.y, 52, CAP * 44 + 16, '#ffffff10', 22); K.stroke(p.x - 26, p.y, 52, CAP * 44 + 16, '#ffffff44', 2, 22);
+      t.forEach((v, j) => {
+        let y = p.y + CAP * 44 - j * 44 - 14;
+        if (i === s.sel && j === t.length - 1) y = K.lerp(y, p.y - 34, s.lift);
+        K.glow(PAL[v], 10); K.circle(p.x, y, 19, PAL[v]); K.noGlow(); K.alpha(0.4); K.circle(p.x - 6, y - 7, 6, '#fff'); K.alpha(1);
+      });
+    });
+    K.text(`LEVEL ${s.lv + 1}`, 480, 30, 22, '#fff', 'center', 'd');
+    K.button(20, 470, 110, 44, 'UNDO', { color: '#22e6ff', size: 13 });
+    K.button(830, 470, 110, 44, 'RESTART', { color: '#8e88b8', size: 13 });
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 22) return;
+    for (let a = 0; a < s.t.length; a++) for (let b = 0; b < s.t.length; b++) { const A = s.t[a], B = s.t[b]; if (a !== b && A.length && B.length < CAP && B.length && B[B.length - 1] === A[A.length - 1] && !(A.every((v) => v === A[0]) && B.length < A.length)) { B.push(A.pop()); return; } }
+    const a = K.irand(0, s.t.length - 1), e = s.t.findIndex((t) => !t.length); if (e >= 0 && s.t[a].length) s.t[e].push(s.t[a].pop());
+  },
+});
+</script></body></html>

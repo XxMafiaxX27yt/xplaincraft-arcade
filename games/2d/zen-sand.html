@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zen Sand</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"zen-sand","n":14,"title":"ZEN SAND","genre":"relax","desc":"A quiet sand garden. Rake flowing lines around the stones, change rake width, drop new stones and moss, smooth it all out and start again. Soft wind and water in the background. No goals, no timer.","controls":"Drag to rake · 1/2/3 rake width · S = place a stone · M = moss · C = smooth the sand · DONE when you finish","scoreLabel":"MINUTES","tasks":[{"stat":"score","target":2,"text":"Rake the Zen Sand garden for 2 minutes"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+let sand = null, sctx = null;
+function smooth() {
+  sand = document.createElement('canvas'); sand.width = 960; sand.height = 540; sctx = sand.getContext('2d');
+  sctx.fillStyle = '#e8dcc0'; sctx.fillRect(0, 0, 960, 540);
+  for (let i = 0; i < 9000; i++) { sctx.fillStyle = `rgba(${150 + Math.random() * 60},${130 + Math.random() * 50},${90 + Math.random() * 40},${Math.random() * 0.25})`; sctx.fillRect(Math.random() * 960, Math.random() * 540, 2, 2); }
+}
+function rake(x0, y0, x1, y1, teeth) {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy); if (L < 1) return;
+  const nx = -dy / L, ny = dx / L, gap = 9;
+  for (let t = 0; t < teeth; t++) {
+    const off = (t - (teeth - 1) / 2) * gap;
+    sctx.strokeStyle = 'rgba(120,96,60,.55)'; sctx.lineWidth = 3; sctx.lineCap = 'round';
+    sctx.beginPath(); sctx.moveTo(x0 + nx * off, y0 + ny * off); sctx.lineTo(x1 + nx * off, y1 + ny * off); sctx.stroke();
+    sctx.strokeStyle = 'rgba(255,248,230,.6)'; sctx.lineWidth = 1.5;
+    sctx.beginPath(); sctx.moveTo(x0 + nx * (off + 2.5), y0 + ny * (off + 2.5)); sctx.lineTo(x1 + nx * (off + 2.5), y1 + ny * (off + 2.5)); sctx.stroke();
+  }
+}
+K.game({
+  bg: '#c9b994', touch: { stick: false, buttons: [['Digit1', 'S'], ['Digit3', 'L'], ['KeyS', '●'], ['KeyM', '❀'], ['KeyC', '↺']] },
+  init(s) {
+    smooth(); s.time = 0; s.teeth = 5; s.last = null; s.mode = 'rake';
+    s.stones = [{ x: 300, y: 260, r: 46 }, { x: 640, y: 180, r: 34 }, { x: 700, y: 380, r: 26 }];
+    s.moss = [{ x: 330, y: 300, r: 30 }];
+    s.amb = null;
+  },
+  update(s, dt) {
+    s.time += dt;
+    if (!s.amb && !K.attract) { s.amb = K.drone(110, 0.012, 'sine'); }
+    if (Math.random() < dt * 0.25) K.tone(K.pick([523, 587, 659, 784, 880]), 1.6, 'sine', 0.012);
+    if (K.tap('Digit1')) s.teeth = 3; if (K.tap('Digit2')) s.teeth = 5; if (K.tap('Digit3')) s.teeth = 8;
+    if (K.tap('KeyS')) s.mode = 'stone'; if (K.tap('KeyM')) s.mode = 'moss';
+    if (K.tap('KeyC')) { smooth(); K.sfx('whoosh'); }
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 830, y: 490, w: 120, h: 40 })) return K.end(s, { score: Math.floor(s.time / 60), won: null, title: 'PEACEFUL', text: `${Math.floor(s.time / 60)} min ${Math.floor(s.time % 60)} s in the garden.` });
+    if (m.clicked && s.mode !== 'rake') { (s.mode === 'stone' ? s.stones : s.moss).push({ x: m.x, y: m.y, r: s.mode === 'stone' ? K.rand(20, 44) : K.rand(18, 32) }); K.sfx('knock'); s.mode = 'rake'; return; }
+    if (m.down && s.mode === 'rake') {
+      if (s.last) { rake(s.last.x, s.last.y, m.x, m.y, s.teeth); if (Math.random() < 0.15) K.noise(0.12, 0.015, 2500, 0, 2); }
+      s.last = { x: m.x, y: m.y };
+    } else s.last = null;
+    if (s.time >= 600) K.end(s, { score: 10, won: null, title: 'PEACEFUL', text: '10 quiet minutes.' });
+  },
+  draw(s) {
+    if (sand) K.ctx().drawImage(sand, 0, 0, 960, 540);
+    s.moss.forEach((m) => { for (let i = 0; i < 18; i++) { const a = i * 2.4, d = (i / 18) * m.r; K.circle(m.x + Math.cos(a) * d, m.y + Math.sin(a) * d, m.r * 0.32, i % 2 ? '#5f8a3a' : '#79a24a'); } });
+    s.stones.forEach((st) => {
+      K.alpha(0.25); K.circle(st.x + 6, st.y + 8, st.r, '#3a2e1a'); K.alpha(1);
+      const c = K.ctx(); c.fillStyle = K.rgrad(st.x - st.r * 0.3, st.y - st.r * 0.3, st.r * 1.4, ['#9a9590', '#6a645c', '#4a453e']); c.beginPath(); c.ellipse(st.x, st.y, st.r, st.r * 0.82, 0.3, 0, 6.28); c.fill();
+    });
+    K.rect(10, 10, 300, 30, 'rgba(60,45,25,.35)', 8);
+    K.text(s.mode === 'rake' ? `RAKE ${['', '', '', 'SMALL', '', 'MEDIUM', '', '', 'WIDE'][s.teeth]}` : s.mode === 'stone' ? 'TAP TO PLACE A STONE' : 'TAP TO PLACE MOSS', 20, 25, 13, '#fff8e8', 'left', 'd');
+    K.text(`${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')}`, 940, 25, 14, '#5a4a30', 'right', 'm');
+    K.button(830, 490, 120, 40, 'DONE', { color: '#5a4a30', size: 13 });
+  },
+  ai(s) { s.ang = (s.ang || 0) + 0.04; const r = 140 + Math.sin(s.ang * 0.7) * 60; K.vmouse(480 + Math.cos(s.ang) * r * 1.6, 270 + Math.sin(s.ang) * r, false, true); },
+});
+</script></body></html>

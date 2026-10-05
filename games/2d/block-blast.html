@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Block Blast</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"block-blast","n":11,"title":"BLOCK BLAST","genre":"relax","desc":"Drag the three pieces onto the 8×8 board. Fill a whole row or column and it clears. Clear several at once for a combo. When none of your pieces fit anywhere, it's over. No timer.","controls":"Drag pieces onto the board","scoreLabel":"POINTS","tasks":[{"stat":"score","target":800,"text":"Score 800 in Block Blast"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 8, T = 52, BX = 120, BY = 50;
+const SHAPES = [[[0, 0]], [[0, 0], [1, 0]], [[0, 0], [0, 1]], [[0, 0], [1, 0], [2, 0]], [[0, 0], [0, 1], [0, 2]], [[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [0, 1], [0, 2], [0, 3]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]], [[0, 0], [0, 1], [1, 1]], [[1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [1, 1]], [[0, 0], [1, 0], [0, 1]], [[0, 0], [0, 1], [0, 2], [1, 2]], [[0, 0], [1, 0], [2, 0], [2, 1]], [[1, 0], [1, 1], [0, 2], [1, 2]], [[0, 0], [1, 0], [2, 0], [1, 1]], [[0, 0], [1, 0], [1, 1], [2, 1]], [[1, 0], [2, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]], [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]]];
+const COLS = ['#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '#22e6ff', '#4f8bff', '#c45cff', '#ff9bc8'];
+const fits = (s, sh, gx, gy) => sh.every(([x, y]) => gx + x >= 0 && gy + y >= 0 && gx + x < N && gy + y < N && !s.g[gy + y][gx + x]);
+const anyFit = (s, sh) => { for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (fits(s, sh, x, y)) return true; return false; };
+function hand(s) { s.hand = [0, 1, 2].map(() => ({ sh: K.pick(SHAPES), c: K.pick(COLS) })); }
+const slot = (i) => ({ x: 640 + (i % 2) * 140, y: 70 + Math.floor(i / 2) * 200 + (i === 2 ? 0 : 0), cx: 700 + (i === 2 ? 70 : (i % 2) * 140), cy: i === 2 ? 410 : 150 });
+K.game({
+  bg: '#0e0c22', touch: { stick: false, buttons: [] },
+  init(s) { s.g = Array.from({ length: N }, () => Array(N).fill(null)); s.score = 0; s.combo = 0; s.drag = null; s.flash = []; hand(s); },
+  update(s, dt) {
+    s.flash.forEach((f) => (f.t -= dt)); s.flash = s.flash.filter((f) => f.t > 0);
+    const m = K.mouse;
+    if (m.clicked && !s.drag) s.hand.forEach((p, i) => { if (p && Math.hypot(m.x - slot(i).cx, m.y - slot(i).cy) < 80) s.drag = { i }; });
+    if (s.drag && !m.down) {
+      const p = s.hand[s.drag.i], [gx, gy] = gridAt(s, p.sh, m.x, m.y);
+      s.drag = null;
+      if (gx == null || !fits(s, p.sh, gx, gy)) { K.sfx('wrong'); return; }
+      p.sh.forEach(([x, y]) => (s.g[gy + y][gx + x] = p.c));
+      s.score += p.sh.length; K.sfx('click');
+      s.hand[s.hand.indexOf(p)] = null;
+      const rows = [], cols = [];
+      for (let k = 0; k < N; k++) { if (s.g[k].every(Boolean)) rows.push(k); if (s.g.every((r) => r[k])) cols.push(k); }
+      const lines = rows.length + cols.length;
+      if (lines) {
+        s.combo++;
+        rows.forEach((r) => { for (let x = 0; x < N; x++) { s.flash.push({ x, y: r, c: s.g[r][x], t: 0.4 }); } });
+        cols.forEach((c) => { for (let y = 0; y < N; y++) s.flash.push({ x: c, y, c: s.g[y][c], t: 0.4 }); });
+        rows.forEach((r) => s.g[r].fill(null)); cols.forEach((c) => s.g.forEach((r) => (r[c] = null)));
+        const pts = lines * 10 * lines * s.combo; s.score += pts;
+        K.floatText(`+${pts}${s.combo > 1 ? ' COMBO ×' + s.combo : ''}`, BX + N * T / 2, BY + N * T / 2, '#ffd93a', 26);
+        K.tone(520 + lines * 120, 0.2, 'triangle', 0.07); if (lines > 1) K.sfx('power');
+      } else s.combo = 0;
+      if (s.hand.every((x) => !x)) hand(s);
+      if (!s.hand.some((x) => x && anyFit(s, x.sh))) { K.sfx('lose'); K.end(s, { score: s.score, won: null, title: 'NO ROOM LEFT', text: 'Calm and clear. Nice board.' }); }
+    }
+  },
+  draw(s) {
+    K.rect(BX - 8, BY - 8, N * T + 16, N * T + 16, '#1a1740', 12);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const c = s.g[y][x]; K.rect(BX + x * T + 2, BY + y * T + 2, T - 4, T - 4, c || '#221e4a', 6); if (c) K.rect(BX + x * T + 4, BY + y * T + 4, T - 8, 6, '#ffffff44', 3); }
+    s.flash.forEach((f) => { K.alpha(f.t / 0.4); K.glow(f.c, 20); K.rect(BX + f.x * T + 2, BY + f.y * T + 2, T - 4, T - 4, '#fff', 6); K.noGlow(); }); K.alpha(1);
+    if (s.drag) {
+      const p = s.hand[s.drag.i], [gx, gy] = gridAt(s, p.sh, K.mouse.x, K.mouse.y);
+      if (gx != null && fits(s, p.sh, gx, gy)) { K.alpha(0.35); p.sh.forEach(([x, y]) => K.rect(BX + (gx + x) * T + 2, BY + (gy + y) * T + 2, T - 4, T - 4, p.c, 6)); K.alpha(1); }
+    }
+    s.hand.forEach((p, i) => {
+      if (!p) return;
+      const dragging = s.drag && s.drag.i === i, sz = dragging ? T : 30;
+      const w = Math.max(...p.sh.map((q) => q[0])) + 1, h = Math.max(...p.sh.map((q) => q[1])) + 1;
+      const ox = dragging ? K.mouse.x - (w * sz) / 2 : slot(i).cx - (w * sz) / 2, oy = dragging ? K.mouse.y - h * sz - 20 : slot(i).cy - (h * sz) / 2;
+      const ok = anyFit(s, p.sh);
+      K.alpha(ok || dragging ? 1 : 0.3);
+      p.sh.forEach(([x, y]) => { K.rect(ox + x * sz + 1, oy + y * sz + 1, sz - 2, sz - 2, p.c, 5); K.rect(ox + x * sz + 3, oy + y * sz + 3, sz - 6, 4, '#ffffff44', 2); });
+      K.alpha(1);
+    });
+    K.text(String(s.score), 780, 520, 30, '#ffd93a', 'center', 'd');
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 30) return;
+    const i = s.hand.findIndex((p) => p && anyFit(s, p.sh)); if (i < 0) return; const p = s.hand[i];
+    for (let y = N - 1; y >= 0; y--) for (let x = 0; x < N; x++) if (fits(s, p.sh, x, y)) { p.sh.forEach(([a, b]) => (s.g[y + b][x + a] = p.c)); s.hand[i] = null; if (s.hand.every((q) => !q)) hand(s); for (let k = 0; k < N; k++) if (s.g[k].every(Boolean)) s.g[k].fill(null); return; }
+  },
+});
+function gridAt(s, sh, mx, my) {
+  const w = Math.max(...sh.map((q) => q[0])) + 1, h = Math.max(...sh.map((q) => q[1])) + 1;
+  const ox = mx - (w * T) / 2, oy = my - h * T - 20;
+  const gx = Math.round((ox - BX) / T), gy = Math.round((oy - BY) / T);
+  if (gx < -1 || gy < -1 || gx > N || gy > N) return [null, null];
+  return [gx, gy];
+}
+</script></body></html>
