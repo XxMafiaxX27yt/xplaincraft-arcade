@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tape Recorder</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tape-recorder","n":43,"title":"TAPE RECORDER","genre":"horror","desc":"A box of old cassette tapes from the house you just moved into. Play them forwards, play them backwards, scrub to the right spot. Hidden messages appear in the static. Piece together what happened in the house, one tape at a time.","controls":"PLAY ▶ / REVERSE ◀ / STOP buttons (or → ← Space) · drag the tape position · type the hidden word you heard","scoreLabel":"TAPES","tasks":[{"stat":"score","target":4,"text":"Decode 4 tapes in Tape Recorder"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// each tape: forward text, a hidden word that only shows when played backwards at a certain position
+const TAPES = [
+  ['TAPE 1 - "Birthday"', 'Happy birthday, Emma! Make a wish!', 'BASEMENT', 0.62],
+  ['TAPE 2 - "New house"', 'Dad says the old owners left in a hurry.', 'LOCKED', 0.35],
+  ['TAPE 3 - "Night"', 'Emma, why are you awake? Go back to bed.', 'WALLS', 0.78],
+  ['TAPE 4 - "Voices"', 'There is a hum in the walls. Only at night.', 'LISTEN', 0.2],
+  ['TAPE 5 - "The door"', 'We found a door behind the shelves. It was painted over.', 'BEHIND', 0.55],
+  ['TAPE 6 - "Last"', 'If anyone finds these tapes, do not go down there.', 'RUN', 0.88],
+];
+function load(s) { s.tape = TAPES[s.i]; s.pos = 0; s.dir = 0; s.typed = ''; s.seen = false; s.msgT = 0; }
+K.game({
+  bg: '#14100c', touch: { stick: false, buttons: [] },
+  init(s) { s.i = 0; s.solved = 0; load(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    const btn = (x) => m.clicked && K.inRect(m.x, m.y, { x, y: 330, w: 110, h: 50 });
+    if (K.tap('ArrowRight') || btn(250)) { s.dir = 1; K.sfx('click'); }
+    if (K.tap('ArrowLeft') || btn(370)) { s.dir = -1; K.sfx('click'); }
+    if (btn(490)) { s.dir = 0; K.sfx('click'); }
+    if (m.down && K.inRect(m.x, m.y, { x: 230, y: 280, w: 500, h: 30 })) { s.pos = K.clamp((m.x - 240) / 480, 0, 1); }
+    s.pos = K.clamp(s.pos + s.dir * dt / 14, 0, 1); if (s.pos <= 0 || s.pos >= 1) s.dir = 0;
+    if (s.dir) { if (Math.random() < dt * 20) K.noise(0.05, 0.03, s.dir > 0 ? 1200 : 600, 0, 0.8); }
+    const near = Math.abs(s.pos - s.tape[3]) < 0.04;
+    if (s.dir < 0 && near) { if (!s.seen) K.sfx('whisper'); s.seen = true; }
+    s.msgT -= dt;
+    const kb = K.keyboard(255, 420, 450, {}, { h: 34 });
+    if (kb && kb.length === 1 && s.typed.length < 10) s.typed += kb;
+    if (kb === 'BACK') s.typed = s.typed.slice(0, -1);
+    if (kb === 'ENTER' && s.typed) {
+      if (s.typed === s.tape[2]) { s.solved++; K.sfx('chime'); s.msg = `"${s.tape[2]}"… you write it in your notebook.`; s.msgT = 2.5; s.i++; if (s.i >= TAPES.length) return K.end(s, { score: s.solved, won: true, title: 'BASEMENT. LOCKED. WALLS. LISTEN. BEHIND. RUN.', text: 'You understand now. You hear the hum.' }); load(s); }
+      else { K.sfx('wrong'); s.msg = 'That isn\'t what it said.'; s.msgT = 1.5; s.typed = ''; }
+    }
+  },
+  draw(s) {
+    K.rect(200, 40, 560, 220, '#2a2420', 14); K.rect(220, 60, 520, 150, '#1a1612', 8);
+    const spin = K.time() * s.dir * 6;
+    [[340, 135], [620, 135]].forEach(([x, y], k) => { K.circle(x, y, 50, '#0e0c0a'); K.circle(x, y, 50 * (k ? 0.5 + s.pos * 0.5 : 1 - s.pos * 0.5), '#3a2a20'); for (let i = 0; i < 6; i++) { const a = spin + (i / 6) * 6.28; K.line(x, y, x + Math.cos(a) * 18, y + Math.sin(a) * 18, '#8a7a6a', 3); } K.circle(x, y, 8, '#8a7a6a'); });
+    K.rect(380, 70, 200, 30, '#e8dcc0', 4); K.text(s.tape[0], 480, 85, 12, '#3a2a1a', 'center', 'd');
+    K.rect(240, 290, 480, 10, '#3a3028', 5); K.rect(240, 290, 480 * s.pos, 10, '#ff8a3a', 5); K.circle(240 + 480 * s.pos, 295, 10, '#ffd93a');
+    [[250, '▶ PLAY'], [370, '◀ REVERSE'], [490, '■ STOP']].forEach(([x, l]) => K.button(x, 330, 110, 50, l, { color: '#e8dcc0', size: 12 }));
+    // what you hear
+    const near = Math.abs(s.pos - s.tape[3]) < 0.04;
+    let heard = '';
+    if (s.dir > 0) { const n = Math.floor(s.tape[1].length * s.pos); heard = s.tape[1].slice(Math.max(0, n - 30), n); }
+    else if (s.dir < 0) heard = near ? `…${[...s.tape[2]].map((c, i) => (Math.random() < 0.15 ? '#' : c)).join(' ')}…` : '…' + [...'shhhhhkrrrrsssshhh'].sort(() => Math.random() - 0.5).join('').slice(0, 12) + '…';
+    K.text(heard, 480, 238, 18, s.dir < 0 && near ? '#ff3355' : '#e8dcc0', 'center', 'm');
+    K.rect(620, 330, 150, 50, '#0e0c0a', 8); K.text(s.typed || 'WORD?', 695, 355, 16, s.typed ? '#fff' : '#555', 'center', 'd');
+    K.keyboard(255, 420, 450, {}, { h: 34 });
+    K.text(`DECODED ${s.solved} / ${TAPES.length}`, 20, 24, 14, '#ffd93a', 'left', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 20, 15, '#3dffa0', 'center', 'u');
+    K.vignette(0.6);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw === 10) { s.pos = s.tape[3] + 0.05; s.dir = -1; } if (s.aw > 60 && s.aw % 6 === 0) { if (s.typed.length < s.tape[2].length) K.vtap('Key' + s.tape[2][s.typed.length]); else { K.vtap('Enter'); s.aw = 0; } } },
+});
+</script></body></html>

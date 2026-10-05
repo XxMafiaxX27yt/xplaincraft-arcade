@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lighthouse</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lighthouse","n":33,"title":"LIGHTHOUSE","genre":"horror","desc":"You are the keeper. Things rise from the black water and crawl toward the rocks, and only the beam drives them back. Swing the light around, keep the lamp fuelled, and last until dawn. Ships need the light too.","controls":"Mouse / touch aims the beam · ← → also turn it · click the fuel can when the lamp runs low","scoreLabel":"MINUTES","tasks":[{"stat":"score","target":6,"text":"Keep the light on until dawn in Lighthouse"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const LX = 480, LY = 300, DAWN = 180;
+K.game({
+  bg: '#02040a',
+  init(s) { s.a = -Math.PI / 2; s.fuel = 1; s.t = 0; s.things = []; s.ships = []; s.next = 2; s.cans = 0; s.drone = null; s.canT = 14; s.can = null; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(38, 0.035);
+    s.t += dt;
+    const d = K.dir(); if (d.x) s.a += d.x * 2.4 * dt; else if (K.mouse.moved || K.mouse.down) { const ta = Math.atan2(K.mouse.y - LY, K.mouse.x - LX); let da = Math.atan2(Math.sin(ta - s.a), Math.cos(ta - s.a)); s.a += K.clamp(da, -3 * dt, 3 * dt); }
+    s.fuel -= dt / 55;
+    s.canT -= dt; if (!s.can && s.canT <= 0) { s.can = { x: LX + K.pick([-60, 60]), y: LY + 34 }; }
+    if (s.can && K.mouse.clicked && K.dist(K.mouse, s.can) < 30) { s.fuel = 1; s.can = null; s.canT = K.rand(16, 24); K.sfx('power'); }
+    if (s.fuel <= 0) { K.sfx('scare'); return K.end(s, { score: Math.floor(s.t / 30), won: false, title: 'THE LIGHT WENT OUT', text: `${Math.floor(s.t / 30)} of 6 hours.` }); }
+    s.next -= dt;
+    if (s.next <= 0) { const a = K.rand(0, Math.PI * 2); s.things.push({ a, r: 520, sp: K.rand(14, 24) + s.t * 0.08, hp: 1 }); s.next = Math.max(0.7, 3 - s.t * 0.012); if (Math.random() < 0.15) s.ships.push({ x: -60, y: K.rand(380, 500), vx: 40, lit: 0 }); }
+    const beam = (ang) => Math.abs(Math.atan2(Math.sin(ang - s.a), Math.cos(ang - s.a))) < 0.22 * s.fuel + 0.08;
+    for (const th of s.things) {
+      if (beam(th.a)) { th.r += 90 * dt; th.hp -= dt * 1.5; if (Math.random() < 0.1) K.particle({ x: LX + Math.cos(th.a) * th.r, y: LY + Math.sin(th.a) * th.r, vx: K.rand(-30, 30), vy: -40, color: '#9adfff', life: 0.5, size: 3 }); }
+      else th.r -= th.sp * dt;
+      if (th.r < 60) { K.sfx('scare'); K.flash('#000', 0.8); K.shake(18); return K.end(s, { score: Math.floor(s.t / 30), won: false, title: 'THEY CLIMBED THE ROCKS', text: `${Math.floor(s.t / 30)} of 6 hours.` }); }
+    }
+    s.things = s.things.filter((th) => th.hp > 0 && th.r < 600);
+    s.ships.forEach((sh) => { sh.x += sh.vx * dt; if (beam(Math.atan2(sh.y - LY, sh.x - LX))) sh.lit += dt; }); s.ships = s.ships.filter((sh) => sh.x < 1020);
+    if (s.t >= DAWN) { K.sfx('win'); return K.end(s, { score: 6, won: true, title: 'DAWN', text: 'The sun rises. The water is just water again.' }); }
+  },
+  draw(s) {
+    const dawn = s.t / DAWN;
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, [`rgb(${2 + dawn * 60},${4 + dawn * 30},${10 + dawn * 40})`, '#02040a']));
+    K.rect(0, 320, 960, 220, '#030818');
+    for (let i = 0; i < 30; i++) K.line((i * 61 + s.t * 20) % 960, 340 + (i % 8) * 24, (i * 61 + s.t * 20) % 960 + 30, 340 + (i % 8) * 24, '#0c1a3a', 2);
+    const c = K.ctx(), f = s.fuel;
+    c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = K.rgrad(LX, LY - 80, 600, [`rgba(255,240,180,${0.35 * f})`, 'rgba(255,240,180,0)']);
+    c.beginPath(); c.moveTo(LX, LY - 80); c.arc(LX, LY - 80, 900, s.a - 0.22 * f - 0.08, s.a + 0.22 * f + 0.08); c.closePath(); c.fill(); c.restore();
+    s.things.forEach((th) => { const x = LX + Math.cos(th.a) * th.r, y = LY + Math.sin(th.a) * th.r * 0.5 + 40; K.alpha(Math.min(1, th.hp + 0.2)); K.rect(x - 8, y - 20, 16, 30, '#0a1a14', 6); K.circle(x, y - 24, 9, '#0a1a14'); K.circle(x - 3, y - 25, 2, '#9affd8'); K.circle(x + 3, y - 25, 2, '#9affd8'); K.alpha(1); });
+    s.ships.forEach((sh) => { K.rect(sh.x - 30, sh.y - 8, 60, 14, '#2a2a3a', 4); K.rect(sh.x - 2, sh.y - 40, 4, 32, '#3a3a4a'); K.poly([[sh.x + 2, sh.y - 38], [sh.x + 24, sh.y - 14], [sh.x + 2, sh.y - 14]], '#4a4a5a'); if (sh.lit > 0.5) K.text('⚑', sh.x, sh.y - 50, 12, '#3dffa0'); });
+    K.poly([[LX - 50, 340], [LX + 50, 340], [LX + 34, 280], [LX - 34, 280]], '#2a2a32');
+    K.rect(LX - 22, LY - 130, 44, 170, '#e8e8f0'); for (let i = 0; i < 4; i++) K.rect(LX - 22, LY - 130 + i * 44, 44, 20, '#ff3355');
+    K.glow('#fff0b0', 30 * f); K.rect(LX - 18, LY - 160, 36, 30, `rgba(255,240,180,${0.4 + f * 0.6})`, 4); K.noGlow(); K.poly([[LX - 26, LY - 160], [LX + 26, LY - 160], [LX, LY - 184]], '#3a3a4a');
+    if (s.can) { K.glow('#ffd93a', 16); K.rect(s.can.x - 12, s.can.y - 16, 24, 30, '#ff8a3a', 4); K.noGlow(); K.text('FUEL', s.can.x, s.can.y + 26, 10, '#ffd93a', 'center', 'd'); }
+    K.rect(20, 20, 160, 10, '#222', 5); K.rect(20, 20, 160 * f, 10, f < 0.25 ? '#ff3355' : '#ffd93a', 5); K.text('LAMP OIL', 188, 25, 11, '#ffd93a', 'left', 'm');
+    const hr = Math.floor(s.t / 30); K.text(`${(hr + 12) % 12 || 12}:${String(Math.floor((s.t % 30) * 2)).padStart(2, '0')} AM`, 940, 25, 16, '#c9c3ff', 'right', 'd');
+  },
+  ai(s) { const th = s.things.sort((a, b) => a.r - b.r)[0]; if (th) { const da = Math.atan2(Math.sin(th.a - s.a), Math.cos(th.a - s.a)); K.vhold('ArrowLeft', da < -0.05); K.vhold('ArrowRight', da > 0.05); } if (s.can) K.vmouse(s.can.x, s.can.y, true); },
+});
+</script></body></html>

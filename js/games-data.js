@@ -573,6 +573,48 @@ export const GAME_LIST = [
 "cover": "games/covers/fog-road.png"
 },
 {
+"id": "lighthouse",
+"n": 33,
+"title": "LIGHTHOUSE",
+"genre": "horror",
+"desc": "You are the keeper. Things rise from the black water and crawl toward the rocks, and only the beam drives them back. Swing the light around, keep the lamp fuelled, and last until dawn. Ships need the light too.",
+"controls": "Mouse / touch aims the beam · ← → also turn it · click the fuel can when the lamp runs low",
+"scoreLabel": "MINUTES",
+"tasks": [
+{
+"stat": "score",
+"target": 6,
+"text": "Keep the light on until dawn in Lighthouse"
+}
+],
+"file": "games/2d/lighthouse.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "camping",
+"n": 34,
+"title": "CAMPING",
+"genre": "horror",
+"desc": "Night in the woods. Keep the campfire burning: walk into the dark to gather sticks, then hurry back. The further from the fire you go, the darker it gets and the closer the eyes come. Survive until morning.",
+"controls": "Arrow keys / WASD (or the stick) to walk · sticks are picked up automatically · walk into the fire to feed it",
+"scoreLabel": "HOURS",
+"tasks": [
+{
+"stat": "score",
+"target": 6,
+"text": "Survive the night in Camping"
+}
+],
+"file": "games/2d/camping.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "blink",
 "n": 35,
 "title": "BLINK",
@@ -593,6 +635,90 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/blink.png"
+},
+{
+"id": "ghost-photographer",
+"n": 37,
+"title": "GHOST PHOTOGRAPHER",
+"genre": "horror",
+"desc": "Ghosts don't show up to the naked eye, only in photos. Snap pictures of the haunted rooms and look closely at what develops: faint figures, hands, faces. Capture each room's ghost before your film runs out. Some ghosts don't like being photographed.",
+"controls": "Click / tap to take a photo where you aim · arrow keys / A D to change room",
+"scoreLabel": "GHOSTS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Capture 5 ghosts in Ghost Photographer"
+}
+],
+"file": "games/2d/ghost-photographer.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "tape-recorder",
+"n": 43,
+"title": "TAPE RECORDER",
+"genre": "horror",
+"desc": "A box of old cassette tapes from the house you just moved into. Play them forwards, play them backwards, scrub to the right spot. Hidden messages appear in the static. Piece together what happened in the house, one tape at a time.",
+"controls": "PLAY ▶ / REVERSE ◀ / STOP buttons (or → ← Space) · drag the tape position · type the hidden word you heard",
+"scoreLabel": "TAPES",
+"tasks": [
+{
+"stat": "score",
+"target": 4,
+"text": "Decode 4 tapes in Tape Recorder"
+}
+],
+"file": "games/2d/tape-recorder.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "zombie-fence",
+"n": 54,
+"title": "ZOMBIE FENCE",
+"genre": "horror",
+"desc": "The farmhouse fence is all that stands between you and the horde. Zombies pile up and claw at the planks. Run along the fence and hammer the broken planks back before any section falls. Each night the horde grows.",
+"controls": "← → / A D to run along the fence · hold Space (or tap a section) to repair",
+"scoreLabel": "NIGHTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Hold the fence for 3 nights"
+}
+],
+"file": "games/2d/zombie-fence.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "monster-under-bed",
+"n": 60,
+"title": "MONSTER UNDER THE BED",
+"genre": "horror",
+"desc": "You're the night-light guardian of a kid's room. Monsters creep out of the closet, under the bed and through the window. Shine the torch at each one until it shrinks away, but the battery drains while it's on. Keep the kid asleep until 6 AM, five nights in a row.",
+"controls": "Hold the mouse / touch to shine the torch where you point · release to save battery",
+"scoreLabel": "NIGHTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Protect the kid for 3 nights"
+}
+],
+"file": "games/2d/monster-under-bed.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "breakout",
@@ -2315,7 +2441,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/floor-is-lava.png"
 },
 {
 "id": "cursor-chaos",
@@ -2385,7 +2512,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/shrink-grow.png"
 },
 {
 "id": "copy-cat",
@@ -2406,7 +2534,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/copy-cat.png"
 },
 {
 "id": "delay-controls",
@@ -2427,7 +2556,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/delay-controls.png"
 },
 {
 "id": "ice-world",
@@ -2448,7 +2578,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/ice-world.png"
 },
 {
 "id": "black-hole",
@@ -2469,7 +2600,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/black-hole.png"
 },
 {
 "id": "draw-guess",

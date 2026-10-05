@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ghost Photographer</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"ghost-photographer","n":37,"title":"GHOST PHOTOGRAPHER","genre":"horror","desc":"Ghosts don't show up to the naked eye, only in photos. Snap pictures of the haunted rooms and look closely at what develops: faint figures, hands, faces. Capture each room's ghost before your film runs out. Some ghosts don't like being photographed.","controls":"Click / tap to take a photo where you aim · arrow keys / A D to change room","scoreLabel":"GHOSTS","tasks":[{"stat":"score","target":5,"text":"Capture 5 ghosts in Ghost Photographer"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ROOMS = ['NURSERY', 'HALLWAY', 'LIBRARY', 'KITCHEN', 'ATTIC', 'CELLAR'];
+function haunt(s) { s.ghosts = ROOMS.map(() => ({ x: K.rand(140, 820), y: K.rand(150, 400), kind: K.pick(['figure', 'face', 'hand', 'child']), got: false, angry: 0 })); }
+K.game({
+  bg: '#0d0b0a',
+  init(s) { s.room = 0; s.film = 18; s.got = 0; s.photo = null; s.flash = 0; s.drift = 0; haunt(s); s.drone = null; s.anger = 0; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(50, 0.025);
+    s.flash = Math.max(0, s.flash - dt * 3); s.drift += dt;
+    const g = s.ghosts[s.room];
+    if (!g.got) { g.x += Math.sin(s.drift * 0.7 + s.room) * 30 * dt; g.y += Math.cos(s.drift * 0.5) * 20 * dt; }
+    if (K.tap('ArrowRight', 'KeyD')) { s.room = (s.room + 1) % ROOMS.length; s.photo = null; K.sfx('creak'); }
+    if (K.tap('ArrowLeft', 'KeyA')) { s.room = (s.room + ROOMS.length - 1) % ROOMS.length; s.photo = null; K.sfx('creak'); }
+    if (s.photo) { s.photo.t += dt; if (K.mouse.clicked && s.photo.t > 0.6) s.photo = null; return; }
+    if (!K.mouse.clicked || K.mouse.y > 470) return;
+    if (s.film <= 0) return K.end(s, { score: s.got, won: s.got >= ROOMS.length, title: 'OUT OF FILM', text: `${s.got} of ${ROOMS.length} ghosts on film.` });
+    s.film--; s.flash = 1; K.sfx('click'); K.noise(0.3, 0.1, 3000);
+    const dist = Math.hypot(K.mouse.x - g.x, K.mouse.y - g.y), caught = !g.got && dist < 110;
+    s.photo = { x: K.mouse.x, y: K.mouse.y, t: 0, caught, ghost: { ...g }, near: dist };
+    if (caught) { g.got = true; s.got++; K.sfx('scare'); if (s.got >= ROOMS.length) setTimeout(() => K.end(s, { score: s.got, won: true, title: 'FULL ALBUM', text: 'Every ghost in the house, on film.' }), 1800); }
+    else if (!g.got && dist < 260) { s.anger += 0.25; K.sfx('whisper'); if (s.anger >= 1) { K.flash('#300', 1); K.shake(20); return K.end(s, { score: s.got, won: false, title: 'IT DIDN\'T WANT TO BE SEEN', text: `${s.got} ghosts captured.` }); } }
+  },
+  draw(s) {
+    const roomCol = ['#2a1e2a', '#1e1a16', '#1a1e16', '#1e1c1a', '#1a1612', '#141414'][s.room];
+    K.rect(0, 0, 960, 540, roomCol); K.rect(0, 380, 960, 160, '#0e0a08');
+    const R = s.room;
+    if (R === 0) { K.rect(160, 260, 160, 120, '#3a2a3a'); K.rect(600, 120, 120, 90, '#2a2a3a'); K.text('🧸', 240, 250, 40, '#fff'); }
+    if (R === 1) { for (let i = 0; i < 5; i++) K.rect(100 + i * 180, 120, 70, 100, '#3a3026'); K.rect(440, 80, 80, 300, '#0a0806'); }
+    if (R === 2) { for (let i = 0; i < 3; i++) { K.rect(80 + i * 300, 80, 220, 300, '#3a2414'); for (let j = 0; j < 6; j++) K.rect(90 + i * 300, 100 + j * 46, 200, 6, '#5a3a20'); } }
+    if (R === 3) { K.rect(100, 260, 760, 120, '#3a3a3a'); K.rect(400, 120, 160, 100, '#222'); K.text('🔪', 300, 240, 28, '#fff'); }
+    if (R === 4) { K.poly([[0, 0], [480, 60], [960, 0]], '#0a0806'); K.rect(200, 280, 120, 100, '#4a3a2a'); K.rect(620, 300, 100, 80, '#4a3a2a'); }
+    if (R === 5) { for (let i = 0; i < 4; i++) K.circle(150 + i * 220, 330, 50, '#3a2a1a'); }
+    K.darkness([{ x: K.mouse.x, y: K.mouse.y, r: 170 }], 0.9);
+    if (s.flash > 0) { K.alpha(s.flash); K.rect(0, 0, 960, 540, '#fff'); K.alpha(1); }
+    if (s.photo && s.photo.t > 0.2) {
+      const p = s.photo, dev = Math.min(1, (p.t - 0.2) / 1.2);
+      K.rect(260, 70, 440, 360, '#f4f0e6', 4); K.rect(280, 90, 400, 280, `rgb(${30 + dev * 60},${28 + dev * 50},${26 + dev * 40})`);
+      const c = K.ctx(); c.save(); c.beginPath(); c.rect(280, 90, 400, 280); c.clip();
+      const gx = 480 + (p.ghost.x - p.x) * 0.9, gy = 230 + (p.ghost.y - p.y) * 0.9;
+      if (p.near < 300) {
+        K.alpha(dev * (p.caught ? 0.75 : 0.25));
+        if (p.ghost.kind === 'figure') { K.rect(gx - 20, gy - 40, 40, 100, '#e8f0ff', 18); K.circle(gx, gy - 54, 20, '#e8f0ff'); }
+        if (p.ghost.kind === 'face') { K.circle(gx, gy, 46, '#e8f0ff'); K.circle(gx - 16, gy - 8, 9, '#111'); K.circle(gx + 16, gy - 8, 9, '#111'); K.rect(gx - 14, gy + 16, 28, 12, '#111', 6); }
+        if (p.ghost.kind === 'hand') { K.rect(gx - 20, gy - 10, 40, 50, '#e8f0ff', 10); for (let k = 0; k < 4; k++) K.rect(gx - 20 + k * 11, gy - 46, 8, 40, '#e8f0ff', 4); }
+        if (p.ghost.kind === 'child') { K.rect(gx - 14, gy - 10, 28, 60, '#e8f0ff', 10); K.circle(gx, gy - 24, 15, '#e8f0ff'); K.circle(gx - 5, gy - 26, 3, '#111'); K.circle(gx + 5, gy - 26, 3, '#111'); }
+        K.alpha(1);
+      }
+      c.restore();
+      K.text(p.caught ? 'SOMETHING IS IN THE PHOTO' : p.near < 300 ? 'a faint shape at the edge…' : 'nothing… just dust', 480, 400, 16, p.caught ? '#a01020' : '#333', 'center', 'd');
+    }
+    K.rect(0, 476, 960, 64, '#0a0806');
+    ROOMS.forEach((r, i) => K.text((s.ghosts[i].got ? '✓ ' : '') + r, 90 + i * 156, 500, 12, i === s.room ? '#ffd93a' : s.ghosts[i].got ? '#3dffa0' : '#6a6a6a', 'center', 'd'));
+    K.text(`FILM ${s.film}`, 940, 524, 14, '#e8e0d0', 'right', 'd'); K.text('← → change room', 20, 524, 12, '#6a6a6a', 'left', 'm');
+    if (s.anger > 0.2) { K.alpha(s.anger * 0.4); K.rect(0, 0, 960, 476, '#300'); K.alpha(1); }
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; const g = s.ghosts[s.room]; K.vmouse(g.x + Math.sin(s.aw / 20) * 30, g.y); if (s.aw % 90 === 0) { if (g.got) K.vtap('ArrowRight'); else K.vmouse(g.x, g.y, true); } },
+});
+</script></body></html>

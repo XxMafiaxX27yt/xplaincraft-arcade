@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zombie Fence</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"zombie-fence","n":54,"title":"ZOMBIE FENCE","genre":"horror","desc":"The farmhouse fence is all that stands between you and the horde. Zombies pile up and claw at the planks. Run along the fence and hammer the broken planks back before any section falls. Each night the horde grows.","controls":"← → / A D to run along the fence · hold Space (or tap a section) to repair","scoreLabel":"NIGHTS","tasks":[{"stat":"score","target":3,"text":"Hold the fence for 3 nights"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SEC = 8, SW = 110, FX = 40, FY = 300;
+function night(s) { s.t = 0; s.hp = Array(SEC).fill(1); s.z = []; s.spawn = 0; }
+K.game({
+  bg: '#0c120a',
+  init(s) { s.night = 0; s.x = 480; night(s); s.drone = null; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(40, 0.03);
+    s.t += dt;
+    const d = K.dir(); s.x = K.clamp(s.x + d.x * 330 * dt, FX + 20, FX + SEC * SW - 20);
+    let fix = K.down('Space') ? Math.floor((s.x - FX) / SW) : -1;
+    if (K.mouse.down && K.mouse.y > FY - 60 && K.mouse.y < FY + 60) { const i = Math.floor((K.mouse.x - FX) / SW); if (i >= 0 && i < SEC) { s.x = K.lerp(s.x, FX + i * SW + SW / 2, dt * 10); if (Math.abs(s.x - (FX + i * SW + SW / 2)) < 30) fix = i; } }
+    if (fix >= 0 && s.hp[fix] < 1) { s.hp[fix] = Math.min(1, s.hp[fix] + dt * 0.55); if (Math.random() < dt * 8) K.noise(0.04, 0.12, 900); }
+    s.spawn -= dt;
+    if (s.spawn <= 0) { s.z.push({ x: K.rand(FX + 10, FX + SEC * SW - 10), y: -20, sp: K.rand(18, 34), atk: 0 }); s.spawn = Math.max(0.35, 1.6 - s.night * 0.25 - s.t * 0.01); }
+    for (const z of s.z) {
+      if (z.y < FY - 40) z.y += z.sp * dt;
+      else { const i = Math.floor((z.x - FX) / SW); s.hp[i] -= dt * 0.045; z.atk += dt; if (Math.random() < dt * 0.4) K.sfx('knock'); if (s.hp[i] <= 0) { K.sfx('scare'); K.shake(18); K.flash('#300', 0.6); return K.end(s, { score: s.night, won: false, title: 'THE FENCE FELL', text: `Section ${i + 1} gave way on night ${s.night + 1}.` }); } }
+    }
+    if (s.t >= 50) { s.night++; K.sfx('win'); if (s.night >= 5) return K.end(s, { score: 5, won: true, title: 'RESCUE ARRIVES', text: 'Five nights. The fence held.' }); night(s); }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, FY, '#0a1008'); K.rect(0, FY, 960, 240, '#1a2414');
+    for (let i = 0; i < 40; i++) K.rect((i * 97) % 960, (i * 61) % (FY - 60), 2, 8, '#1a2a14');
+    s.z.forEach((z) => { const by = Math.min(z.y, FY - 40), arm = Math.sin(K.time() * 8 + z.x) * 6; K.rect(z.x - 10, by - 30, 20, 34, '#3a5a3a', 6); K.circle(z.x, by - 38, 11, '#5a7a4a'); K.circle(z.x - 4, by - 40, 2, '#ff3355'); K.circle(z.x + 4, by - 40, 2, '#ff3355'); K.line(z.x - 8, by - 20, z.x - 14, by + 4 + arm, '#5a7a4a', 5); K.line(z.x + 8, by - 20, z.x + 14, by + 4 - arm, '#5a7a4a', 5); });
+    for (let i = 0; i < SEC; i++) {
+      const x = FX + i * SW, h = s.hp[i];
+      K.rect(x, FY - 70, 8, 90, '#5a3a1e');
+      for (let p = 0; p < 4; p++) { const ok = h > p / 4; K.rect(x + 8 + p * 25, FY - 64 + (ok ? 0 : 20), 20, ok ? 80 : 60, ok ? '#8a6a3a' : '#3a2a1a', 3); }
+      K.rect(x + 6, FY + 24, SW - 12, 6, '#222', 3); K.rect(x + 6, FY + 24, (SW - 12) * h, 6, h < 0.3 ? '#ff3355' : h < 0.6 ? '#ffd93a' : '#3dffa0', 3);
+    }
+    K.rect(FX + SEC * SW, FY - 70, 8, 90, '#5a3a1e');
+    K.circle(s.x, FY + 70, 14, '#d8c8a8'); K.rect(s.x - 12, FY + 84, 24, 30, '#3a6fd8', 6);
+    const swing = K.down('Space') || K.mouse.down ? Math.sin(K.time() * 30) * 0.8 : 0; const c = K.ctx(); c.save(); c.translate(s.x + 14, FY + 76); c.rotate(-0.6 + swing); K.rect(-2, -26, 4, 26, '#8a5a2a'); K.rect(-8, -32, 16, 8, '#aaa', 2); c.restore();
+    K.text(`NIGHT ${s.night + 1}`, 20, 26, 18, '#c9e0b0', 'left', 'd'); K.text(`${Math.max(0, Math.ceil(50 - s.t))}s to dawn`, 940, 26, 16, '#c9e0b0', 'right', 'd');
+    K.vignette(0.7);
+  },
+  ai(s) { const i = s.hp.indexOf(Math.min(...s.hp)), tx = FX + i * SW + SW / 2; K.vhold('ArrowLeft', tx < s.x - 8); K.vhold('ArrowRight', tx > s.x + 8); K.vhold('Space', Math.abs(tx - s.x) < 30); },
+});
+</script></body></html>

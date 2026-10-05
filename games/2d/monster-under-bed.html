@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Monster Under the Bed</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"monster-under-bed","n":60,"title":"MONSTER UNDER THE BED","genre":"horror","desc":"You're the night-light guardian of a kid's room. Monsters creep out of the closet, under the bed and through the window. Shine the torch at each one until it shrinks away, but the battery drains while it's on. Keep the kid asleep until 6 AM, five nights in a row.","controls":"Hold the mouse / touch to shine the torch where you point · release to save battery","scoreLabel":"NIGHTS","tasks":[{"stat":"score","target":3,"text":"Protect the kid for 3 nights"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SPOTS = [{ n: 'closet', x: 150, y: 260 }, { n: 'bed', x: 520, y: 420 }, { n: 'window', x: 820, y: 180 }, { n: 'door', x: 380, y: 230 }];
+function night(s) { s.t = 0; s.bat = 1; s.mon = SPOTS.map((sp) => ({ ...sp, grow: 0 })); s.fear = 0; }
+K.game({
+  bg: '#0a0814',
+  init(s) { s.night = 0; night(s); s.drone = null; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(46, 0.03);
+    s.t += dt;
+    const on = K.mouse.down && s.bat > 0;
+    s.bat = K.clamp(s.bat + (on ? -dt / 14 : dt / 30), 0, 1);
+    const rate = 0.05 + s.night * 0.025 + s.t * 0.0008;
+    for (const m of s.mon) {
+      const lit = on && Math.hypot(K.mouse.x - m.x, K.mouse.y - m.y) < 110;
+      if (lit) m.grow = Math.max(0, m.grow - dt * 0.9);
+      else if (Math.random() < dt * 0.6) m.grow += rate * K.rand(0.5, 2) * 0.6;
+      if (m.grow >= 1) { K.sfx('scare'); K.flash('#200', 0.9); K.shake(20); return K.end(s, { score: s.night, won: false, title: 'THE KID WOKE UP SCREAMING', text: `It came from the ${m.n}. Night ${s.night + 1}.` }); }
+    }
+    s.fear = Math.max(...s.mon.map((m) => m.grow));
+    if (s.fear > 0.6 && Math.random() < dt * 2) K.sfx('heart');
+    if (s.t >= 60) { s.night++; K.sfx('win'); if (s.night >= 5) return K.end(s, { score: 5, won: true, title: 'FIVE PEACEFUL NIGHTS', text: 'The monsters give up on this house.' }); night(s); }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#1a1630'); K.rect(0, 380, 960, 160, '#2a2038');
+    K.rect(80, 120, 140, 260, '#3a2a1e'); K.rect(86, 126, 128, 248, '#120c08'); K.circle(200, 260, 4, '#c9a24a');
+    K.rect(330, 110, 100, 230, '#3a2a1e'); K.rect(780, 90, 120, 150, '#0a1430'); K.stroke(780, 90, 120, 150, '#4a3a2a', 6); K.line(840, 90, 840, 240, '#4a3a2a', 4); K.circle(860, 130, 16, '#d8d8c0');
+    K.rect(400, 330, 280, 80, '#5a3a6a', 8); K.rect(400, 300, 70, 40, '#e8e0f0', 10); K.rect(470, 310, 210, 30, '#7a5a8a', 8);
+    K.circle(440, 316, 14, '#f1c9a5'); K.text('z', 470 + Math.sin(s.t * 2) * 4, 280 - (s.t * 10) % 30, 14, '#bff6ff', 'center', 'd');
+    s.mon.forEach((m) => {
+      if (m.grow < 0.05) return; const g = m.grow;
+      K.alpha(Math.min(1, g + 0.2));
+      if (m.n === 'bed') { K.rect(m.x - 80 * g, m.y - 10, 160 * g, 30, '#000', 10); K.circle(m.x - 20, m.y, 4 + g * 4, '#ff3355'); K.circle(m.x + 20, m.y, 4 + g * 4, '#ff3355'); for (let i = 0; i < 4; i++) K.line(m.x - 60 + i * 30, m.y + 10, m.x - 60 + i * 30 - 10 * g, m.y + 30 * g, '#000', 4); }
+      else { const sz = 30 + g * 90; K.circle(m.x, m.y, sz, '#000'); K.circle(m.x - sz * 0.3, m.y - sz * 0.2, 4 + g * 6, '#ffd93a'); K.circle(m.x + sz * 0.3, m.y - sz * 0.2, 4 + g * 6, '#ffd93a'); if (g > 0.5) K.rect(m.x - sz * 0.4, m.y + sz * 0.2, sz * 0.8, 6 + g * 6, '#fff', 3); }
+      K.alpha(1);
+    });
+    const on = K.mouse.down && s.bat > 0;
+    K.darkness(on ? [{ x: K.mouse.x, y: K.mouse.y, r: 150 }, { x: 60, y: 480, r: 70 }] : [{ x: 60, y: 480, r: 70 }], 0.9);
+    K.glow('#ffd93a', 12); K.circle(60, 480, 10, '#ffd93a'); K.noGlow();
+    K.rect(20, 20, 160, 10, '#222', 5); K.rect(20, 20, 160 * s.bat, 10, s.bat < 0.2 ? '#ff3355' : '#3dffa0', 5); K.text('TORCH', 188, 25, 11, '#3dffa0', 'left', 'm');
+    const hr = Math.floor(s.t / 10); K.text(`NIGHT ${s.night + 1}  ·  ${hr === 0 ? 12 : hr} AM`, 940, 25, 16, '#c9c3ff', 'right', 'd');
+    if (s.fear > 0.5) { K.alpha((s.fear - 0.5) * 0.6); K.rect(0, 0, 960, 540, '#400'); K.alpha(1); }
+  },
+  ai(s) { const m = s.mon.slice().sort((a, b) => b.grow - a.grow)[0]; K.vmouse(m.x, m.y, false, m.grow > 0.25 && s.bat > 0.1); },
+});
+</script></body></html>

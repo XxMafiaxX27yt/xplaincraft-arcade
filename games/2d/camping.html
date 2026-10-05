@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Camping</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"camping","n":34,"title":"CAMPING","genre":"horror","desc":"Night in the woods. Keep the campfire burning: walk into the dark to gather sticks, then hurry back. The further from the fire you go, the darker it gets and the closer the eyes come. Survive until morning.","controls":"Arrow keys / WASD (or the stick) to walk · sticks are picked up automatically · walk into the fire to feed it","scoreLabel":"HOURS","tasks":[{"stat":"score","target":6,"text":"Survive the night in Camping"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WW = 2000, WH = 1400, FX = 1000, FY = 700, NIGHT = 240;
+K.game({
+  bg: '#000',
+  init(s) {
+    s.p = { x: FX, y: FY + 60 }; s.fire = 0.8; s.carry = 0; s.t = 0; s.sticks = []; s.eyes = []; s.trees = [];
+    for (let i = 0; i < 160; i++) { const x = K.rand(0, WW), y = K.rand(0, WH); if (Math.hypot(x - FX, y - FY) > 160) s.trees.push({ x, y, r: K.rand(16, 30) }); }
+    for (let i = 0; i < 40; i++) s.sticks.push({ x: K.rand(100, WW - 100), y: K.rand(100, WH - 100) });
+    s.drone = null; s.crackle = 0;
+  },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(44, 0.03);
+    s.t += dt; s.fire = Math.max(0, s.fire - dt / 40);
+    const d = K.dir(), nx = K.clamp(s.p.x + d.x * 170 * dt, 20, WW - 20), ny = K.clamp(s.p.y + d.y * 170 * dt, 20, WH - 20);
+    if (!s.trees.some((t) => Math.hypot(t.x - nx, t.y - ny) < t.r * 0.6)) { s.p.x = nx; s.p.y = ny; }
+    s.sticks = s.sticks.filter((k) => { if (Math.hypot(k.x - s.p.x, k.y - s.p.y) < 26 && s.carry < 5) { s.carry++; K.sfx('click'); return false; } return true; });
+    if (s.sticks.length < 25) s.sticks.push({ x: K.rand(100, WW - 100), y: K.rand(100, WH - 100) });
+    const df = Math.hypot(s.p.x - FX, s.p.y - FY);
+    if (df < 50 && s.carry) { s.fire = Math.min(1, s.fire + s.carry * 0.15); s.carry = 0; K.sfx('power'); }
+    s.crackle -= dt; if (s.crackle <= 0 && s.fire > 0.1) { K.noise(0.05, 0.05 * s.fire, 2500); s.crackle = K.rand(0.1, 0.5); }
+    const light = 60 + s.fire * 260;
+    // eyes gather in the dark and creep toward you when you are outside the firelight
+    if (s.eyes.length < 3 + s.t / 40 && Math.random() < dt * 0.5) { const a = K.rand(0, 6.28); s.eyes.push({ x: s.p.x + Math.cos(a) * 500, y: s.p.y + Math.sin(a) * 500, blink: 0 }); }
+    for (const e of s.eyes) {
+      const inFire = Math.hypot(e.x - FX, e.y - FY) < light, dp = Math.hypot(e.x - s.p.x, e.y - s.p.y);
+      const a = Math.atan2(s.p.y - e.y, s.p.x - e.x), sp = df > light ? 70 + s.t * 0.25 : -60;
+      e.x += Math.cos(a) * sp * dt; e.y += Math.sin(a) * sp * dt;
+      if (inFire) { e.x -= Math.cos(a) * 120 * dt; e.y -= Math.sin(a) * 120 * dt; }
+      if (dp < 24) { K.sfx('scare'); K.flash('#000', 1); K.shake(20); return K.end(s, { score: Math.floor(s.t / 40), won: false, title: 'TAKEN', text: `${Math.floor(s.t / 40)} hours before it found you.` }); }
+    }
+    s.eyes = s.eyes.filter((e) => Math.hypot(e.x - s.p.x, e.y - s.p.y) < 900);
+    if (s.fire <= 0 && df > 60) { K.sfx('scare'); return K.end(s, { score: Math.floor(s.t / 40), won: false, title: 'THE FIRE DIED', text: 'Darkness everywhere.' }); }
+    if (s.t >= NIGHT) { K.sfx('win'); return K.end(s, { score: 6, won: true, title: 'MORNING', text: 'Birds start singing. The eyes are gone.' }); }
+  },
+  draw(s) {
+    const cx = K.clamp(s.p.x - 480, 0, WW - 960), cy = K.clamp(s.p.y - 270, 0, WH - 540), c = K.ctx();
+    c.save(); c.translate(-cx, -cy);
+    K.rect(0, 0, WW, WH, '#16220e');
+    s.sticks.forEach((k) => K.line(k.x - 10, k.y - 3, k.x + 10, k.y + 3, '#8a5a2a', 4));
+    K.circle(FX, FY, 34, '#2a2018'); for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.28; K.line(FX + Math.cos(a) * 26, FY + Math.sin(a) * 26, FX - Math.cos(a) * 6, FY - Math.sin(a) * 6, '#4a3020', 6); }
+    if (s.fire > 0) { K.glow('#ff8a3a', 30); for (let i = 0; i < 5; i++) K.circle(FX + K.rand(-10, 10), FY - 10 - Math.random() * 26 * s.fire, 8 + Math.random() * 10 * s.fire, i % 2 ? '#ffd93a' : '#ff6a1a'); K.noGlow(); }
+    K.rect(FX + 90, FY - 60, 70, 50, '#3a6a8a'); K.poly([[FX + 85, FY - 60], [FX + 125, FY - 100], [FX + 165, FY - 60]], '#2a5a7a');
+    s.trees.forEach((t) => { K.circle(t.x, t.y + 6, t.r, '#0a1408'); K.circle(t.x, t.y, t.r, '#1d3a18'); });
+    K.circle(s.p.x, s.p.y, 12, '#d8c8a8'); for (let i = 0; i < s.carry; i++) K.line(s.p.x - 12, s.p.y - 16 - i * 3, s.p.x + 12, s.p.y - 14 - i * 3, '#8a5a2a', 3);
+    c.restore();
+    const light = 60 + s.fire * 260;
+    K.darkness([{ x: FX - cx, y: FY - cy, r: light * (1 + Math.sin(s.t * 9) * 0.03) }, { x: s.p.x - cx, y: s.p.y - cy, r: 70 }], Math.min(0.97, 0.8 + s.t / NIGHT * 0.1));
+    s.eyes.forEach((e, i) => { if (Math.sin(K.time() * 2 + i * 3) > 0.92) return; K.glow('#ffd93a', 10); K.circle(e.x - cx - 6, e.y - cy, 3, '#ffd93a'); K.circle(e.x - cx + 6, e.y - cy, 3, '#ffd93a'); K.noGlow(); });
+    K.rect(20, 20, 160, 10, '#222', 5); K.rect(20, 20, 160 * s.fire, 10, s.fire < 0.25 ? '#ff3355' : '#ff8a3a', 5); K.text('FIRE', 188, 25, 11, '#ff8a3a', 'left', 'm');
+    K.text(`STICKS ${s.carry}/5`, 20, 50, 13, '#c9a080', 'left', 'd');
+    const hr = Math.floor(s.t / 40); K.text(`${(hr + 12) % 12 || 12} AM`, 940, 25, 16, '#c9c3ff', 'right', 'd');
+  },
+  ai(s) { const df = Math.hypot(s.p.x - FX, s.p.y - FY); const t = s.carry >= 3 || s.fire < 0.3 ? { x: FX, y: FY } : s.sticks.sort((a, b) => Math.hypot(a.x - s.p.x, a.y - s.p.y) - Math.hypot(b.x - s.p.x, b.y - s.p.y))[0]; K.vhold('ArrowLeft', t.x < s.p.x - 6); K.vhold('ArrowRight', t.x > s.p.x + 6); K.vhold('ArrowUp', t.y < s.p.y - 6); K.vhold('ArrowDown', t.y > s.p.y + 6); },
+});
+</script></body></html>
