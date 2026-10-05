@@ -1,0 +1,115 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rush Hour</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"rush-hour","n":32,"title":"RUSH HOUR","genre":"mind","desc":"Traffic jam! Slide the cars and trucks along their lanes to clear a path so the red car can drive out of the exit on the right. Every puzzle is generated fresh and checked to be solvable; they get longer as you go.","controls":"Drag a car along its lane (or click a car, then arrow keys)","scoreLabel":"PUZZLES","tasks":[{"stat":"score","target":3,"text":"Solve 3 Rush Hour puzzles"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 6, T = 74, BX = 480 - (N * T) / 2 + 40, BY = 270 - (N * T) / 2 + 10;
+const COLS = ['#22e6ff', '#3dffa0', '#ffd93a', '#c45cff', '#ff8a3a', '#4f8bff', '#ff9bc8', '#b6ff3a', '#9aa4b0', '#ffffff', '#2a9a8a', '#8a6aff'];
+// car: { x, y, len, h (horizontal) } ; car 0 is red, horizontal on row 2
+const key = (cars) => cars.map((c) => (c.h ? c.x : c.y)).join(',');
+function occ(cars, skip = -1) { const g = Array.from({ length: N }, () => Array(N).fill(-1)); cars.forEach((c, i) => { if (i === skip) return; for (let k = 0; k < c.len; k++) g[c.y + (c.h ? 0 : k)][c.x + (c.h ? k : 0)] = i; }); return g; }
+function solve(cars, limit = 60000) {
+  const start = key(cars), seen = new Set([start]), q = [[cars.map((c) => ({ ...c })), 0]];
+  for (let qi = 0; qi < q.length; qi++) {
+    const [cs, d] = q[qi];
+    if (cs[0].x + cs[0].len === N) return d;
+    if (seen.size > limit) return -1;
+    const g = occ(cs);
+    cs.forEach((c, i) => {
+      for (const dir of [-1, 1]) {
+        let step = 1;
+        while (true) {
+          const nx = c.x + (c.h ? dir * step : 0), ny = c.y + (c.h ? 0 : dir * step);
+          const tx = c.h ? (dir > 0 ? nx + c.len - 1 : nx) : nx, ty = c.h ? ny : dir > 0 ? ny + c.len - 1 : ny;
+          if (tx < 0 || ty < 0 || tx >= N || ty >= N || (g[ty][tx] !== -1 && g[ty][tx] !== i)) break;
+          const n = cs.map((o) => ({ ...o })); n[i].x = nx; n[i].y = ny;
+          const k = key(n); if (!seen.has(k)) { seen.add(k); q.push([n, d + 1]); }
+          step++;
+        }
+      }
+    });
+  }
+  return -1;
+}
+const BANK = [
+  '6:022h 242v 332h 102h 302h 442h 222v 032v 112h 522v 353h 132v 412h',
+  '8:122h 422v 013v 242v 302v 322v 042h 132h 353h 523v 412h',
+  '8:222h 232h 252h 412v 402h 112v 302v 342h 043h 052h',
+  '6:022h 013h 132v 312v 103h 332h 223v 252h 522v 412h',
+  '7:222h 053h 123v 522v 202v 442h 313h 402h 102v 232h 003v 032v 342v',
+  '5:022h 212v 142v 232h 512v 312v 042v 032h 422v 102v',
+  '5:222h 303h 312h 232h 113v 042h 202v 432h 002v 512v 352h 053h 242h',
+  '5:022h 142v 033v 422v 212v 232v 312v 452h 102h 342v',
+  '5:122h 332h 253h 342h 412v 402h 312v 052h 102v',
+  '7:022h 312v 212v 342v 133v 422v 402v 452h 002v 523v',
+  '10:122h 012v 302h 142h 313v 412v 342h 252h 202v',
+  '9:022h 442h 222v 353h 103h 002v 522v 402h 412h 332v 132v 052h 212h',
+  '10:222h 352h 103h 413v 332v 122v 113h 012v 442h',
+  '9:122h 342v 053h 202v 132v 402v 442h 232h 422v 512v 013v',
+  '9:022h 412h 452h 222v 342v 322v 113h 032h 103h 442h 142h 432h 002v',
+  '11:122h 202v 032v 142v 303h 012v 243h 132h 322v 252h',
+  '11:022h 002v 402v 243h 322v 113h 512v 353h 422v 202h 132v',
+  '11:222h 212h 123v 442h 502v 342v 522v 202h 422v 152h',
+  '9:022h 323v 033h 203h 312h 442h 102v 502v 002v 212v',
+  '11:022h 312v 223v 142v 002v 522v 252h 452h 042v 112h 032h',
+  '16:022h 522v 223v 102v 412v 002v 212h 432v 322v 342v 302h',
+  '15:022h 103h 222v 243h 252h 523v 403v 032v 113h 332h',
+  '14:122h 322v 133v 442v 312h 432h 242h 023v 303h 252h 512v 202v 542v',
+  '14:122h 342h 252h 313v 023v 402h 412h 102v 522v 542v 052h 232v',
+  '13:022h 212v 132v 313v 252h 102h 342h 033v 302h 432h 232v 542v',
+  '13:022h 302h 312v 032v 343h 232h 152h 432h 212v 353h 142h 503v',
+  '15:122h 132h 012v 102h 422v 352h 032v 242v 343h 303v 412h',
+  '13:022h 222v 432v 212h 242h 132v 102h 303h 002v 523v',
+  '16:322h 312h 102h 002v 233v 442h 212v 353h 022v 513v 332v 302h',
+  '13:022h 222v 113h 202h 512v 032v 442h 242h 133v 412v 002h',
+  '21:022h 132v 222v 032v 432h 313v 242h 153h 412h 442v',
+  '21:022h 232v 352h 202h 002v 332v 032h 212v 522v 402v 422v 312v 102v',
+  '30:122h 312v 303h 242h 542v 412h 423v 522v 023v 132v 202v',
+  '17:022h 032h 042v 352h 323v 202v 303h 142h 312h 222v 432v 102v',
+  '17:222h 442h 342v 013h 133h 302h 022v 003h 513v 042h 052h 422v 312h',
+  '21:122h 322v 013v 243h 312h 252h 052h 432h 002h 042h 302h 502v 202v',
+  '27:022h 432v 032v 252h 412v 212v 322v 143h 302v 522v 402h',
+  '18:022h 232v 042v 212v 032h 512v 342h 202h 402v 252h 312v 102v 332h',
+  '19:122h 402h 242h 233h 442v 202v 132v 522v 303v 152h 023v',
+  '19:022h 423v 212v 522v 412h 102h 133v 002v 312v 302h 352h 242h',
+];
+// puzzle bank made by tools/gen_rushhour.js: "minimum slides:x y length h/v ..." (car 0 = red), 10 per band
+const decode = (str) => { const [d, cars] = str.split(':'); return { d: Number(d), cars: cars.split(' ').map((c) => ({ x: +c[0], y: +c[1], len: +c[2], h: c[3] === 'h' })) }; };
+function generate(band) { const b = Math.min(3, band), pick = BANK.slice(b * 10, b * 10 + 10); return decode(K.pick(pick)); }
+function puzzle(s) { const p = generate(Math.floor(s.done / 2)); s.cars = p.cars; s.opt = p.d; s.moves = 0; s.sel = -1; s.drag = null; s.anim = 0; }
+K.game({
+  bg: '#101418', touch: { stick: false, buttons: [] },
+  init(s) { s.done = 0; puzzle(s); },
+  update(s, dt) {
+    if (s.anim > 0) { s.anim -= dt; s.cars[0].px = (s.cars[0].px ?? s.cars[0].x) + dt * 12; if (s.anim <= 0) { s.done++; if (s.done >= 8) return K.end(s, { score: s.done, won: true, title: 'TRAFFIC CLEARED', text: '8 jams solved.' }); puzzle(s); } return; }
+    const m = K.mouse;
+    const carAt = (mx, my) => { const gx = Math.floor((mx - BX) / T), gy = Math.floor((my - BY) / T); if (gx < 0 || gy < 0 || gx >= N || gy >= N) return -1; return occ(s.cars)[gy][gx]; };
+    if (m.clicked) { const i = carAt(m.x, m.y); if (i >= 0) { s.sel = i; s.drag = { i, sx: m.x, sy: m.y, ox: s.cars[i].x, oy: s.cars[i].y }; K.sfx('tick'); } }
+    const tryMove = (i, d) => { const c = s.cars[i], g = occ(s.cars, i), nx = c.x + (c.h ? d : 0), ny = c.y + (c.h ? 0 : d); for (let k = 0; k < c.len; k++) { const x = nx + (c.h ? k : 0), y = ny + (c.h ? 0 : k); if (x < 0 || y < 0 || x >= N || y >= N || g[y][x] !== -1) return false; } c.x = nx; c.y = ny; return true; };
+    if (s.drag && m.down) {
+      const c = s.cars[s.drag.i], want = Math.round(((c.h ? m.x - s.drag.sx : m.y - s.drag.sy) / T)) + (c.h ? s.drag.ox : s.drag.oy), cur = c.h ? c.x : c.y;
+      if (want !== cur && tryMove(s.drag.i, Math.sign(want - cur))) { K.sfx('click'); s.moved = true; }
+    }
+    if (s.drag && !m.down) { if (s.moved) s.moves++; s.moved = false; s.drag = null; }
+    const d = K.tapDir();
+    if (d && s.sel >= 0) { const c = s.cars[s.sel], dir = c.h ? (d === 'right' ? 1 : d === 'left' ? -1 : 0) : d === 'down' ? 1 : d === 'up' ? -1 : 0; if (dir && tryMove(s.sel, dir)) { s.moves++; K.sfx('click'); } }
+    if (s.cars[0].x + s.cars[0].len === N && !s.anim) { s.anim = 0.6; K.sfx('win'); }
+  },
+  draw(s) {
+    K.rect(BX - 12, BY - 12, N * T + 24, N * T + 24, '#2a2f38', 14);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) K.rect(BX + x * T + 2, BY + y * T + 2, T - 4, T - 4, '#1a1e26', 6);
+    K.rect(BX + N * T + 2, BY + 2 * T + 6, 22, T - 12, '#3dffa0', 4); K.text('EXIT', BX + N * T + 40, BY + 2 * T + T / 2, 12, '#3dffa0', 'center', 'd');
+    s.cars.forEach((c, i) => {
+      const x = BX + (c.px ?? c.x) * T, y = BY + c.y * T, w = c.h ? c.len * T : T, h = c.h ? T : c.len * T, col = i === 0 ? '#ff3355' : COLS[i % COLS.length];
+      K.glow(col, i === s.sel ? 18 : 4); K.rect(x + 6, y + 6, w - 12, h - 12, col, 12); K.noGlow();
+      K.rect(x + (c.h ? w - 26 : 14), y + (c.h ? 14 : h - 26), c.h ? 10 : w - 28, c.h ? h - 28 : 10, '#ffffff66', 3);
+      if (i === s.sel) K.stroke(x + 4, y + 4, w - 8, h - 8, '#fff', 2, 12);
+    });
+    K.text(`PUZZLE ${s.done + 1}`, 110, 140, 22, '#fff', 'center', 'd');
+    K.text(`${s.moves} moves`, 110, 180, 16, '#8e88b8', 'center', 'm');
+    K.text(`best possible: ${s.opt}`, 110, 206, 13, '#8e88b8', 'center', 'm');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 20) return; const i = K.irand(0, s.cars.length - 1), c = s.cars[i], g = occ(s.cars, i), d = K.pick([-1, 1]), nx = c.x + (c.h ? d : 0), ny = c.y + (c.h ? 0 : d); let ok = true; for (let k = 0; k < c.len; k++) { const x = nx + (c.h ? k : 0), y = ny + (c.h ? 0 : k); if (x < 0 || y < 0 || x >= N || y >= N || g[y][x] !== -1) ok = false; } if (ok) { c.x = nx; c.y = ny; s.sel = i; } },
+});
+</script></body></html>

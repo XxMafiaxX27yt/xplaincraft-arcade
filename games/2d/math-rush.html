@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Math Rush</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"math-rush","n":22,"title":"MATH RUSH","genre":"mind","desc":"Sums fall from the sky. Type the answer before they hit the ground. Easy additions turn into times tables and then two-step problems. Each wrong landing breaks a shield; three and you're out.","controls":"Type the number + Enter (or the on-screen keypad)","scoreLabel":"SOLVED","tasks":[{"stat":"score","target":30,"text":"Solve 30 sums in Math Rush"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function sum(s) {
+  const lv = s.score, r = Math.random();
+  let q, a;
+  if (lv < 8 || r < 0.3) { const x = K.irand(2, 9 + lv), y = K.irand(2, 9 + lv); if (Math.random() < 0.5) { q = `${x} + ${y}`; a = x + y; } else { q = `${x + y} − ${y}`; a = x; } }
+  else if (lv < 20 || r < 0.6) { const x = K.irand(2, 12), y = K.irand(2, 12); if (Math.random() < 0.6) { q = `${x} × ${y}`; a = x * y; } else { q = `${x * y} ÷ ${x}`; a = y; } }
+  else { const x = K.irand(2, 9), y = K.irand(2, 9), z = K.irand(1, 20); q = `${x} × ${y} + ${z}`; a = x * y + z; }
+  s.drops.push({ q, a, x: K.rand(120, 840), y: -20, vy: 28 + Math.min(60, lv * 1.6) });
+}
+const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '↵'];
+K.game({
+  bg: '#0a1020', touch: { stick: false, buttons: [] },
+  init(s) { s.drops = []; s.score = 0; s.shield = 3; s.input = ''; s.next = 0.5; },
+  update(s, dt) {
+    s.next -= dt;
+    if (s.next <= 0) { sum(s); s.next = Math.max(1.4, 3.6 - s.score * 0.06); }
+    s.drops.forEach((d) => (d.y += d.vy * dt));
+    const hit = s.drops.filter((d) => d.y > 430);
+    if (hit.length) { s.drops = s.drops.filter((d) => d.y <= 430); s.shield -= hit.length; K.sfx('hit'); K.shake(8); if (s.shield <= 0) return K.end(s, { score: s.score, won: null, title: 'SHIELDS DOWN', text: `${s.score} solved. The last one was ${hit[0].q} = ${hit[0].a}.` }); }
+    let key = null;
+    for (let i = 0; i <= 9; i++) if (K.tap('Digit' + i, 'Numpad' + i)) key = String(i);
+    if (K.tap('Backspace')) key = '⌫'; if (K.tap('Enter', 'NumpadEnter')) key = '↵';
+    if (K.mouse.clicked) PAD.forEach((p, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: 40 + i * 74, y: 470, w: 68, h: 56 })) key = p; });
+    if (!key) return;
+    if (key === '⌫') s.input = s.input.slice(0, -1);
+    else if (key === '↵') {
+      const v = Number(s.input), d = s.drops.filter((x) => x.a === v).sort((a, b) => b.y - a.y)[0];
+      if (d && s.input) { s.drops = s.drops.filter((x) => x !== d); s.score++; K.sfx('coin'); K.burst(d.x, d.y, '#3dffa0', 12); } else if (s.input) K.sfx('wrong');
+      s.input = '';
+    } else if (s.input.length < 4) { s.input += key; const v = Number(s.input), d = s.drops.find((x) => x.a === v && String(x.a).length === s.input.length); if (d) { s.drops = s.drops.filter((x) => x !== d); s.score++; K.sfx('coin'); K.burst(d.x, d.y, '#3dffa0', 12); s.input = ''; } }
+  },
+  draw(s) {
+    for (let i = 0; i < 50; i++) K.circle((i * 151) % 960, (i * 83) % 420, 1, '#ffffff44');
+    K.rect(0, 430, 960, 6, s.shield > 1 ? '#22e6ff' : '#ff3355');
+    s.drops.forEach((d) => { K.rect(d.x - 70, d.y - 22, 140, 44, '#18264a', 10); K.stroke(d.x - 70, d.y - 22, 140, 44, '#22e6ff', 2, 10); K.text(d.q, d.x, d.y + 1, 22, '#fff', 'center', 'd'); });
+    PAD.forEach((p, i) => { const x = 40 + i * 74; K.rect(x, 470, 68, 56, '#1c2440', 8); K.text(p, x + 34, 499, 22, p === '↵' ? '#3dffa0' : '#fff', 'center', 'd'); });
+    K.text(`= ${s.input || '_'}`, 940, 470, 30, '#ffd93a', 'right', 'd');
+    K.text(`${s.score} ✓`, 20, 24, 20, '#3dffa0', 'left', 'd'); K.text('🛡'.repeat(Math.max(0, s.shield)), 940, 24, 20, '#22e6ff', 'right');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 25) return; const d = s.drops.slice().sort((a, b) => b.y - a.y)[0]; if (!d) return; String(d.a).split('').forEach((ch) => K.vtap('Digit' + ch)); },
+});
+</script></body></html>

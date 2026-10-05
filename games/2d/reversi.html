@@ -1,0 +1,73 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reversi</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"reversi","n":27,"title":"REVERSI","genre":"mind","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Othello: place a disc so it traps a line of the other colour, and the whole line flips to yours. Corners are gold. Most discs when the board fills wins. Against a CPU that thinks a few moves ahead, a friend, or online.","controls":"Click / tap a glowing square","scoreLabel":"DISCS","tasks":[{"stat":"won","target":1,"text":"Win a game of Reversi"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 8, S = 58, BX = 480 - (N * S) / 2, BY = 34;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const W8 = [[100, -20, 10, 5, 5, 10, -20, 100], [-20, -50, -2, -2, -2, -2, -50, -20], [10, -2, 1, 1, 1, 1, -2, 10], [5, -2, 1, 0, 0, 1, -2, 5], [5, -2, 1, 0, 0, 1, -2, 5], [10, -2, 1, 1, 1, 1, -2, 10], [-20, -50, -2, -2, -2, -2, -50, -20], [100, -20, 10, 5, 5, 10, -20, 100]];
+const mode = () => (K.net ? 'net' : K.local ? 'local' : 'cpu');
+const myCol = (s) => (mode() === 'net' ? K.net.index + 1 : mode() === 'local' ? s.turn : 1);
+function flips(b, x, y, c) {
+  if (b[y][x]) return [];
+  const out = [];
+  for (const [dx, dy] of DIRS) { const line = []; let i = x + dx, j = y + dy; while (i >= 0 && j >= 0 && i < N && j < N && b[j][i] === 3 - c) { line.push([i, j]); i += dx; j += dy; } if (line.length && i >= 0 && j >= 0 && i < N && j < N && b[j][i] === c) out.push(...line); }
+  return out;
+}
+const moves = (b, c) => { const m = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const f = flips(b, x, y, c); if (f.length) m.push({ x, y, f }); } return m; };
+function evalB(b, c) { let v = 0; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (b[y][x]) v += (b[y][x] === c ? 1 : -1) * W8[y][x]; return v + (moves(b, c).length - moves(b, 3 - c).length) * 4; }
+function search(b, c, d, a, bt) {
+  if (d === 0) return evalB(b, c);
+  const ms = moves(b, c); if (!ms.length) return -search(b, 3 - c, d - 1, -bt, -a);
+  for (const m of ms) { const nb = b.map((r) => r.slice()); nb[m.y][m.x] = c; m.f.forEach(([i, j]) => (nb[j][i] = c)); const v = -search(nb, 3 - c, d - 1, -bt, -a); if (v > a) a = v; if (a >= bt) break; }
+  return a;
+}
+function cpu(b) { let best = null, bv = -1e9; for (const m of K.shuffle(moves(b, 2))) { const nb = b.map((r) => r.slice()); nb[m.y][m.x] = 2; m.f.forEach(([i, j]) => (nb[j][i] = 2)); const v = -search(nb, 1, 3, -1e9, 1e9); if (v > bv) { bv = v; best = m; } } return best; }
+function play(s, x, y, send) {
+  const f = flips(s.b, x, y, s.turn); if (!f.length) return false;
+  s.b[y][x] = s.turn; f.forEach(([i, j]) => { s.b[j][i] = s.turn; s.anim[j * N + i] = 0; }); s.anim[y * N + x] = 0; s.last = [x, y];
+  K.sfx('click'); if (send && K.net) K.net.send({ t: 'mv', x, y });
+  s.turn = 3 - s.turn;
+  if (!moves(s.b, s.turn).length) { s.turn = 3 - s.turn; if (!moves(s.b, s.turn).length) end(s); else { s.msg = 'NO MOVES - TURN SKIPPED'; s.msgT = 1.5; } }
+  s.think = 0;
+  return true;
+}
+function count(s, c) { return s.b.flat().filter((v) => v === c).length; }
+function end(s) {
+  s.over = true;
+  const a = count(s, 1), b = count(s, 2), me = myCol(s) === 2 && mode() === 'net' ? 2 : 1, mine = me === 1 ? a : b, theirs = me === 1 ? b : a;
+  setTimeout(() => K.end(s, { score: mine, won: mode() === 'local' || a === b ? null : mine > theirs, stats: { won: mine > theirs && mode() !== 'local' ? 1 : 0 }, title: mode() === 'local' ? (a > b ? 'BLUE WINS' : a < b ? 'PINK WINS' : 'DRAW') : mine > theirs ? 'YOU WIN' : mine < theirs ? 'YOU LOSE' : 'DRAW', text: `${a} - ${b}` }), 1000);
+}
+K.game({
+  bg: '#07101a', touch: { stick: false, buttons: [] },
+  init(s) { s.b = Array.from({ length: N }, () => Array(N).fill(0)); s.b[3][3] = s.b[4][4] = 2; s.b[3][4] = s.b[4][3] = 1; s.turn = 1; s.over = false; s.anim = {}; s.think = 0; s.msg = ''; s.msgT = 0; s.last = null; },
+  onNet(s, d) { if (d.t === 'mv' && s.turn !== myCol(s)) play(s, d.x, d.y, false); },
+  onLeave(s) { if (!s.over) { s.over = true; K.end(s, { score: count(s, myCol(s)), won: true, stats: { won: 1 }, title: 'OPPONENT LEFT' }); } },
+  update(s, dt) {
+    Object.keys(s.anim).forEach((k) => (s.anim[k] = Math.min(1, s.anim[k] + dt * 4))); s.msgT -= dt;
+    if (s.over) return;
+    if (mode() === 'cpu' && s.turn === 2) { s.think += dt; if (s.think > 0.5) { const m = cpu(s.b); if (m) play(s, m.x, m.y, false); } return; }
+    if (s.turn !== myCol(s) || !K.mouse.clicked) return;
+    const x = Math.floor((K.mouse.x - BX) / S), y = Math.floor((K.mouse.y - BY) / S);
+    if (x >= 0 && y >= 0 && x < N && y < N && !play(s, x, y, true)) K.sfx('wrong');
+  },
+  draw(s) {
+    K.rect(BX - 8, BY - 8, N * S + 16, N * S + 16, '#0c3a2a', 10);
+    const legal = !s.over && s.turn === myCol(s) ? moves(s.b, s.turn) : [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const X = BX + x * S, Y = BY + y * S; K.rect(X + 1, Y + 1, S - 2, S - 2, '#145a3e', 4);
+      const v = s.b[y][x];
+      if (v) { const a = s.anim[y * N + x] ?? 1, sq = Math.abs(Math.cos(a * Math.PI)) * 0.5 + 0.5; const c = v === 1 ? '#22e6ff' : '#ff2bd6'; K.glow(c, 10); K.ctx().fillStyle = c; K.ctx().beginPath(); K.ctx().ellipse(X + S / 2, Y + S / 2, 23 * (a < 1 ? sq : 1), 23, 0, 0, 6.28); K.ctx().fill(); K.noGlow(); }
+      if (s.last && s.last[0] === x && s.last[1] === y) K.circle(X + S / 2, Y + S / 2, 4, '#fff');
+    }
+    legal.forEach((m) => K.circle(BX + m.x * S + S / 2, BY + m.y * S + S / 2, 6, s.turn === 1 ? '#22e6ff88' : '#ff2bd688'));
+    const names = mode() === 'net' ? K.net.players.map((p) => p.username) : mode() === 'local' ? ['BLUE', 'PINK'] : ['YOU', 'CPU'];
+    K.circle(100, 200, 20, '#22e6ff'); K.text(String(count(s, 1)), 100, 250, 34, '#22e6ff', 'center', 'd'); K.text(names[0] || '', 100, 160, 13, '#fff', 'center', 'd');
+    K.circle(860, 200, 20, '#ff2bd6'); K.text(String(count(s, 2)), 860, 250, 34, '#ff2bd6', 'center', 'd'); K.text(names[1] || '', 860, 160, 13, '#fff', 'center', 'd');
+    if (!s.over) K.text(s.turn === myCol(s) ? (mode() === 'local' ? `${s.turn === 1 ? 'BLUE' : 'PINK'} TO PLAY` : 'YOUR TURN') : mode() === 'cpu' ? 'CPU THINKING…' : 'THEIR TURN', s.turn === 1 ? 100 : 860, 300, 13, '#fff', 'center', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 520, 16, '#ffd93a', 'center', 'd');
+  },
+  ai(s) { if (s.turn === 1 && !s.over) { s.aw = (s.aw || 0) + 1; if (s.aw % 30 === 0) { const m = K.pick(moves(s.b, 1)); if (m) play(s, m.x, m.y, false); } } },
+});
+</script></body></html>

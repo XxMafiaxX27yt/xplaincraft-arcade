@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stroop Test</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"stroop-test","n":21,"title":"STROOP TEST","genre":"mind","desc":"The word says RED but it's painted blue. Pick the INK colour, not the word. Sometimes the rule flips and you must pick the WORD instead. 45 seconds, mistakes cost time.","controls":"Click / tap the right colour (or keys 1-4)","scoreLabel":"CORRECT","tasks":[{"stat":"score","target":25,"text":"Get 25 right in Stroop Test"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const C = [['RED', '#ff3355'], ['BLUE', '#3a8bff'], ['GREEN', '#3dd170'], ['YELLOW', '#ffd93a'], ['PURPLE', '#b45cff'], ['ORANGE', '#ff8a3a']];
+function next(s) {
+  const w = K.irand(0, C.length - 1); let ink; do { ink = K.irand(0, C.length - 1); } while (ink === w && Math.random() < 0.85);
+  s.word = w; s.ink = ink; s.rule = s.score >= 8 && Math.random() < 0.3 ? 'WORD' : 'INK';
+  const ans = s.rule === 'INK' ? ink : w, opts = new Set([ans, w, ink]); while (opts.size < 4) opts.add(K.irand(0, C.length - 1));
+  s.opts = K.shuffle([...opts]); s.ans = ans; s.flash = 0;
+}
+const BTN = (i) => ({ x: 150 + i * 170, y: 380, w: 150, h: 80 });
+K.game({
+  bg: '#0d0d16', touch: { stick: false, buttons: [] },
+  init(s) { s.score = 0; s.time = 45; s.wrong = 0; s.streak = 0; next(s); },
+  update(s, dt) {
+    s.time -= dt; s.flash -= dt;
+    if (s.time <= 0) return K.end(s, { score: s.score, won: null, title: 'TIME', text: `${s.score} right · ${s.wrong} wrong` });
+    let pick = -1;
+    for (let i = 0; i < 4; i++) if (K.tap('Digit' + (i + 1))) pick = i;
+    if (K.mouse.clicked) for (let i = 0; i < 4; i++) if (K.inRect(K.mouse.x, K.mouse.y, BTN(i))) pick = i;
+    if (pick < 0) return;
+    if (s.opts[pick] === s.ans) { s.score++; s.streak++; K.tone(500 + Math.min(10, s.streak) * 40, 0.08, 'triangle', 0.06); if (s.streak % 5 === 0) { s.time += 2; K.floatText('+2s', 480, 120, '#3dffa0'); } }
+    else { s.wrong++; s.streak = 0; s.time -= 3; K.sfx('wrong'); K.shake(5); s.flash = 0.3; }
+    next(s);
+  },
+  draw(s) {
+    if (s.flash > 0) K.rect(0, 0, 960, 540, '#ff335522');
+    K.text(s.rule === 'INK' ? 'PICK THE INK COLOUR' : 'PICK WHAT THE WORD SAYS', 480, 70, 22, s.rule === 'INK' ? '#fff' : '#ffd93a', 'center', 'd', s.rule === 'WORD' ? 10 : 0);
+    K.text(C[s.word][0], 480, 220, 96, C[s.ink][1], 'center', 'd', 6);
+    s.opts.forEach((o, i) => { const b = BTN(i); K.rect(b.x, b.y, b.w, b.h, '#1c1c2c', 12); K.stroke(b.x, b.y, b.w, b.h, '#ffffff33', 2, 12); K.circle(b.x + 30, b.y + b.h / 2, 16, C[o][1]); K.text(C[o][0], b.x + 92, b.y + b.h / 2, 16, '#fff', 'center', 'd'); });
+    K.text(`${Math.max(0, Math.ceil(s.time))}s`, 920, 30, 22, s.time < 10 ? '#ff3355' : '#22e6ff', 'right', 'd');
+    K.text(`${s.score} ✓`, 40, 30, 22, '#3dffa0', 'left', 'd');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0) { const i = s.opts.indexOf(s.ans); const b = BTN(Math.random() < 0.85 ? i : 0); K.vmouse(b.x + 70, b.y + 40, true); } },
+});
+</script></body></html>

@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Checkers</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"checkers","n":16,"title":"CHECKERS","genre":"mind","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Draughts on an 8×8 board. Move diagonally, jump to capture, and captures are compulsory. Chain multi-jumps, reach the far row to crown a king that moves both ways. CPU, same screen, or online.","controls":"Click / tap a piece, then where it goes","scoreLabel":"PIECES LEFT","tasks":[{"stat":"won","target":1,"text":"Win a game of Checkers"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// pieces: 1/2 = men (1 moves up, starts at bottom), 3/4 = kings of 1/2
+const N = 8, S = 58, BX = 480 - (N * S) / 2, BY = 34;
+const mode = () => (K.net ? 'net' : K.local ? 'local' : 'cpu');
+const own = (v) => (v === 1 || v === 3 ? 1 : v === 2 || v === 4 ? 2 : 0);
+const myCol = (s) => (mode() === 'net' ? K.net.index + 1 : mode() === 'local' ? s.turn : 1);
+function stepsFor(b, x, y) {
+  const v = b[y][x], c = own(v), king = v > 2, dirs = [];
+  if (c === 1 || king) dirs.push([-1, -1], [1, -1]); if (c === 2 || king) dirs.push([-1, 1], [1, 1]);
+  const mv = [], jp = [];
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+    if (!b[ny][nx]) mv.push({ fx: x, fy: y, tx: nx, ty: ny });
+    else if (own(b[ny][nx]) === 3 - c) { const jx = nx + dx, jy = ny + dy; if (jx >= 0 && jy >= 0 && jx < N && jy < N && !b[jy][jx]) jp.push({ fx: x, fy: y, tx: jx, ty: jy, cx: nx, cy: ny }); }
+  }
+  return { mv, jp };
+}
+function allMoves(b, c, only = null) {
+  let mv = [], jp = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (own(b[y][x]) === c && (!only || (only[0] === x && only[1] === y))) { const r = stepsFor(b, x, y); mv.push(...r.mv); jp.push(...r.jp); }
+  return jp.length ? jp : only ? [] : mv;
+}
+function apply(b, m) { const nb = b.map((r) => r.slice()), v = nb[m.fy][m.fx]; nb[m.fy][m.fx] = 0; nb[m.ty][m.tx] = v; if (m.cx != null) nb[m.cy][m.cx] = 0; if (v === 1 && m.ty === 0) nb[m.ty][m.tx] = 3; if (v === 2 && m.ty === N - 1) nb[m.ty][m.tx] = 4; return nb; }
+function score(b) { let v = 0; b.flat().forEach((p) => { if (p) v += (own(p) === 2 ? 1 : -1) * (p > 2 ? 3 : 1); }); return v; }
+function search(b, c, d) {
+  const ms = allMoves(b, c); if (!ms.length) return c === 2 ? -100 : 100; if (d === 0) return score(b);
+  const vals = ms.map((m) => { let nb = apply(b, m); if (m.cx != null) { let more = allMoves(nb, c, [m.tx, m.ty]).filter((x) => x.cx != null); while (more.length) { nb = apply(nb, more[0]); more = allMoves(nb, c, [more[0].tx, more[0].ty]).filter((x) => x.cx != null); } } return search(nb, 3 - c, d - 1); });
+  return c === 2 ? Math.max(...vals) : Math.min(...vals);
+}
+function doMove(s, m, send) {
+  const wasMan = s.b[m.fy][m.fx] <= 2;
+  s.b = apply(s.b, m); s.last = m; K.sfx(m.cx != null ? 'hit' : 'click');
+  if (send && K.net) K.net.send({ t: 'mv', m });
+  if (m.cx != null && !(wasMan && s.b[m.ty][m.tx] > 2)) { const more = allMoves(s.b, s.turn, [m.tx, m.ty]).filter((x) => x.cx != null); if (more.length) { s.chain = [m.tx, m.ty]; return; } }
+  s.chain = null; s.turn = 3 - s.turn; s.think = 0;
+  if (!allMoves(s.b, s.turn).length) finish(s, 3 - s.turn);
+}
+function finish(s, winner) {
+  if (s.over) return; s.over = true;
+  const me = myCol(s), left = s.b.flat().filter((v) => own(v) === (mode() === 'net' ? me : 1)).length;
+  K.sfx(mode() === 'local' || winner === me ? 'win' : 'lose');
+  setTimeout(() => K.end(s, { score: left, won: mode() === 'local' ? null : winner === me, stats: { won: mode() !== 'local' && winner === me ? 1 : 0 }, title: mode() === 'local' ? (winner === 1 ? 'BLUE WINS' : 'PINK WINS') : winner === me ? 'YOU WIN' : 'YOU LOSE' }), 900);
+}
+K.game({
+  bg: '#140c08', touch: { stick: false, buttons: [] },
+  init(s) { s.b = Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => ((x + y) % 2 ? (y < 3 ? 2 : y > 4 ? 1 : 0) : 0))); s.turn = 1; s.sel = null; s.chain = null; s.over = false; s.think = 0; s.last = null; },
+  onNet(s, d) { if (d.t === 'mv' && s.turn !== myCol(s)) doMove(s, d.m, false); },
+  onLeave(s) { if (!s.over) finish(s, myCol(s)); },
+  update(s, dt) {
+    if (s.over) return;
+    if (mode() === 'cpu' && s.turn === 2) {
+      s.think += dt; if (s.think < 0.5) return;
+      const ms = allMoves(s.b, 2, s.chain); let best = ms[0], bv = -1e9;
+      for (const m of K.shuffle(ms.slice())) { const v = search(apply(s.b, m), 1, 3); if (v > bv) { bv = v; best = m; } }
+      if (best) doMove(s, best, false); s.think = 0.3; return;
+    }
+    if (s.turn !== myCol(s) || !K.mouse.clicked) return;
+    const x = Math.floor((K.mouse.x - BX) / S), y = Math.floor((K.mouse.y - BY) / S); if (x < 0 || y < 0 || x >= N || y >= N) return;
+    const legal = allMoves(s.b, s.turn, s.chain);
+    const go = s.sel && legal.find((m) => m.fx === s.sel[0] && m.fy === s.sel[1] && m.tx === x && m.ty === y);
+    if (go) { s.sel = null; doMove(s, go, true); if (s.chain) s.sel = s.chain; return; }
+    if (own(s.b[y][x]) === s.turn && legal.some((m) => m.fx === x && m.fy === y)) { s.sel = [x, y]; K.sfx('tick'); } else if (own(s.b[y][x]) === s.turn) { K.sfx('wrong'); }
+  },
+  draw(s) {
+    const legal = !s.over && s.turn === myCol(s) ? allMoves(s.b, s.turn, s.chain) : [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const X = BX + x * S, Y = BY + y * S; K.rect(X, Y, S, S, (x + y) % 2 ? '#5a3a22' : '#e8d4b0');
+      if (s.last && ((s.last.tx === x && s.last.ty === y) || (s.last.fx === x && s.last.fy === y))) K.rect(X, Y, S, S, '#ffd93a33');
+      const v = s.b[y][x];
+      if (v) { const c = own(v) === 1 ? '#22e6ff' : '#ff2bd6'; K.circle(X + S / 2, Y + S / 2 + 3, 22, '#00000066'); K.glow(c, 8); K.circle(X + S / 2, Y + S / 2, 22, c); K.noGlow(); K.ring(X + S / 2, Y + S / 2, 15, '#ffffff55', 2); if (v > 2) K.text('★', X + S / 2, Y + S / 2 + 1, 20, '#fff'); }
+      if (s.sel && s.sel[0] === x && s.sel[1] === y) K.ring(X + S / 2, Y + S / 2, 26, '#ffd93a', 3);
+    }
+    if (s.sel) legal.filter((m) => m.fx === s.sel[0] && m.fy === s.sel[1]).forEach((m) => K.circle(BX + m.tx * S + S / 2, BY + m.ty * S + S / 2, 8, '#ffd93a'));
+    else legal.forEach((m) => K.ring(BX + m.fx * S + S / 2, BY + m.fy * S + S / 2, 25, '#ffffff33', 2));
+    const names = mode() === 'net' ? K.net.players.map((p) => p.username) : mode() === 'local' ? ['BLUE', 'PINK'] : ['YOU', 'CPU'];
+    const cnt = (c) => s.b.flat().filter((v) => own(v) === c).length;
+    K.text(names[0] || '', 100, 300, 14, '#22e6ff', 'center', 'd'); K.text(String(cnt(1)), 100, 340, 30, '#22e6ff', 'center', 'd');
+    K.text(names[1] || '', 860, 160, 14, '#ff2bd6', 'center', 'd'); K.text(String(cnt(2)), 860, 200, 30, '#ff2bd6', 'center', 'd');
+    if (!s.over) K.text(s.turn === myCol(s) ? (s.chain ? 'KEEP JUMPING!' : mode() === 'local' ? `${s.turn === 1 ? 'BLUE' : 'PINK'} TO MOVE` : 'YOUR MOVE') : mode() === 'cpu' ? 'CPU THINKING…' : 'THEIR MOVE', 480, 516, 14, '#fff', 'center', 'd');
+  },
+  ai(s) { if (s.turn === 1 && !s.over) { s.aw = (s.aw || 0) + 1; if (s.aw % 30 === 0) { const m = K.pick(allMoves(s.b, 1, s.chain)); if (m) doMove(s, m, false); } } },
+});
+</script></body></html>

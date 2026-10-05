@@ -910,7 +910,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/helicopter-cave.png"
 },
 {
 "id": "whack-a-mole",
@@ -953,7 +954,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/dino-run.png"
 },
 {
 "id": "tank-battle",
@@ -1031,7 +1033,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/frogger.png"
 },
 {
 "id": "missile-defense",
@@ -1052,7 +1055,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/missile-defense.png"
 },
 {
 "id": "lumberjack",
@@ -1073,7 +1077,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/lumberjack.png"
 },
 {
 "id": "bomb-tag",
@@ -1224,7 +1229,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/knife-throw.png"
 },
 {
 "id": "typing-race",
@@ -1566,6 +1572,32 @@ export const GAME_LIST = [
 "cover": "games/covers/connect-four.png"
 },
 {
+"id": "checkers",
+"n": 16,
+"title": "CHECKERS",
+"genre": "mind",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Draughts on an 8×8 board. Move diagonally, jump to capture, and captures are compulsory. Chain multi-jumps, reach the far row to crown a king that moves both ways. CPU, same screen, or online.",
+"controls": "Click / tap a piece, then where it goes",
+"scoreLabel": "PIECES LEFT",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Checkers"
+}
+],
+"file": "games/2d/checkers.html",
+"dim": "2d",
+"cover": "games/covers/checkers.png"
+},
+{
 "id": "sliding-puzzle",
 "n": 17,
 "title": "SLIDING PUZZLE",
@@ -1610,6 +1642,50 @@ export const GAME_LIST = [
 "cover": "games/covers/mastermind.png"
 },
 {
+"id": "stroop-test",
+"n": 21,
+"title": "STROOP TEST",
+"genre": "mind",
+"desc": "The word says RED but it's painted blue. Pick the INK colour, not the word. Sometimes the rule flips and you must pick the WORD instead. 45 seconds, mistakes cost time.",
+"controls": "Click / tap the right colour (or keys 1-4)",
+"scoreLabel": "CORRECT",
+"tasks": [
+{
+"stat": "score",
+"target": 25,
+"text": "Get 25 right in Stroop Test"
+}
+],
+"file": "games/2d/stroop-test.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/stroop-test.png"
+},
+{
+"id": "math-rush",
+"n": 22,
+"title": "MATH RUSH",
+"genre": "mind",
+"desc": "Sums fall from the sky. Type the answer before they hit the ground. Easy additions turn into times tables and then two-step problems. Each wrong landing breaks a shield; three and you're out.",
+"controls": "Type the number + Enter (or the on-screen keypad)",
+"scoreLabel": "SOLVED",
+"tasks": [
+{
+"stat": "score",
+"target": 30,
+"text": "Solve 30 sums in Math Rush"
+}
+],
+"file": "games/2d/math-rush.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/math-rush.png"
+},
+{
 "id": "lights-out",
 "n": 23,
 "title": "LIGHTS OUT",
@@ -1652,6 +1728,76 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/hangman.png"
+},
+{
+"id": "reversi",
+"n": 27,
+"title": "REVERSI",
+"genre": "mind",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Othello: place a disc so it traps a line of the other colour, and the whole line flips to yours. Corners are gold. Most discs when the board fills wins. Against a CPU that thinks a few moves ahead, a friend, or online.",
+"controls": "Click / tap a glowing square",
+"scoreLabel": "DISCS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Reversi"
+}
+],
+"file": "games/2d/reversi.html",
+"dim": "2d",
+"cover": "games/covers/reversi.png"
+},
+{
+"id": "rush-hour",
+"n": 32,
+"title": "RUSH HOUR",
+"genre": "mind",
+"desc": "Traffic jam! Slide the cars and trucks along their lanes to clear a path so the red car can drive out of the exit on the right. Every puzzle is generated fresh and checked to be solvable; they get longer as you go.",
+"controls": "Drag a car along its lane (or click a car, then arrow keys)",
+"scoreLabel": "PUZZLES",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Solve 3 Rush Hour puzzles"
+}
+],
+"file": "games/2d/rush-hour.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/rush-hour.png"
+},
+{
+"id": "sokoban",
+"n": 33,
+"title": "SOKOBAN",
+"genre": "mind",
+"desc": "Push every crate onto a glowing target. You can only push, never pull, and only one crate at a time, so one wrong push can trap you. Ten warehouses from easy to devious. Undo and restart are free.",
+"controls": "Arrow keys / WASD or swipe · U = undo · R = restart the level",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 4,
+"text": "Solve 4 Sokoban levels"
+}
+],
+"file": "games/2d/sokoban.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/sokoban.png"
 },
 {
 "id": "quiz-battle",

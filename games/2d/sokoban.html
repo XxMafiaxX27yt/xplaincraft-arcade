@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sokoban</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sokoban","n":33,"title":"SOKOBAN","genre":"mind","desc":"Push every crate onto a glowing target. You can only push, never pull, and only one crate at a time, so one wrong push can trap you. Ten warehouses from easy to devious. Undo and restart are free.","controls":"Arrow keys / WASD or swipe · U = undo · R = restart the level","scoreLabel":"LEVELS","tasks":[{"stat":"score","target":4,"text":"Solve 4 Sokoban levels"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// classic notation: # wall, . target, $ crate, * crate on target, @ player, + player on target
+// generated + solver-checked by tools/gen_sokoban.py
+const LEVELS = [
+  ['######', '#    #', '#@## #', '#.$  #', '######'],
+  ['#######', '# .   #', '# $## #', '#   $+#', '#######'],
+  ['#######', '#    .#', '# $## #', '#   @ #', '# $  .#', '#######'],
+  ['#######', '# $ + #', '# #   #', '# #   #', '# $   #', '# .   #', '#######'],
+  ['########', '#@     #', '# $$ #.#', '#    $ #', '#   .. #', '########'],
+  ['########', '#      #', '#   .$ #', '#  $#  #', '#.#@   #', '#.  $  #', '########'],
+  ['########', '#    $.#', '# $  $ #', '# .  # #', '#  #   #', '#   ## #', '#    + #', '########'],
+  ['#########', '# ..  $ #', '# #   $ #', '#  #    #', '#  $ #  #', '# .   @ #', '#########'],
+  ['#########', '#       #', '#   .   #', '# @  .# #', '# $ . # #', '# $ #$# #', '#  .  $ #', '#########'],
+  ['##########', '#     $..#', '#  $$ #  #', '# #  #@# #', '# # .  # #', '#   .# #$#', '#        #', '##########'],
+];
+function load(s) {
+  const L = LEVELS[s.lv]; s.h = L.length; s.w = Math.max(...L.map((r) => r.length)); s.T = Math.min(56, Math.floor(Math.min(820 / s.w, 440 / s.h)));
+  s.walls = new Set(); s.targets = new Set(); s.crates = new Set();
+  L.forEach((row, y) => [...row].forEach((ch, x) => { const k = x + ',' + y; if (ch === '#') s.walls.add(k); if ('.*+'.includes(ch)) s.targets.add(k); if ('$*'.includes(ch)) s.crates.add(k); if ('@+'.includes(ch)) s.p = [x, y]; }));
+  s.hist = []; s.moves = 0; s.face = [1, 0];
+}
+const solved = (s) => [...s.crates].every((k) => s.targets.has(k));
+K.game({
+  bg: '#14101c',
+  init(s) { s.lv = 0; load(s); s.done = 0; },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= LEVELS.length) return K.end(s, { score: s.lv, won: true, title: 'WAREHOUSE MASTER', text: 'All ten levels solved.' }); load(s); } return; }
+    if (K.tap('KeyR')) { load(s); K.sfx('whoosh'); return; }
+    if (K.tap('KeyU') && s.hist.length) { const h = s.hist.pop(); s.p = h.p; s.crates = new Set(h.c); s.moves--; K.sfx('tick'); return; }
+    const d = K.tapDir(); if (!d) return;
+    const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[d]; s.face = [dx, dy];
+    const nx = s.p[0] + dx, ny = s.p[1] + dy, k = nx + ',' + ny;
+    if (s.walls.has(k)) { K.sfx('wrong'); return; }
+    if (s.crates.has(k)) { const bk = nx + dx + ',' + (ny + dy); if (s.walls.has(bk) || s.crates.has(bk)) { K.sfx('wrong'); return; } s.hist.push({ p: s.p.slice(), c: [...s.crates] }); s.crates.delete(k); s.crates.add(bk); K.sfx(s.targets.has(bk) ? 'chime' : 'knock'); }
+    else s.hist.push({ p: s.p.slice(), c: [...s.crates] });
+    s.p = [nx, ny]; s.moves++; if (!s.crates.has(k)) K.sfx('step');
+    if (solved(s)) { s.done = 1.2; K.sfx('win'); }
+  },
+  draw(s) {
+    const T = s.T, ox = 480 - (s.w * T) / 2, oy = 290 - (s.h * T) / 2;
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) { const k = x + ',' + y; if (s.walls.has(k)) { K.rect(ox + x * T, oy + y * T, T, T, '#3a2a5a'); K.rect(ox + x * T, oy + y * T, T, 5, '#5a4a8a'); } else K.rect(ox + x * T, oy + y * T, T, T, (x + y) % 2 ? '#1e1a2c' : '#221d32'); }
+    s.targets.forEach((k) => { const [x, y] = k.split(',').map(Number); K.glow('#3dffa0', 10); K.ring(ox + x * T + T / 2, oy + y * T + T / 2, T * 0.22, '#3dffa0', 3); K.noGlow(); });
+    s.crates.forEach((k) => { const [x, y] = k.split(',').map(Number), on = s.targets.has(k); K.rect(ox + x * T + 4, oy + y * T + 4, T - 8, T - 8, on ? '#2a9a5a' : '#b8742a', 6); K.stroke(ox + x * T + 8, oy + y * T + 8, T - 16, T - 16, on ? '#3dffa0' : '#8a5420', 3, 4); });
+    const [px, py] = s.p; K.glow('#22e6ff', 14); K.circle(ox + px * T + T / 2, oy + py * T + T / 2, T * 0.32, '#22e6ff'); K.noGlow(); K.circle(ox + px * T + T / 2 + s.face[0] * T * 0.14, oy + py * T + T / 2 + s.face[1] * T * 0.14, T * 0.08, '#05040c');
+    K.text(`LEVEL ${s.lv + 1} / ${LEVELS.length}`, 480, 30, 20, '#fff', 'center', 'd');
+    K.text(`${s.moves} moves · U undo · R restart`, 480, 520, 14, '#8e88b8', 'center', 'm');
+    if (s.done > 0) K.text('SOLVED!', 480, 270, 46, '#3dffa0', 'center', 'd', 18);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 14 === 0) K.vtap(K.pick(['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'ArrowLeft'])); if (s.aw % 400 === 0) load(s); },
+});
+</script></body></html>
