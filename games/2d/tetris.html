@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Block Drop</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tetris","n":23,"title":"BLOCK DROP","genre":"relax","desc":"The classic falling-blocks puzzle. Rotate and slide the pieces to complete lines. Hold a piece for later, see the next three, ghost piece shows where it lands. Choose CHILL (speed never rises) or CLASSIC (it does).","controls":"← → move · ↑ / X rotate · Z rotate back · ↓ soft drop · Space hard drop · C hold","scoreLabel":"POINTS","tasks":[{"stat":"lines","target":20,"text":"Clear 20 lines in Block Drop"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 10, H = 20, T = 24, BX = 480 - (W * T) / 2, BY = 30;
+const SH = { I: [[0, 1], [1, 1], [2, 1], [3, 1]], O: [[1, 0], [2, 0], [1, 1], [2, 1]], T: [[1, 0], [0, 1], [1, 1], [2, 1]], S: [[1, 0], [2, 0], [0, 1], [1, 1]], Z: [[0, 0], [1, 0], [1, 1], [2, 1]], J: [[0, 0], [0, 1], [1, 1], [2, 1]], L: [[2, 0], [0, 1], [1, 1], [2, 1]] };
+const COL = { I: '#22e6ff', O: '#ffd93a', T: '#c45cff', S: '#3dffa0', Z: '#ff3355', J: '#4f8bff', L: '#ff8a3a' };
+function bag(s) { if (s.queue.length < 7) s.queue.push(...K.shuffle(Object.keys(SH))); }
+function spawn(s, type) { bag(s); const t = type || s.queue.shift(); bag(s); s.cur = { t, r: 0, x: 3, y: -1 }; s.held = false; if (hits(s, s.cur)) over(s); }
+function cells(p) { const sz = p.t === 'I' ? 4 : p.t === 'O' ? 4 : 3; return SH[p.t].map(([x, y]) => { let cx = x, cy = y; for (let i = 0; i < p.r % 4; i++) [cx, cy] = [sz - 1 - cy, cx]; if (p.t === 'O') [cx, cy] = [x, y]; return [p.x + cx, p.y + cy]; }); }
+const hits = (s, p) => cells(p).some(([x, y]) => x < 0 || x >= W || y >= H || (y >= 0 && s.g[y][x]));
+function lock(s) {
+  cells(s.cur).forEach(([x, y]) => { if (y >= 0) s.g[y][x] = s.cur.t; });
+  if (cells(s.cur).some(([, y]) => y < 0)) return over(s);
+  const full = s.g.map((r, i) => (r.every(Boolean) ? i : -1)).filter((i) => i >= 0);
+  if (full.length) { s.clearing = { rows: full, t: 0.25 }; s.lines += full.length; s.score += [0, 100, 300, 500, 800][full.length] * (s.level + 1); K.sfx(full.length === 4 ? 'power' : 'coin'); if (full.length === 4) K.floatText('TETRA!', 480, 200, '#22e6ff', 30); }
+  else K.sfx('click');
+  s.level = s.chill ? 0 : Math.floor(s.lines / 10);
+  spawn(s);
+}
+function over(s) { if (s.done) return; s.done = true; K.sfx('lose'); K.end(s, { score: s.score, won: null, stats: { lines: s.lines }, title: 'TOPPED OUT', text: `${s.lines} lines` }); }
+function move(s, dx, dy, dr = 0) {
+  const n = { ...s.cur, x: s.cur.x + dx, y: s.cur.y + dy, r: (s.cur.r + dr + 4) % 4 };
+  for (const kick of dr ? [0, -1, 1, -2, 2] : [0]) { const k = { ...n, x: n.x + kick }; if (!hits(s, k)) { s.cur = k; return true; } }
+  return false;
+}
+K.game({
+  bg: '#0a0a18',
+  init(s) { s.g = Array.from({ length: H }, () => Array(W).fill(null)); s.queue = []; s.score = 0; s.lines = 0; s.level = 0; s.fall = 0; s.hold = null; s.das = 0; s.done = false; s.clearing = null; s.chill = null; spawn(s); },
+  update(s, dt) {
+    if (s.chill == null) {
+      if (K.tap('Digit1') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 220, w: 300, h: 54 }))) s.chill = true;
+      if (K.tap('Digit2') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 290, w: 300, h: 54 }))) s.chill = false;
+      return;
+    }
+    if (s.clearing) { s.clearing.t -= dt; if (s.clearing.t <= 0) { s.g = s.g.filter((r, i) => !s.clearing.rows.includes(i)); while (s.g.length < H) s.g.unshift(Array(W).fill(null)); s.clearing = null; } return; }
+    if (K.tap('ArrowUp', 'KeyX', 'KeyW')) { if (move(s, 0, 0, 1)) K.sfx('tick'); }
+    if (K.tap('KeyZ')) move(s, 0, 0, -1);
+    if (K.tap('KeyC', 'ShiftLeft')) { if (!s.held) { const t = s.cur.t; if (s.hold) spawn(s, s.hold); else spawn(s); s.hold = t; s.held = true; K.sfx('whoosh'); } }
+    const d = (K.down('ArrowRight', 'KeyD') ? 1 : 0) - (K.down('ArrowLeft', 'KeyA') ? 1 : 0);
+    if (K.tap('ArrowRight', 'KeyD', 'ArrowLeft', 'KeyA')) { move(s, d, 0); s.das = 0.17; } else if (d) { s.das -= dt; if (s.das <= 0) { move(s, d, 0); s.das = 0.045; } }
+    const sw = K.swipe(); if (sw === 'left') move(s, -1, 0); if (sw === 'right') move(s, 1, 0); if (sw === 'up') move(s, 0, 0, 1);
+    if (K.tap('Space') || sw === 'down') { while (move(s, 0, 1)) s.score += 2; lock(s); return; }
+    if (K.mouse.clicked && !sw && K.mouse.x > BX && K.mouse.x < BX + W * T) move(s, 0, 0, 1);
+    const speed = s.chill ? 0.8 : Math.max(0.06, 0.8 - s.level * 0.07);
+    s.fall += dt * (K.down('ArrowDown', 'KeyS') ? 12 : 1);
+    if (s.fall >= speed) { s.fall = 0; if (!move(s, 0, 1)) lock(s); }
+  },
+  draw(s) {
+    K.rect(BX - 6, BY - 6, W * T + 12, H * T + 12, '#14142a', 8);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = s.g[y][x], fl = s.clearing && s.clearing.rows.includes(y); K.rect(BX + x * T + 1, BY + y * T + 1, T - 2, T - 2, fl ? '#fff' : v ? COL[v] : '#1a1a32', 3); }
+    if (s.chill != null && !s.clearing) {
+      const ghost = { ...s.cur }; while (!hits(s, { ...ghost, y: ghost.y + 1 })) ghost.y++;
+      cells(ghost).forEach(([x, y]) => y >= 0 && K.stroke(BX + x * T + 2, BY + y * T + 2, T - 4, T - 4, COL[s.cur.t] + '88', 2, 3));
+      K.glow(COL[s.cur.t], 8); cells(s.cur).forEach(([x, y]) => y >= 0 && K.rect(BX + x * T + 1, BY + y * T + 1, T - 2, T - 2, COL[s.cur.t], 3)); K.noGlow();
+    }
+    const mini = (t, x, y) => SH[t].forEach(([a, b]) => K.rect(x + a * 16, y + b * 16, 15, 15, COL[t], 2));
+    K.text('NEXT', 700, 50, 14, '#8e88b8', 'center', 'd'); s.queue.slice(0, 3).forEach((t, i) => mini(t, 670, 70 + i * 56));
+    K.text('HOLD (C)', 260, 50, 14, '#8e88b8', 'center', 'd'); if (s.hold) mini(s.hold, 230, 70);
+    K.text(String(s.score), 260, 220, 26, '#ffd93a', 'center', 'd'); K.text(`LINES ${s.lines}`, 260, 260, 16, '#fff', 'center', 'd'); K.text(s.chill ? 'CHILL' : `LEVEL ${s.level + 1}`, 260, 290, 14, '#22e6ff', 'center', 'd');
+    if (s.chill == null) { K.rect(0, 0, 960, 540, 'rgba(5,4,12,.85)'); K.text('BLOCK DROP', 480, 150, 40, '#fff', 'center', 'd', 16); K.button(330, 220, 300, 54, '1  CHILL (no speed-up)', { color: '#3dffa0', size: 14 }); K.button(330, 290, 300, 54, '2  CLASSIC', { color: '#ffd93a', size: 14 }); }
+  },
+  ai(s) {
+    if (s.chill == null) { s.chill = false; return; }
+    s.aw = (s.aw || 0) + 1; if (s.aw % 6) return;
+    if (!s.plan) { let best = null; for (let r = 0; r < 4; r++) for (let x = -2; x < W; x++) { let p = { ...s.cur, r, x, y: 0 }; if (hits(s, p)) continue; while (!hits(s, { ...p, y: p.y + 1 })) p.y++; const h = Math.min(...cells(p).map(([, y]) => y)); const holes = cells(p).filter(([cx, cy]) => cy + 1 < H && !s.g[cy + 1][cx] && !cells(p).some(([a, b]) => a === cx && b === cy + 1)).length; const sc = h * 2 - holes * 6; if (!best || sc > best.sc) best = { sc, r, x }; } s.plan = best || { r: 0, x: 3 }; }
+    if (s.cur.r !== s.plan.r) K.vtap('ArrowUp'); else if (s.cur.x < s.plan.x) K.vtap('ArrowRight'); else if (s.cur.x > s.plan.x) K.vtap('ArrowLeft'); else { K.vtap('Space'); s.plan = null; }
+  },
+});
+</script></body></html>

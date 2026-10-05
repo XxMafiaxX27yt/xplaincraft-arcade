@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Night Sky</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"night-sky","n":18,"title":"NIGHT SKY","genre":"relax","desc":"Lie back and connect the stars. Each night hides a real constellation; its faint outline shows you roughly where. Join the stars in the right pairs and it lights up with its story. Shooting stars are wishes, tap them.","controls":"Drag from one star to another to join them · tap shooting stars","scoreLabel":"CONSTELLATIONS","tasks":[{"stat":"score","target":3,"text":"Draw 3 constellations in Night Sky"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// constellations: stars in 0..1 coords, edges between star indexes, a line about it
+const CONS = [
+  ['ORION', 'The hunter, with his famous three-star belt.', [[0.3, 0.1], [0.7, 0.15], [0.45, 0.45], [0.5, 0.47], [0.55, 0.49], [0.25, 0.85], [0.75, 0.82]], [[0, 2], [1, 4], [2, 3], [3, 4], [2, 5], [4, 6]]],
+  ['BIG DIPPER', 'Seven stars shaped like a ladle. Two of them point to the North Star.', [[0.05, 0.3], [0.25, 0.25], [0.42, 0.33], [0.58, 0.45], [0.6, 0.75], [0.9, 0.78], [0.92, 0.48]], [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]]],
+  ['CASSIOPEIA', 'A queen on her throne, a bright W in the sky.', [[0.05, 0.3], [0.28, 0.75], [0.5, 0.4], [0.72, 0.8], [0.95, 0.35]], [[0, 1], [1, 2], [2, 3], [3, 4]]],
+  ['CYGNUS', 'The swan, flying along the Milky Way.', [[0.5, 0.05], [0.5, 0.4], [0.5, 0.95], [0.1, 0.35], [0.9, 0.45]], [[0, 1], [1, 2], [3, 1], [1, 4]]],
+  ['LEO', 'The lion, his mane drawn as a backwards question mark.', [[0.15, 0.15], [0.28, 0.08], [0.35, 0.25], [0.3, 0.45], [0.35, 0.65], [0.75, 0.6], [0.92, 0.75], [0.7, 0.35]], [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [5, 7], [7, 3]]],
+  ['CRUX', 'The Southern Cross, guide of sailors.', [[0.5, 0.05], [0.5, 0.95], [0.12, 0.5], [0.85, 0.42]], [[0, 1], [2, 3]]],
+  ['SCORPIUS', 'The scorpion, with red Antares at its heart.', [[0.1, 0.1], [0.15, 0.3], [0.25, 0.4], [0.35, 0.5], [0.45, 0.68], [0.6, 0.82], [0.78, 0.85], [0.9, 0.7], [0.85, 0.55]], [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8]]],
+];
+function night(s) {
+  const C = CONS[s.order[s.idx % CONS.length]]; s.C = C;
+  const ox = K.rand(220, 520), oy = K.rand(80, 160), sc = K.rand(260, 330);
+  s.stars = C[2].map(([x, y]) => ({ x: ox + x * sc, y: oy + y * sc * 0.85, real: true, r: K.rand(3, 4.5) }));
+  for (let i = 0; i < 60; i++) s.stars.push({ x: K.rand(20, 940), y: K.rand(20, 500), real: false, r: K.rand(0.6, 2) });
+  s.lines = []; s.drag = null; s.lit = 0;
+}
+K.game({
+  bg: '#03030c', touch: { stick: false, buttons: [] },
+  init(s) { s.order = K.shuffle([...CONS.keys()]); s.idx = 0; s.score = 0; s.shoot = null; s.shootT = 6; night(s); },
+  update(s, dt) {
+    s.shootT -= dt;
+    if (!s.shoot && s.shootT <= 0) s.shoot = { x: K.rand(100, 800), y: K.rand(20, 200), vx: K.rand(250, 400), vy: K.rand(80, 160), life: 1.6 };
+    if (s.shoot) { s.shoot.x += s.shoot.vx * dt; s.shoot.y += s.shoot.vy * dt; s.shoot.life -= dt; if (K.mouse.clicked && K.dist(s.shoot, K.mouse) < 50) { s.score++; K.sfx('chime'); K.floatText('A WISH ✦', s.shoot.x, s.shoot.y, '#ffd93a'); s.shoot = null; s.shootT = K.rand(8, 14); } else if (s.shoot.life <= 0) { s.shoot = null; s.shootT = K.rand(8, 14); } }
+    if (s.lit > 0) { s.lit -= dt; if (s.lit <= 0) { s.idx++; if (s.idx >= 5) return K.end(s, { score: s.score, won: true, title: 'A SKY FULL OF STORIES', text: `${s.idx} constellations drawn.` }); night(s); } return; }
+    const near = (p) => s.stars.filter((st) => st.r > 2.5).find((st) => K.dist(st, p) < 22);
+    if (K.mouse.clicked) { const st = near(K.mouse); if (st) s.drag = st; }
+    if (s.drag && !K.mouse.down) {
+      const to = near(K.mouse);
+      if (to && to !== s.drag) {
+        const a = s.stars.indexOf(s.drag), b = s.stars.indexOf(to);
+        if (!s.lines.some((l) => (l[0] === a && l[1] === b) || (l[0] === b && l[1] === a))) { s.lines.push([a, b]); K.tone(520 + s.lines.length * 60, 0.3, 'sine', 0.05); }
+        const need = s.C[3], done = need.every(([x, y]) => s.lines.some((l) => (l[0] === x && l[1] === y) || (l[0] === y && l[1] === x)));
+        if (done) { s.score += 3; s.lit = 4; K.sfx('win'); }
+      }
+      s.drag = null;
+    }
+    if (K.tap('Backspace') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 830, y: 480, w: 110, h: 40 }))) { s.lines.pop(); K.sfx('tick'); }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#03030c', '#0d0a2a', '#1a1030']));
+    K.alpha(0.08); K.poly([[0, 400], [960, 120], [960, 220], [0, 500]], '#c9c3ff'); K.alpha(1);
+    K.alpha(0.12); s.C[3].forEach(([a, b]) => K.line(s.stars[a].x, s.stars[a].y, s.stars[b].x, s.stars[b].y, '#c9c3ff', 1)); K.alpha(1);
+    s.lines.forEach(([a, b]) => { K.glow('#22e6ff', s.lit > 0 ? 18 : 8); K.line(s.stars[a].x, s.stars[a].y, s.stars[b].x, s.stars[b].y, s.lit > 0 ? '#ffd93a' : '#22e6ff', 2); });
+    K.noGlow();
+    s.stars.forEach((st, i) => { const tw = 0.7 + Math.sin(K.time() * 3 + i) * 0.3; K.alpha(tw); K.glow('#fff', st.r * 3); K.circle(st.x, st.y, st.r, '#fff'); K.alpha(1); });
+    K.noGlow();
+    if (s.drag) K.line(s.drag.x, s.drag.y, K.mouse.x, K.mouse.y, '#22e6ff88', 2);
+    if (s.shoot) { K.glow('#fff', 14); K.line(s.shoot.x, s.shoot.y, s.shoot.x - s.shoot.vx * 0.15, s.shoot.y - s.shoot.vy * 0.15, '#fff', 3); K.noGlow(); }
+    K.rect(0, 470, 960, 70, '#05040c'); for (let x = 0; x < 960; x += 30) K.poly([[x, 470], [x + 15, 440 - (x % 90) / 3], [x + 30, 470]], '#05040c');
+    if (s.lit > 0) { K.text(s.C[0], 480, 40, 34, '#ffd93a', 'center', 'd', 14); K.text(s.C[1], 480, 76, 16, '#e8e0ff', 'center', 'u'); }
+    else K.text('Join the bright stars to find the hidden constellation', 480, 30, 15, '#8e88b8', 'center', 'u');
+    K.text(`✦ ${s.score}`, 20, 510, 18, '#ffd93a', 'left', 'd'); K.button(830, 480, 110, 40, 'UNDO', { color: '#8e88b8', size: 12 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0 && s.lit <= 0) { const e = s.C[3].find(([a, b]) => !s.lines.some((l) => (l[0] === a && l[1] === b) || (l[0] === b && l[1] === a))); if (e) s.lines.push(e); if (!s.C[3].find(([a, b]) => !s.lines.some((l) => (l[0] === a && l[1] === b) || (l[0] === b && l[1] === a)))) s.lit = 3; } },
+});
+</script></body></html>

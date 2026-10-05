@@ -1945,6 +1945,48 @@ export const GAME_LIST = [
 "cover": "games/covers/solitaire.png"
 },
 {
+"id": "mahjong-tiles",
+"n": 8,
+"title": "MAHJONG TILES",
+"genre": "relax",
+"desc": "Mahjong solitaire. Match pairs of identical tiles until the stack is gone. A tile is free when nothing sits on top of it and its left or right side is open. Shuffle and hint whenever you like. No timer.",
+"controls": "Click / tap two matching free tiles · H = hint · S = shuffle",
+"scoreLabel": "PAIRS",
+"tasks": [
+{
+"stat": "score",
+"target": 30,
+"text": "Match 30 pairs in Mahjong Tiles"
+}
+],
+"file": "games/2d/mahjong-tiles.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "jigsaw",
+"n": 9,
+"title": "JIGSAW",
+"genre": "relax",
+"desc": "Real jigsaw pieces with tabs and blanks, cut from a painted scene that is different every time: sunsets, mountains, cities, oceans. Drag pieces into place; they snap when close. Pick 12, 24 or 48 pieces.",
+"controls": "Drag pieces · they snap into place when close",
+"scoreLabel": "PUZZLES",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Finish a Jigsaw"
+}
+],
+"file": "games/2d/jigsaw.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "block-blast",
 "n": 11,
 "title": "BLOCK BLAST",
@@ -1987,6 +2029,27 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/bubble-shooter.png"
+},
+{
+"id": "aquarium",
+"n": 13,
+"title": "AQUARIUM",
+"genre": "relax",
+"desc": "A calm tank of your own. Drop food, watch the fish come to eat and grow. Happy, well-fed fish drop pearls you can spend on new fish, plants and decorations. Your tank is saved between visits.",
+"controls": "Click / tap the water to drop food · tap pearls to collect · shop buttons at the bottom",
+"scoreLabel": "PEARLS",
+"tasks": [
+{
+"stat": "score",
+"target": 30,
+"text": "Collect 30 pearls in Aquarium"
+}
+],
+"file": "games/2d/aquarium.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "zen-sand",
@@ -2053,6 +2116,69 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/ball-sort.png"
+},
+{
+"id": "night-sky",
+"n": 18,
+"title": "NIGHT SKY",
+"genre": "relax",
+"desc": "Lie back and connect the stars. Each night hides a real constellation; its faint outline shows you roughly where. Join the stars in the right pairs and it lights up with its story. Shooting stars are wishes, tap them.",
+"controls": "Drag from one star to another to join them · tap shooting stars",
+"scoreLabel": "CONSTELLATIONS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Draw 3 constellations in Night Sky"
+}
+],
+"file": "games/2d/night-sky.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "tetris",
+"n": 23,
+"title": "BLOCK DROP",
+"genre": "relax",
+"desc": "The classic falling-blocks puzzle. Rotate and slide the pieces to complete lines. Hold a piece for later, see the next three, ghost piece shows where it lands. Choose CHILL (speed never rises) or CLASSIC (it does).",
+"controls": "← → move · ↑ / X rotate · Z rotate back · ↓ soft drop · Space hard drop · C hold",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "lines",
+"target": 20,
+"text": "Clear 20 lines in Block Drop"
+}
+],
+"file": "games/2d/tetris.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "bubble-wrap",
+"n": 38,
+"title": "BUBBLE WRAP",
+"genre": "relax",
+"desc": "An endless sheet of bubble wrap. Pop. Pop pop. Drag across rows for a satisfying chain. Golden bubbles are rare, rainbow sheets are rarer. When a sheet is done, a fresh one slides in.",
+"controls": "Click, tap or drag across the bubbles",
+"scoreLabel": "POPS",
+"tasks": [
+{
+"stat": "score",
+"target": 300,
+"text": "Pop 300 bubbles in Bubble Wrap"
+}
+],
+"file": "games/2d/bubble-wrap.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "gravity-flip",

@@ -1,0 +1,71 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mahjong Tiles</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mahjong-tiles","n":8,"title":"MAHJONG TILES","genre":"relax","desc":"Mahjong solitaire. Match pairs of identical tiles until the stack is gone. A tile is free when nothing sits on top of it and its left or right side is open. Shuffle and hint whenever you like. No timer.","controls":"Click / tap two matching free tiles · H = hint · S = shuffle","scoreLabel":"PAIRS","tasks":[{"stat":"score","target":30,"text":"Match 30 pairs in Mahjong Tiles"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const TW = 46, TH = 60, FACES = ['🍒', '🍋', '🍇', '🍉', '🍑', '🌸', '🌻', '🍀', '🍁', '⭐', '🌙', '☀', '❄', '🔥', '💧', '🐟', '🐦', '🦋', '🐞', '🎈', '🎵', '💎', '🔔', '🍄'];
+// turtle-ish layout: [col, row, layer] on a half-tile grid
+function layout() {
+  const L = [];
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 12; c++) if (!((r === 0 || r === 7) && (c < 2 || c > 9))) L.push([c * 2, r * 2, 0]);
+  for (let r = 1; r < 7; r++) for (let c = 3; c < 9; c++) L.push([c * 2, r * 2, 1]);
+  for (let r = 2; r < 6; r++) for (let c = 4; c < 8; c++) L.push([c * 2, r * 2, 2]);
+  for (let r = 3; r < 5; r++) for (let c = 5; c < 7; c++) L.push([c * 2, r * 2, 3]);
+  L.push([11, 7, 4]); L.push([-2, 7, 0]); L.push([24, 7, 0]); L.push([26, 7, 0]);
+  return L;
+}
+function deal(s) {
+  const L = layout(); const n = L.length - (L.length % 2);
+  // deal pairs onto positions in removal order so the board is always solvable
+  const pos = L.slice(0, n).map(([x, y, z], i) => ({ x, y, z, id: i, alive: true, f: null }));
+  s.t = pos; const faces = []; for (let i = 0; i < n / 2; i++) { const f = FACES[i % FACES.length]; faces.push(f, f); }
+  let tries = 0;
+  while (tries++ < 50) {
+    pos.forEach((p) => { p.alive = true; p.f = null; });
+    const order = []; let ok = true;
+    while (pos.some((p) => p.alive)) { const fr = K.shuffle(pos.filter((p) => p.alive && free(s, p))); if (fr.length < 2) { ok = false; break; } fr[0].alive = false; fr[1].alive = false; order.push([fr[0], fr[1]]); }
+    if (!ok) continue;
+    const fs = K.shuffle(Array.from({ length: n / 2 }, (_, i) => FACES[i % FACES.length]));
+    order.forEach(([a, b], i) => { a.f = fs[i]; b.f = fs[i]; });
+    pos.forEach((p) => (p.alive = true)); break;
+  }
+  s.sel = null; s.hint = null;
+}
+const over = (a, b) => b.alive && b.z === a.z + 1 && Math.abs(b.x - a.x) < 2 && Math.abs(b.y - a.y) < 2;
+const side = (a, b, dx) => b.alive && b.z === a.z && b.x === a.x + dx * 2 && Math.abs(b.y - a.y) < 2;
+function free(s, a) { if (s.t.some((b) => over(a, b))) return false; const L = s.t.some((b) => side(a, b, -1)), R = s.t.some((b) => side(a, b, 1)); return !L || !R; }
+const scr = (p) => ({ x: 480 - 13 * (TW / 2) + p.x * (TW / 2) - p.z * 5 - 4, y: 40 + p.y * (TH / 2) - p.z * 6 });
+function moves(s) { const fr = s.t.filter((p) => p.alive && free(s, p)), out = []; for (let i = 0; i < fr.length; i++) for (let j = i + 1; j < fr.length; j++) if (fr[i].f === fr[j].f) out.push([fr[i], fr[j]]); return out; }
+function shuffleLeft(s) { const al = s.t.filter((p) => p.alive), fs = K.shuffle(al.map((p) => p.f)); al.forEach((p, i) => (p.f = fs[i])); K.sfx('whoosh'); }
+K.game({
+  bg: '#0f2a22', touch: { stick: false, buttons: [] },
+  init(s) { deal(s); s.pairs = 0; },
+  update(s, dt) {
+    if (K.tap('KeyH') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 20, y: 470, w: 110, h: 44 }))) { s.hint = moves(s)[0] || null; s.hintT = 2; K.sfx('chime'); return; }
+    if (K.tap('KeyS') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 140, y: 470, w: 110, h: 44 }))) { shuffleLeft(s); return; }
+    s.hintT -= dt;
+    if (!K.mouse.clicked) return;
+    const hit = s.t.filter((p) => p.alive).sort((a, b) => b.z - a.z || b.y - a.y).find((p) => { const q = scr(p); return K.inRect(K.mouse.x, K.mouse.y, { x: q.x, y: q.y, w: TW, h: TH }); });
+    if (!hit) return;
+    if (!free(s, hit)) { K.sfx('wrong'); return; }
+    if (!s.sel || s.sel === hit) { s.sel = s.sel === hit ? null : hit; K.sfx('tick'); return; }
+    if (s.sel.f === hit.f) { s.sel.alive = false; hit.alive = false; s.pairs++; K.tone(600 + (s.pairs % 8) * 50, 0.15, 'sine', 0.06); const q = scr(hit); K.burst(q.x + TW / 2, q.y + TH / 2, '#ffd93a', 8, 140); s.sel = null; s.hint = null;
+      if (!s.t.some((p) => p.alive)) { K.sfx('win'); return K.end(s, { score: s.pairs, won: true, title: 'BOARD CLEARED', text: `${s.pairs} pairs` }); }
+      if (!moves(s).length) { shuffleLeft(s); K.floatText('NO MATCHES - SHUFFLED', 480, 30, '#ffd93a', 18); }
+    } else { s.sel = hit; K.sfx('tick'); }
+  },
+  draw(s) {
+    s.t.filter((p) => p.alive).sort((a, b) => a.z - b.z || a.y - b.y || a.x - b.x).forEach((p) => {
+      const q = scr(p), fr = free(s, p), sel = s.sel === p, hint = s.hintT > 0 && s.hint && s.hint.includes(p);
+      K.rect(q.x + 5, q.y + 6, TW, TH, '#0a1a14', 6); K.rect(q.x + 3, q.y + 3, TW, TH, '#c8b88a', 6);
+      K.rect(q.x, q.y, TW, TH, sel ? '#fff4b0' : hint ? '#b8ffd8' : fr ? '#fffaf0' : '#e0d8c8', 6); K.stroke(q.x, q.y, TW, TH, sel ? '#ffd93a' : '#a89870', sel ? 3 : 1, 6);
+      K.text(p.f, q.x + TW / 2, q.y + TH / 2 + 2, 26, '#111');
+      if (!fr) { K.alpha(0.18); K.rect(q.x, q.y, TW, TH, '#000', 6); K.alpha(1); }
+    });
+    K.text(`PAIRS ${s.pairs}`, 940, 30, 18, '#ffd93a', 'right', 'd'); K.text(`${moves(s).length} moves available`, 940, 54, 12, '#cfe9dc', 'right', 'm');
+    K.button(20, 470, 110, 44, 'HINT', { color: '#3dffa0', size: 13 }); K.button(140, 470, 110, 44, 'SHUFFLE', { color: '#cfe9dc', size: 13 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 30 === 0) { const m = moves(s)[0]; if (m) { m[0].alive = false; m[1].alive = false; s.pairs++; } } },
+});
+</script></body></html>

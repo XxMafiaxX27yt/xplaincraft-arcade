@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bubble Wrap</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bubble-wrap","n":38,"title":"BUBBLE WRAP","genre":"relax","desc":"An endless sheet of bubble wrap. Pop. Pop pop. Drag across rows for a satisfying chain. Golden bubbles are rare, rainbow sheets are rarer. When a sheet is done, a fresh one slides in.","controls":"Click, tap or drag across the bubbles","scoreLabel":"POPS","tasks":[{"stat":"score","target":300,"text":"Pop 300 bubbles in Bubble Wrap"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const R = 26, COLS = 15, ROWS = 8;
+function sheet(s) { s.rainbow = Math.random() < 0.15; s.b = []; for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) s.b.push({ x: 60 + c * 60 + (r % 2) * 30, y: 70 + r * 56, popped: 0, gold: Math.random() < 0.02, hue: (c * 24 + r * 30) % 360 }); s.slide = 960; }
+K.game({
+  bg: '#dfe8ef', touch: { stick: false, buttons: [] },
+  init(s) { s.pops = 0; s.sheets = 0; sheet(s); },
+  update(s, dt) {
+    s.slide = Math.max(0, s.slide - dt * 2400);
+    if (s.slide > 0) return;
+    const m = K.mouse;
+    if (m.down || m.clicked) for (const b of s.b) if (!b.popped && Math.hypot(b.x - m.x, b.y - m.y) < R) {
+      b.popped = 1; s.pops++;
+      K.noise(0.05, b.gold ? 0.25 : 0.16, K.rand(1800, 3200), 0, 1.2); K.tone(K.rand(180, 260), 0.04, 'square', 0.03, -80);
+      if (b.gold) { K.sfx('coin'); s.pops += 9; K.floatText('+10', b.x, b.y - 20, '#c9a227'); }
+      K.burst(b.x, b.y, s.rainbow ? `hsl(${b.hue},80%,70%)` : '#ffffff', 4, 90, 0.25, 3);
+    }
+    s.b.forEach((b) => { if (b.popped) b.popped = Math.min(2, b.popped + dt * 6); });
+    if (s.b.every((b) => b.popped)) { s.sheets++; K.sfx('whoosh'); sheet(s); }
+    if (K.mouse.clicked && K.inRect(m.x, m.y, { x: 840, y: 500, w: 110, h: 34 })) K.end(s, { score: s.pops, won: null, title: 'SO SATISFYING', text: `${s.pops} pops, ${s.sheets} sheets.` });
+  },
+  draw(s) {
+    const c = K.ctx(); c.save(); c.translate(s.slide, 0);
+    K.rect(20, 30, 920, 470, s.rainbow ? '#f5f0ff' : '#e9f2f8', 18); K.stroke(20, 30, 920, 470, '#c0d0dc', 2, 18);
+    s.b.forEach((b) => {
+      if (b.popped) { K.alpha(0.6); K.circle(b.x, b.y, R * 0.92, '#d4e0e8'); K.alpha(1); K.line(b.x - 10, b.y - 4, b.x + 8, b.y + 6, '#b0c0cc', 2); K.line(b.x - 4, b.y + 8, b.x + 6, b.y - 8, '#b0c0cc', 2); return; }
+      const col = b.gold ? '#ffd93a' : s.rainbow ? `hsl(${b.hue},80%,82%)` : '#f8fcff';
+      K.circle(b.x + 3, b.y + 4, R, 'rgba(120,150,170,.25)'); c.fillStyle = K.rgrad(b.x - 8, b.y - 10, R * 1.4, ['#ffffff', col, b.gold ? '#c9a227' : s.rainbow ? `hsl(${b.hue},60%,70%)` : '#d6e6f2']); c.beginPath(); c.arc(b.x, b.y, R, 0, 6.28); c.fill();
+      K.alpha(0.9); K.circle(b.x - 8, b.y - 9, 6, '#fff'); K.alpha(1);
+    });
+    c.restore();
+    K.text(`${s.pops} POPS`, 30, 520, 16, '#5a7488', 'left', 'd'); K.button(840, 500, 110, 34, 'DONE', { color: '#5a7488', size: 12 });
+  },
+  ai(s) { s.ax = (s.ax || 60) + 9; if (s.ax > 920) { s.ax = 60; s.ay = ((s.ay || 70) + 56) % 520; } K.vmouse(s.ax, s.ay || 70, false, true); },
+});
+</script></body></html>

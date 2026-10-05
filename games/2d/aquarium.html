@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aquarium</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"aquarium","n":13,"title":"AQUARIUM","genre":"relax","desc":"A calm tank of your own. Drop food, watch the fish come to eat and grow. Happy, well-fed fish drop pearls you can spend on new fish, plants and decorations. Your tank is saved between visits.","controls":"Click / tap the water to drop food · tap pearls to collect · shop buttons at the bottom","scoreLabel":"PEARLS","tasks":[{"stat":"score","target":30,"text":"Collect 30 pearls in Aquarium"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SHOP = [['🐟', 'FISH', 10, 'fish'], ['🐠', 'TROPICAL', 25, 'fish'], ['🐡', 'PUFFER', 40, 'fish'], ['🌿', 'PLANT', 8, 'plant'], ['🪸', 'CORAL', 15, 'plant'], ['🏰', 'CASTLE', 30, 'deco']];
+function addFish(s, kind) { s.fish.push({ kind, x: K.rand(100, 860), y: K.rand(100, 360), vx: K.rand(-40, 40) || 20, vy: 0, size: 0.7, full: 0.5, pearlT: K.rand(6, 12) }); }
+function save(s) { K.store('tank', { fish: s.fish.map((f) => ({ kind: f.kind, size: f.size })), plants: s.plants, decos: s.decos, pearls: s.pearls }); }
+K.game({
+  bg: '#062038', touch: { stick: false, buttons: [] },
+  init(s) {
+    const t = K.attract ? null : K.load('tank', null);
+    s.fish = []; s.plants = t?.plants || [{ k: '🌿', x: 140 }, { k: '🪸', x: 760 }]; s.decos = t?.decos || []; s.pearls = t?.pearls || 0; s.food = []; s.drops = []; s.bubbles = []; s.got = 0; s.time = 0;
+    (t?.fish || [{ kind: '🐟', size: 0.8 }, { kind: '🐠', size: 0.8 }]).forEach((f) => { addFish(s, f.kind); s.fish[s.fish.length - 1].size = f.size; });
+  },
+  update(s, dt) {
+    s.time += dt;
+    if (Math.random() < dt * 3) s.bubbles.push({ x: K.pick([200, 620, 880]) + K.rand(-6, 6), y: 440, r: K.rand(2, 6) });
+    s.bubbles.forEach((b) => { b.y -= 60 * dt; b.x += Math.sin(b.y / 20) * 0.4; }); s.bubbles = s.bubbles.filter((b) => b.y > 40);
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 10, w: 100, h: 34 })) { save(s); return K.end(s, { score: s.got, won: null, title: 'SEE YOU SOON', text: `${s.fish.length} fish are waiting for you.` }); }
+    if (m.clicked) {
+      const pi = s.drops.findIndex((d) => K.dist(d, m) < 24);
+      if (pi >= 0) { s.drops.splice(pi, 1); s.pearls++; s.got++; K.sfx('coin'); save(s); }
+      else if (m.y < 420) { for (let i = 0; i < 4; i++) s.food.push({ x: m.x + K.rand(-12, 12), y: m.y, vy: K.rand(20, 40) }); K.sfx('pop'); }
+      else SHOP.forEach((it, i) => { if (K.inRect(m.x, m.y, { x: 40 + i * 150, y: 470, w: 140, h: 56 })) { if (s.pearls < it[2]) { K.sfx('wrong'); return; } s.pearls -= it[2]; if (it[3] === 'fish') addFish(s, it[0]); if (it[3] === 'plant') s.plants.push({ k: it[0], x: K.rand(60, 900) }); if (it[3] === 'deco') s.decos.push({ k: it[0], x: K.rand(200, 760) }); K.sfx('power'); save(s); } });
+    }
+    s.food.forEach((f) => { f.y = Math.min(420, f.y + f.vy * dt); });
+    s.fish.forEach((f) => {
+      f.full = Math.max(0, f.full - dt * 0.015);
+      const near = s.food.filter((fd) => !fd.eaten).sort((a, b) => K.dist(a, f) - K.dist(b, f))[0];
+      if (near && f.full < 0.9) { const a = K.angle(f, near); f.vx = K.lerp(f.vx, Math.cos(a) * 110, dt * 2); f.vy = K.lerp(f.vy, Math.sin(a) * 110, dt * 2); if (K.dist(f, near) < 14) { near.eaten = true; f.full = Math.min(1, f.full + 0.2); f.size = Math.min(1.6, f.size + 0.02); K.sfx('tick'); } }
+      else { f.vy = K.lerp(f.vy, Math.sin(s.time + f.x / 80) * 14, dt); if (Math.random() < dt * 0.3) f.vx = K.rand(25, 55) * (Math.random() < 0.5 ? -1 : 1); }
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      if (f.x < 40 || f.x > 920) { f.vx *= -1; f.x = K.clamp(f.x, 40, 920); } f.y = K.clamp(f.y, 60, 400);
+      f.pearlT -= dt * f.full;
+      if (f.pearlT <= 0) { f.pearlT = K.rand(8, 14); s.drops.push({ x: f.x, y: f.y, vy: 30 }); }
+    });
+    s.food = s.food.filter((fd) => !fd.eaten && s.time - (fd.t ||= s.time) < 20);
+    s.drops.forEach((d) => (d.y = Math.min(410, d.y + d.vy * dt)));
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#0e5a8a', '#062038']));
+    for (let i = 0; i < 6; i++) { K.alpha(0.06); K.poly([[i * 180 + Math.sin(s.time * 0.5 + i) * 30, 0], [i * 180 + 80 + Math.sin(s.time * 0.5 + i) * 30, 0], [i * 180 + 160, 440], [i * 180 + 40, 440]], '#bff6ff'); } K.alpha(1);
+    K.rect(0, 420, 960, 40, '#d8c08a'); for (let i = 0; i < 60; i++) K.circle((i * 97) % 960, 430 + (i % 3) * 8, 3, '#c0a670');
+    s.decos.forEach((d) => K.text(d.k, d.x, 395, 64, '#fff'));
+    s.plants.forEach((p, i) => { const c = K.ctx(); c.save(); c.translate(p.x, 420); c.rotate(Math.sin(s.time + i) * 0.08); K.text(p.k, 0, -28, 54, '#fff'); c.restore(); });
+    s.bubbles.forEach((b) => K.ring(b.x, b.y, b.r, '#bff6ff88', 1.5));
+    s.food.forEach((f) => K.circle(f.x, f.y, 3, '#c8783a'));
+    s.drops.forEach((d) => { K.glow('#fff', 12); K.circle(d.x, d.y, 9, '#f4f0ff'); K.noGlow(); });
+    s.fish.forEach((f) => { const c = K.ctx(); c.save(); c.translate(f.x, f.y); c.scale(f.vx > 0 ? -1 : 1, 1); K.text(f.kind, 0, 0, 34 * f.size, '#fff'); c.restore(); });
+    SHOP.forEach((it, i) => { const x = 40 + i * 150; K.rect(x, 470, 140, 56, s.pearls >= it[2] ? '#12385a' : '#0c2236', 10); K.text(it[0], x + 26, 498, 26, '#fff'); K.text(it[1], x + 88, 488, 12, '#fff', 'center', 'd'); K.text(`○ ${it[2]}`, x + 88, 510, 12, '#bff6ff', 'center', 'm'); });
+    K.text(`○ ${s.pearls} PEARLS`, 940, 26, 18, '#f4f0ff', 'right', 'd');
+    K.button(20, 10, 100, 34, 'DONE', { color: '#bff6ff', size: 12 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 50 === 0) K.vmouse(K.rand(200, 760), K.rand(120, 300), true); },
+});
+</script></body></html>

@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jigsaw</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"jigsaw","n":9,"title":"JIGSAW","genre":"relax","desc":"Real jigsaw pieces with tabs and blanks, cut from a painted scene that is different every time: sunsets, mountains, cities, oceans. Drag pieces into place; they snap when close. Pick 12, 24 or 48 pieces.","controls":"Drag pieces · they snap into place when close","scoreLabel":"PUZZLES","tasks":[{"stat":"score","target":1,"text":"Finish a Jigsaw"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PW = 520, PH = 360, PX = 220, PY = 90;
+let art = null;
+function paint() {
+  art = document.createElement('canvas'); art.width = PW; art.height = PH; const c = art.getContext('2d');
+  const theme = K.irand(0, 3), hue = K.irand(0, 360);
+  const g = c.createLinearGradient(0, 0, 0, PH); g.addColorStop(0, `hsl(${hue},70%,${theme === 2 ? 15 : 55}%)`); g.addColorStop(1, `hsl(${(hue + 60) % 360},80%,${theme === 2 ? 30 : 75}%)`); c.fillStyle = g; c.fillRect(0, 0, PW, PH);
+  c.fillStyle = `hsl(${(hue + 180) % 360},90%,70%)`; c.beginPath(); c.arc(K.rand(80, 440), K.rand(60, 140), K.rand(30, 60), 0, 6.28); c.fill();
+  if (theme === 2) for (let i = 0; i < 80; i++) { c.fillStyle = '#fff'; c.fillRect(Math.random() * PW, Math.random() * PH * 0.6, 2, 2); }
+  for (let layer = 0; layer < 3; layer++) {
+    c.fillStyle = `hsl(${(hue + 200 + layer * 20) % 360},${40 + layer * 10}%,${theme === 2 ? 10 + layer * 5 : 30 - layer * 8}%)`;
+    c.beginPath(); c.moveTo(0, PH);
+    if (theme === 1) { for (let x = 0; x <= PW; x += 20) c.lineTo(x, PH * (0.45 + layer * 0.15) - Math.abs(Math.sin(x / 70 + layer * 2)) * 90 + Math.random() * 8); }
+    else if (theme === 2) { for (let x = 0; x <= PW; x += K.rand(20, 50)) { const h = PH * (0.5 + layer * 0.12) - K.rand(20, 120); c.lineTo(x, h); c.lineTo(x + 18, h); } }
+    else { for (let x = 0; x <= PW; x += 10) c.lineTo(x, PH * (0.55 + layer * 0.13) + Math.sin(x / 40 + layer) * 14); }
+    c.lineTo(PW, PH); c.fill();
+    if (theme === 2) for (let i = 0; i < 40; i++) { c.fillStyle = '#ffd93a'; c.fillRect(Math.random() * PW, PH * (0.55 + layer * 0.12) + Math.random() * 60, 3, 4); }
+  }
+  if (theme === 3) for (let i = 0; i < 12; i++) { c.fillStyle = `hsl(${K.rand(0, 360)},80%,60%)`; c.beginPath(); c.arc(K.rand(0, PW), K.rand(PH * 0.6, PH), K.rand(6, 14), 0, 6.28); c.fill(); }
+}
+function cut(s, cols, rows) {
+  paint(); s.cols = cols; s.rows = rows; s.pw = PW / cols; s.ph = PH / rows;
+  // edge shape: 0 flat, 1 tab out, -1 blank in; shared between neighbours
+  const hE = Array.from({ length: rows + 1 }, (_, r) => Array.from({ length: cols }, () => (r === 0 || r === rows ? 0 : Math.random() < 0.5 ? 1 : -1)));
+  const vE = Array.from({ length: rows }, () => Array.from({ length: cols + 1 }, (_, c) => (c === 0 || c === cols ? 0 : Math.random() < 0.5 ? 1 : -1)));
+  s.pcs = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) s.pcs.push({ c, r, top: hE[r][c], bottom: -hE[r + 1][c], left: vE[r][c], right: -vE[r][c + 1], x: K.rand(20, 900 - s.pw), y: K.rand(20, 500 - s.ph), done: false, z: Math.random() });
+  s.pcs.forEach((p) => { if (Math.random() < 0.5) { p.x = Math.random() < 0.5 ? K.rand(10, 190 - s.pw * 0.5) : K.rand(760, 940 - s.pw); } });
+  s.drag = null; s.phase = 'play';
+}
+function path(ctx, p, pw, ph, x, y) {
+  const t = Math.min(pw, ph) * 0.22;
+  const edge = (x1, y1, x2, y2, k) => {
+    if (!k) { ctx.lineTo(x2, y2); return; }
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), nx = (dy / L) * k, ny = (-dx / L) * k;
+    ctx.lineTo(mx - (dx / L) * t * 0.6, my - (dy / L) * t * 0.6);
+    ctx.bezierCurveTo(mx - (dx / L) * t * 1.1 + nx * t * 1.3, my - (dy / L) * t * 1.1 + ny * t * 1.3, mx + (dx / L) * t * 1.1 + nx * t * 1.3, my + (dy / L) * t * 1.1 + ny * t * 1.3, mx + (dx / L) * t * 0.6, my + (dy / L) * t * 0.6);
+    ctx.lineTo(x2, y2);
+  };
+  ctx.beginPath(); ctx.moveTo(x, y);
+  edge(x, y, x + pw, y, p.top); edge(x + pw, y, x + pw, y + ph, p.right); edge(x + pw, y + ph, x, y + ph, p.bottom); edge(x, y + ph, x, y, p.left);
+  ctx.closePath();
+}
+K.game({
+  bg: '#1a1424', touch: { stick: false, buttons: [] },
+  init(s) { s.phase = 'pick'; s.solved = 0; },
+  update(s, dt) {
+    if (s.phase === 'pick') { [[4, 3], [6, 4], [8, 6]].forEach(([c, r], i) => { if (K.tap('Digit' + (i + 1)) || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 }))) cut(s, c, r); }); return; }
+    if (s.phase === 'win') { s.winT -= dt; if (s.winT <= 0) { s.solved++; K.end(s, { score: s.solved, won: true, title: 'PICTURE COMPLETE', text: `${s.pcs.length} pieces` }); } return; }
+    const m = K.mouse;
+    if (m.clicked) { const hit = s.pcs.filter((p) => !p.done && K.inRect(m.x, m.y, { x: p.x, y: p.y, w: s.pw, h: s.ph })).sort((a, b) => b.z - a.z)[0]; if (hit) { s.drag = { p: hit, dx: m.x - hit.x, dy: m.y - hit.y }; hit.z = Math.max(...s.pcs.map((q) => q.z)) + 1; K.sfx('tick'); } }
+    if (s.drag && m.down) { s.drag.p.x = m.x - s.drag.dx; s.drag.p.y = m.y - s.drag.dy; }
+    if (s.drag && !m.down) {
+      const p = s.drag.p, tx = PX + p.c * s.pw, ty = PY + p.r * s.ph; s.drag = null;
+      if (Math.hypot(p.x - tx, p.y - ty) < Math.min(s.pw, s.ph) * 0.35) { p.x = tx; p.y = ty; p.done = true; p.z = -1; K.sfx('click'); K.tone(700 + Math.random() * 200, 0.1, 'sine', 0.05);
+        if (s.pcs.every((q) => q.done)) { s.phase = 'win'; s.winT = 2.2; K.sfx('win'); } }
+    }
+  },
+  draw(s) {
+    if (s.phase === 'pick') { K.text('JIGSAW', 480, 130, 44, '#fff', 'center', 'd', 16); ['12 PIECES', '24 PIECES', '48 PIECES'].forEach((n, i) => K.button(330, 200 + i * 70, 300, 54, `${i + 1}  ${n}`, { color: ['#3dffa0', '#ffd93a', '#ff8a3a'][i] })); return; }
+    const c = K.ctx();
+    K.rect(PX - 6, PY - 6, PW + 12, PH + 12, '#0e0a16', 8); K.alpha(0.12); c.drawImage(art, PX, PY); K.alpha(1);
+    s.pcs.slice().sort((a, b) => a.z - b.z).forEach((p) => {
+      c.save(); path(c, p, s.pw, s.ph, p.x, p.y); c.clip();
+      c.drawImage(art, p.x - p.c * s.pw, p.y - p.r * s.ph);
+      c.restore();
+      path(c, p, s.pw, s.ph, p.x, p.y); c.strokeStyle = p.done ? 'rgba(0,0,0,.15)' : s.drag?.p === p ? '#ffd93a' : 'rgba(255,255,255,.55)'; c.lineWidth = p.done ? 1 : 2; c.stroke();
+    });
+    K.text(`${s.pcs.filter((p) => p.done).length} / ${s.pcs.length}`, 480, 40, 18, '#fff', 'center', 'd');
+    if (s.phase === 'win') K.text('BEAUTIFUL', 480, 500, 30, '#ffd93a', 'center', 'd', 14);
+  },
+  ai(s) { if (s.phase === 'pick') { cut(s, 6, 4); return; } s.aw = (s.aw || 0) + 1; if (s.aw % 8 === 0) { const p = s.pcs.find((q) => !q.done); if (p) { p.x = PX + p.c * s.pw; p.y = PY + p.r * s.ph; p.done = true; } } },
+});
+</script></body></html>
