@@ -591,7 +591,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/lighthouse.png"
 },
 {
 "id": "camping",
@@ -612,7 +613,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/camping.png"
 },
 {
 "id": "blink",
@@ -655,7 +657,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/ghost-photographer.png"
 },
 {
 "id": "tape-recorder",
@@ -676,7 +679,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/tape-recorder.png"
 },
 {
 "id": "zombie-fence",
@@ -697,7 +701,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/zombie-fence.png"
 },
 {
 "id": "monster-under-bed",
@@ -718,7 +723,33 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/monster-under-bed.png"
+},
+{
+"id": "lights-out-house",
+"n": 101,
+"title": "LIGHTS OUT",
+"genre": "horror",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "Co-op horror for 1-4. The power is out and something walks the house. Find the 5 fuses and bring the lights back at the fuse box. It freezes in torch light, so cover each other. Caught friends can be revived if someone stands with them.",
+"controls": "Move: arrows / WASD (or the stick) · aim the torch with the mouse (same screen: torch follows where you walk; P1 WASD, P2 arrows)",
+"scoreLabel": "FUSES",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Get the lights back on in Lights Out"
+}
+],
+"file": "games/2d/lights-out-house.html",
+"dim": "2d"
 },
 {
 "id": "breakout",
@@ -2311,6 +2342,30 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/bubble-wrap.png"
+},
+{
+"id": "pond-party",
+"n": 102,
+"title": "POND PARTY",
+"genre": "relax",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "A calm evening of fishing on a shared pond, alone or with up to 7 friends. Cast, wait for the bobber to dip, hook it, then reel gently without snapping the line. Everyone sees everyone's catches. Rare golden fish exist. Three peaceful minutes.",
+"controls": "Hold Space / mouse to charge a cast, release to throw · tap when the bobber dips · hold to reel, ease off when the line goes red",
+"scoreLabel": "GRAMS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Catch 3 kg of fish in Pond Party"
+}
+],
+"file": "games/2d/pond-party.html",
+"dim": "2d"
 },
 {
 "id": "gravity-flip",

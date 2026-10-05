@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lights Out</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lights-out-house","n":101,"title":"LIGHTS OUT","genre":"horror","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":4,"desc":"Co-op horror for 1-4. The power is out and something walks the house. Find the 5 fuses and bring the lights back at the fuse box. It freezes in torch light, so cover each other. Caught friends can be revived if someone stands with them.","controls":"Move: arrows / WASD (or the stick) · aim the torch with the mouse (same screen: torch follows where you walk; P1 WASD, P2 arrows)","scoreLabel":"FUSES","tasks":[{"stat":"won","target":1,"text":"Get the lights back on in Lights Out"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const MAP = ['########################', '#......#.......#.......#', '#......#.......#.......#', '#..............#.......#', '#......#...............#', '###.####.......###.#####', '#......#####.###.......#', '#......#...............#', '#..........#...#.......#', '#......#...#...#.......#', '#.######...#####...#####', '#......................#', '########################'];
+const T = 40, OY = 10, COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a'], BOX = { x: 21.5 * T, y: 1.5 * T };
+const wall = (x, y) => { const gx = Math.floor(x / T), gy = Math.floor(y / T); return !MAP[gy] || MAP[gy][gx] !== '.'; };
+const floors = []; MAP.forEach((r, y) => [...r].forEach((c, x) => c === '.' && floors.push([x, y])));
+function bfsStep(fx, fy, tx, ty) {
+  const k = (x, y) => y * 24 + x, prev = new Map([[k(fx, fy), null]]), q = [[fx, fy]];
+  for (let i = 0; i < q.length; i++) { const [x, y] = q[i]; if (x === tx && y === ty) break; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (MAP[ny]?.[nx] === '.' && !prev.has(k(nx, ny))) { prev.set(k(nx, ny), [x, y]); q.push([nx, ny]); } } }
+  let c = [tx, ty], p = prev.get(k(tx, ty)); if (p === undefined) return null;
+  while (p && !(p[0] === fx && p[1] === fy)) { c = p; p = prev.get(k(c[0], c[1])); }
+  return c;
+}
+const inCone = (pl, x, y) => { const d = Math.hypot(x - pl.x, y - pl.y); if (d > 260 || d < 1) return d < 40; const a = Math.atan2(y - pl.y, x - pl.x); return Math.abs(Math.atan2(Math.sin(a - pl.ang), Math.cos(a - pl.ang))) < 0.45; };
+function sim(s, dt) {
+  s.t += dt;
+  for (const p of s.pl) {
+    const inp = p.me ? { ...K.pad(p.local || 0), ang: K.local ? null : Math.atan2(K.mouse.y - OY - p.y, K.mouse.x - p.x) } : s.inputs[p.id] || { x: 0, y: 0 };
+    if (p.down) { const help = s.pl.find((o) => o !== p && !o.down && Math.hypot(o.x - p.x, o.y - p.y) < 36); p.rev = help ? p.rev + dt : 0; if (p.rev > 2) { p.down = false; p.rev = 0; s.fx.push('power'); } continue; }
+    const L = Math.hypot(inp.x, inp.y) || 1, sp = 150;
+    const nx = p.x + (inp.x / L) * sp * dt * (inp.x || inp.y ? 1 : 0), ny = p.y + (inp.y / L) * sp * dt * (inp.x || inp.y ? 1 : 0);
+    if (!wall(nx + Math.sign(inp.x) * 10, p.y)) p.x = nx; if (!wall(p.x, ny + Math.sign(inp.y) * 10)) p.y = ny;
+    if (inp.ang != null) p.ang = inp.ang; else if (inp.x || inp.y) p.ang = Math.atan2(inp.y, inp.x);
+    s.fuses = s.fuses.filter((f) => { if (Math.hypot(f.x - p.x, f.y - p.y) < 24) { s.got++; s.fx.push('coin'); return false; } return true; });
+    if (s.got >= 5 && Math.hypot(BOX.x - p.x, BOX.y - p.y) < 34) { s.won = true; s.fx.push('win'); }
+  }
+  const m = s.mon, lit = s.pl.some((p) => !p.down && inCone(p, m.x, m.y));
+  if (lit) { m.burn += dt; s.fx.push(m.burn < 0.05 ? 'whisper' : ''); if (m.burn > 2.2) { const far = floors.filter(([x, y]) => s.pl.every((p) => Math.hypot(x * T - p.x, y * T - p.y) > 400)); const f = K.pick(far.length ? far : floors); m.x = f[0] * T + T / 2; m.y = f[1] * T + T / 2; m.burn = 0; s.fx.push('scare'); } }
+  else {
+    m.burn = Math.max(0, m.burn - dt * 0.5);
+    const tgt = s.pl.filter((p) => !p.down).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
+    if (tgt) {
+      const step = bfsStep(Math.floor(m.x / T), Math.floor(m.y / T), Math.floor(tgt.x / T), Math.floor(tgt.y / T));
+      const tx = step ? step[0] * T + T / 2 : tgt.x, ty = step ? step[1] * T + T / 2 : tgt.y, a = Math.atan2(ty - m.y, tx - m.x), sp = 95 + s.t * 0.35;
+      m.x += Math.cos(a) * sp * dt; m.y += Math.sin(a) * sp * dt;
+      if (Math.hypot(tgt.x - m.x, tgt.y - m.y) < 22) { tgt.down = true; tgt.rev = 0; s.fx.push('scare'); s.shake = 1; }
+    }
+  }
+  if (s.pl.every((p) => p.down)) s.lost = true;
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  K.end(s, { score: s.got, won: !!s.won, stats: { won: s.won ? 1 : 0 }, title: s.won ? 'THE LIGHTS ARE BACK' : 'IT GOT EVERYONE', text: s.won ? 'The house hums back to life. Whatever it was is gone.' : `${s.got} of 5 fuses found.` });
+}
+K.game({
+  bg: '#000',
+  init(s) {
+    s.pl = K.seats(1).slice(0, 4).filter((p) => !p.bot).map((p, i) => ({ ...p, col: COL[i], x: (2 + i) * T, y: 11.5 * T, ang: 0, down: false, rev: 0 }));
+    const far = K.shuffle(floors.filter(([x, y]) => Math.hypot(x - 2, y - 11) > 6 && !(x > 19 && y < 3))).slice(0, 5);
+    s.fuses = far.map(([x, y]) => ({ x: x * T + T / 2, y: y * T + T / 2 })); s.got = 0;
+    s.mon = { x: 12 * T, y: 2 * T, burn: 0 }; s.t = 0; s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; s.drone = null;
+  },
+  onNet(s, d, from) {
+    if (d.t === 'in' && K.net.isHost) s.inputs[from] = d.k;
+    if (d.t === 'st' && !K.net.isHost) { d.p.forEach((o, i) => { const p = s.pl[i]; if (p) Object.assign(p, { x: o[0], y: o[1], ang: o[2], down: !!o[3], rev: o[4] }); }); s.mon.x = d.m[0]; s.mon.y = d.m[1]; s.mon.burn = d.m[2]; s.fuses = d.f.map(([x, y]) => ({ x, y })); s.got = d.g; s.won = d.w; s.lost = d.l; d.fx.forEach((f) => f && K.sfx(f)); if (d.w || d.l) finish(s); }
+  },
+  onLeave(s, id) { s.pl = s.pl.filter((p) => p.id !== id); if (!s.pl.length) finish(s); },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(42, 0.035);
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { const me = s.pl.find((p) => p.me) || s.pl[0]; K.net.send({ t: 'in', k: { ...K.pad(), ang: Math.atan2(K.mouse.y - OY - me.y, K.mouse.x - me.x) } }); s.sendT = 0.05; } return; }
+    sim(s, dt);
+    const fx = [...new Set(s.fx.splice(0))].filter(Boolean); fx.forEach((f) => K.sfx(f)); if (s.shake) { K.shake(16); s.shake = 0; }
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.won || s.lost || fx.length) { K.net.send({ t: 'st', p: s.pl.map((p) => [Math.round(p.x), Math.round(p.y), +p.ang.toFixed(2), p.down ? 1 : 0, +p.rev.toFixed(1)]), m: [Math.round(s.mon.x), Math.round(s.mon.y), +s.mon.burn.toFixed(2)], f: s.fuses.map((f) => [f.x, f.y]), g: s.got, w: !!s.won, l: !!s.lost, fx }); s.sendT = 0.05; } }
+    if (s.won || s.lost) finish(s);
+  },
+  draw(s) {
+    const c = K.ctx();
+    MAP.forEach((r, y) => [...r].forEach((ch, x) => K.rect(x * T, OY + y * T, T, T, ch === '#' ? '#2a2420' : (x + y) % 2 ? '#1a1612' : '#17130f')));
+    s.fuses.forEach((f) => { K.glow('#ffd93a', 10); K.rect(f.x - 6, OY + f.y - 10, 12, 20, '#ffd93a', 3); K.noGlow(); });
+    K.rect(BOX.x - 16, OY + BOX.y - 20, 32, 40, s.got >= 5 ? '#3dffa0' : '#555', 4); K.text('⚡', BOX.x, OY + BOX.y, 16, '#111');
+    const m = s.mon; K.alpha(0.95); K.circle(m.x, OY + m.y, 18, '#050505'); K.rect(m.x - 14, OY + m.y, 28, 30, '#050505', 8); K.alpha(1); K.circle(m.x - 6, OY + m.y - 4, 3, m.burn > 0 ? '#ffffff' : '#ff3355'); K.circle(m.x + 6, OY + m.y - 4, 3, m.burn > 0 ? '#ffffff' : '#ff3355');
+    s.pl.forEach((p) => { K.glow(p.col, 10); K.circle(p.x, OY + p.y, 12, p.down ? '#444' : p.col); K.noGlow(); if (p.down) { K.text('HELP', p.x, OY + p.y - 22, 10, '#ff3355', 'center', 'd'); if (p.rev > 0) { K.rect(p.x - 16, OY + p.y + 16, 32 * (p.rev / 2), 4, '#3dffa0'); } } else K.text(p.me && !K.local ? 'YOU' : p.name, p.x, OY + p.y - 20, 10, p.col, 'center', 'd'); });
+    // darkness with torch cones
+    if (!s.dk) { s.dk = document.createElement('canvas'); s.dk.width = 960; s.dk.height = 540; }
+    const d = s.dk.getContext('2d'); d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, 960, 540); d.fillStyle = 'rgba(0,0,0,0.96)'; d.fillRect(0, 0, 960, 540); d.globalCompositeOperation = 'destination-out';
+    s.pl.forEach((p) => { if (p.down) return; const g = d.createRadialGradient(p.x, OY + p.y, 0, p.x, OY + p.y, 260); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.7, 'rgba(0,0,0,.9)'); g.addColorStop(1, 'rgba(0,0,0,0)'); d.fillStyle = g; d.beginPath(); d.moveTo(p.x, OY + p.y); d.arc(p.x, OY + p.y, 260, p.ang - 0.45, p.ang + 0.45); d.closePath(); d.fill(); d.beginPath(); d.arc(p.x, OY + p.y, 40, 0, 6.283); d.fill(); });
+    if (s.got >= 5) { d.beginPath(); d.arc(BOX.x, OY + BOX.y, 50, 0, 6.283); d.fill(); }
+    d.globalCompositeOperation = 'source-over'; c.drawImage(s.dk, 0, 0);
+    K.text(`FUSES ${s.got} / 5`, 20, 530, 14, '#ffd93a', 'left', 'd');
+    K.text(s.got >= 5 ? 'ALL FUSES! GET TO THE FUSE BOX (TOP RIGHT)' : 'Find the fuses. Keep your torch on it.', 940, 530, 12, '#c9c3ff', 'right', 'u');
+  },
+  ai(s) {
+    const p = s.pl[0]; if (!p || p.down) return; const f = s.got >= 5 ? BOX : s.fuses[0]; if (!f) return;
+    const step = bfsStep(Math.floor(p.x / T), Math.floor(p.y / T), Math.floor(f.x / T), Math.floor(f.y / T)); const tx = step ? step[0] * T + T / 2 : f.x, ty = step ? step[1] * T + T / 2 : f.y;
+    K.vhold('ArrowLeft', tx < p.x - 4); K.vhold('ArrowRight', tx > p.x + 4); K.vhold('ArrowUp', ty < p.y - 4); K.vhold('ArrowDown', ty > p.y + 4); K.vmouse(s.mon.x, s.mon.y + OY);
+  },
+});
+</script></body></html>

@@ -1,0 +1,73 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pond Party</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pond-party","n":102,"title":"POND PARTY","genre":"relax","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"A calm evening of fishing on a shared pond, alone or with up to 7 friends. Cast, wait for the bobber to dip, hook it, then reel gently without snapping the line. Everyone sees everyone's catches. Rare golden fish exist. Three peaceful minutes.","controls":"Hold Space / mouse to charge a cast, release to throw · tap when the bobber dips · hold to reel, ease off when the line goes red","scoreLabel":"GRAMS","tasks":[{"stat":"score","target":3000,"text":"Catch 3 kg of fish in Pond Party"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const FISH = [['Minnow', '🐟', 40, 120, 30], ['Perch', '🐟', 200, 600, 25], ['Carp', '🐠', 800, 2400, 18], ['Catfish', '🐡', 1200, 3500, 12], ['Koi', '🎏', 600, 1500, 8], ['Old boot', '🥾', 300, 300, 5], ['Golden carp', '✨', 3000, 6000, 2]];
+const DOCK = 420, LEN = 180, COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+function rollFish() { const tot = FISH.reduce((a, f) => a + f[4], 0); let r = Math.random() * tot; for (const f of FISH) { r -= f[4]; if (r <= 0) return f; } return FISH[0]; }
+K.game({
+  bg: '#0b1428',
+  init(s) {
+    s.pl = (K.net ? K.net.players.map((p) => ({ id: p.id, name: p.username, me: p.id === K.net.me })) : [{ id: 'me', name: 'YOU', me: true }]).map((p, i, a) => ({ ...p, col: COL[i % 8], x: 120 + (i + 0.5) * (720 / a.length), total: 0, best: null, log: [] }));
+    s.me = s.pl.find((p) => p.me); s.phase = 'idle'; s.charge = 0; s.bob = null; s.t = 0; s.feed = []; s.over = false; s.wait = 0;
+    s.ripples = []; s.fireflies = Array.from({ length: 24 }, () => ({ x: K.rand(0, 960), y: K.rand(40, 300), ph: K.rand(0, 6) }));
+  },
+  onNet(s, d, from) { if (d.t === 'catch') { const p = s.pl.find((x) => x.id === from); if (p) { p.total += d.g; if (!p.best || d.g > p.best.g) p.best = { n: d.n, g: d.g }; s.feed.unshift({ who: p.name, n: d.n, e: d.e, g: d.g, col: p.col, t: 6 }); } } },
+  onLeave(s, id) { s.pl = s.pl.filter((p) => p.id !== id); },
+  update(s, dt) {
+    s.t += dt;
+    s.feed.forEach((f) => (f.t -= dt)); s.feed = s.feed.filter((f) => f.t > 0).slice(0, 5);
+    s.ripples.forEach((r) => { r.r += 30 * dt; r.a -= dt * 0.5; }); s.ripples = s.ripples.filter((r) => r.a > 0);
+    if (Math.random() < dt * 1.5) s.ripples.push({ x: K.rand(60, 900), y: K.rand(260, 400), r: 2, a: 0.6 });
+    if (s.t >= 180 && !s.over) {
+      s.over = true; const sorted = s.pl.slice().sort((a, b) => b.total - a.total), place = sorted.indexOf(s.me) + 1;
+      return K.end(s, { score: s.me.total, won: s.pl.length > 1 ? place === 1 : null, title: s.pl.length > 1 ? (place === 1 ? 'BEST ANGLER' : `${sorted[0].name} CAUGHT THE MOST`) : 'WHAT A LOVELY EVENING', text: sorted.map((p) => `${p.name} ${(p.total / 1000).toFixed(1)} kg`).join(' · ') });
+    }
+    const hold = K.down('Space') || K.mouse.down, press = K.tap('Space') || K.mouse.clicked;
+    const me = s.me;
+    if (s.phase === 'idle') { if (hold) { s.phase = 'charge'; s.charge = 0; } }
+    else if (s.phase === 'charge') { s.charge = Math.min(1, s.charge + dt * 0.8); if (!hold) { s.bob = { x: me.x + K.rand(-30, 30), y: DOCK - 40 - s.charge * LEN, dip: 0 }; s.phase = 'wait'; s.wait = K.rand(2, 6) * (1.2 - s.charge * 0.4); K.sfx('splash'); s.ripples.push({ x: s.bob.x, y: s.bob.y, r: 4, a: 1 }); } }
+    else if (s.phase === 'wait') { s.wait -= dt; if (s.wait <= 0) { s.phase = 'bite'; s.biteT = 0.9; s.fish = rollFish(); K.sfx('drip'); } if (press && s.wait > 0) { s.phase = 'idle'; s.bob = null; } }
+    else if (s.phase === 'bite') { s.biteT -= dt; s.bob.dip = Math.sin(K.time() * 30) * 6 + 6; if (press) { s.phase = 'reel'; s.tension = 0.4; s.prog = 0; s.fishPull = 0; K.sfx('tick'); } else if (s.biteT <= 0) { s.phase = 'idle'; s.bob = null; K.sfx('wrong'); } }
+    else if (s.phase === 'reel') {
+      const f = s.fish, hard = (f[2] + f[3]) / 6000;
+      s.fishPull += dt; const pull = 0.3 + Math.abs(Math.sin(s.fishPull * (1.5 + hard * 2))) * (0.5 + hard);
+      s.tension = K.clamp(s.tension + (hold ? 0.9 : -0.7) * dt + (pull - 0.6) * dt * 0.6, 0, 1.05);
+      if (hold && s.tension < 0.85) s.prog += dt * (0.35 - hard * 0.12);
+      s.bob.y = K.lerp(s.bob.y, DOCK - 30, s.prog * 0.02);
+      if (s.tension >= 1) { s.phase = 'idle'; s.bob = null; K.sfx('wrong'); K.floatText('SNAP!', me.x, DOCK - 60, '#ff3355'); }
+      else if (s.tension <= 0.02) { s.phase = 'idle'; s.bob = null; K.floatText('it got away', me.x, DOCK - 60, '#8e88b8', 16); }
+      else if (s.prog >= 1) {
+        const g = Math.round(K.rand(f[2], f[3])); me.total += g; if (!me.best || g > me.best.g) me.best = { n: f[0], g };
+        s.feed.unshift({ who: 'YOU', n: f[0], e: f[1], g, col: me.col, t: 6 }); K.sfx(f[0] === 'Golden carp' ? 'win' : 'coin'); K.floatText(`${f[1]} ${f[0]} ${g} g`, me.x, DOCK - 80, '#ffd93a', 18);
+        if (K.net) K.net.send({ t: 'catch', n: f[0], e: f[1], g }); s.phase = 'idle'; s.bob = null;
+      }
+    }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 260, ['#1a1040', '#ff8a6a']));
+    K.circle(780, 200, 50, '#ffd59a');
+    K.rect(0, 220, 960, 320, K.grad(0, 220, 0, 540, ['#2a3a6a', '#0b1428']));
+    for (let i = 0; i < 8; i++) K.rect(0, 230 + i * 26, 960, 2, '#ffffff0d');
+    s.ripples.forEach((r) => { K.alpha(r.a); K.ring(r.x, r.y, r.r, '#bff6ff', 1.5); }); K.alpha(1);
+    s.fireflies.forEach((f) => { K.alpha(0.5 + Math.sin(K.time() * 2 + f.ph) * 0.5); K.circle(f.x + Math.sin(K.time() + f.ph) * 10, f.y + Math.cos(K.time() * 0.7 + f.ph) * 6, 2, '#fff7a0'); }); K.alpha(1);
+    K.rect(60, DOCK, 840, 24, '#5a3a22'); for (let x = 60; x < 900; x += 40) K.rect(x, DOCK + 24, 8, 60, '#3a2414');
+    s.pl.forEach((p) => {
+      K.circle(p.x, DOCK - 22, 12, p.col); K.rect(p.x - 10, DOCK - 12, 20, 14, p.col, 4);
+      K.text(p.me ? 'YOU' : p.name, p.x, DOCK - 44, 10, p.col, 'center', 'd'); K.text(`${(p.total / 1000).toFixed(1)} kg`, p.x, DOCK + 40, 11, '#fff', 'center', 'd');
+      K.line(p.x + 8, DOCK - 18, p.x + 30, DOCK - 70, '#c9a080', 3);
+    });
+    const me = s.me;
+    if (s.bob) { K.line(me.x + 30, DOCK - 70, s.bob.x, s.bob.y + s.bob.dip, '#ffffff88', 1); K.circle(s.bob.x, s.bob.y + s.bob.dip, 6, '#ff3355'); K.circle(s.bob.x, s.bob.y + s.bob.dip - 4, 4, '#fff'); }
+    if (s.phase === 'charge') { K.rect(me.x - 40, DOCK - 100, 80, 8, '#222', 4); K.rect(me.x - 40, DOCK - 100, 80 * s.charge, 8, '#ffd93a', 4); }
+    if (s.phase === 'bite') K.text('NOW!', s.bob.x, s.bob.y - 26, 20, '#ffd93a', 'center', 'd', 10);
+    if (s.phase === 'reel') { K.rect(330, 470, 300, 18, '#222', 9); K.rect(330 + 300 * 0.85, 470, 45, 18, '#ff335555', 0); K.rect(330, 470, 300 * Math.min(1, s.tension), 18, s.tension > 0.85 ? '#ff3355' : '#3dffa0', 9); K.text('TENSION', 480, 500, 11, '#fff', 'center', 'm'); K.rect(330, 452, 300 * s.prog, 6, '#22e6ff', 3); }
+    s.feed.forEach((f, i) => { K.alpha(Math.min(1, f.t)); K.text(`${f.who} caught ${f.e} ${f.n} (${f.g} g)`, 940, 24 + i * 20, 12, f.col, 'right', 'u'); }); K.alpha(1);
+    const left = Math.max(0, 180 - s.t); K.text(`${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`, 20, 26, 18, '#fff', 'left', 'd');
+    if (s.phase === 'idle') K.text('hold to cast', me.x, DOCK - 64, 11, '#ffffffaa', 'center', 'u');
+  },
+  ai(s) { s.ah = (s.ah || 0) + 1 / 60; if (s.phase === 'idle' || s.phase === 'charge') K.vmouse(480, 300, false, s.ah % 3 < 1.2); else if (s.phase === 'bite') K.vmouse(480, 300, true); else if (s.phase === 'reel') K.vmouse(480, 300, false, s.tension < 0.7); else K.vmouse(480, 300, false, false); },
+});
+</script></body></html>
