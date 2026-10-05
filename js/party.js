@@ -144,6 +144,11 @@ async function join(code, { asPublic = false } = {}) {
       }
     });
   });
+  // wait until presence lists us, so the leader is known before anyone picks a game
+  for (let i = 0; i < 40 && !party.members.some((m) => m.id === party.me); i++) {
+    await new Promise((r) => setTimeout(r, 75));
+    readPresence();
+  }
   setOnlineStatus('party');
   clearInterval(roomTimer);
   roomTimer = setInterval(() => party.isHost && syncRoomRow(), 30000);

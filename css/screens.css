@@ -239,12 +239,13 @@ body.playing #decor, body.reduced #decor { display: none; }
 .pd-code { font-family: var(--f-m, monospace); color: var(--cyan); letter-spacing: 3px; font-size: 15px; }
 .pd-members { padding: 6px 10px; display: grid; gap: 4px; max-height: 170px; overflow: auto; }
 .pd-m { display: flex; align-items: center; gap: 8px; }
-.pd-m > span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pd-m > .pd-n { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pd-m > .av { flex: none; }
+.pd-cover { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; border: 1px solid var(--line); }
 .pd-m small { color: var(--dim); font-size: 11px; letter-spacing: 1px; }
 .pd-x { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 14px; }
 .pd-x:hover { color: var(--red); }
 .pd-game { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); }
-.pd-game .thumb { width: 96px; flex: none; }
 .pd-game small { display: block; color: var(--dim); }
 .pd-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
 .pd-chat { flex: 1; min-height: 90px; max-height: 190px; overflow: auto; padding: 8px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
@@ -263,7 +264,8 @@ body.playing #decor, body.reduced #decor { display: none; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 60vh; overflow: auto; margin-top: 10px; }
 .inv-list { display: grid; gap: 8px; margin-top: 10px; max-height: 50vh; overflow: auto; }
 .inv-row { display: flex; align-items: center; gap: 10px; }
-.inv-row > span { flex: 1; display: flex; flex-direction: column; }
+.inv-row > .inv-n { flex: 1; display: flex; flex-direction: column; }
+.inv-row > .av { flex: none; }
 .inv-row small { color: var(--dim); }
 .on-dot { color: #3dffa0; }
 .row-btns { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }

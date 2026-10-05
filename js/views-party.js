@@ -80,11 +80,11 @@ function renderDock() {
       <div class="pd-head-b"><button class="btn sm ghost" data-copy title="Copy the code">COPY</button><button class="btn sm ghost" data-min title="Minimise">—</button></div>
     </div>
     <div class="pd-members">
-      ${party.members.map((m, i) => `<div class="pd-m">${avatarHTML(m.equipped, 28)}<span>${callsignHTML(m.username, m.equipped, 'sm')}<small>${i === 0 ? '★ LEADER' : ''}${m.status && m.status.startsWith('playing') ? ' · IN GAME' : ''}</small></span>
+      ${party.members.map((m, i) => `<div class="pd-m">${avatarHTML(m.equipped, 28)}<span class="pd-n">${callsignHTML(m.username, m.equipped, 'sm')}<small>${i === 0 ? '★ LEADER' : ''}${m.status && m.status.startsWith('playing') ? ' · IN GAME' : ''}</small></span>
         ${party.isHost && m.id !== me ? `<button class="pd-x" data-kick="${esc(m.id)}" title="Remove">✕</button>` : ''}</div>`).join('')}
     </div>
     <div class="pd-game">
-      ${g ? `${thumbHTML(g)}<div><b>${esc(g.title)}</b><small>${g.minPlayers || 2}-${g.maxPlayers || 8} players</small></div>` : `<div class="dim small">${party.isHost ? 'Pick an online game for the party.' : 'Waiting for the leader to pick a game.'}</div>`}
+      ${g ? `${g.cover ? `<img class="pd-cover" src="${esc(g.cover)}" alt="">` : ''}<div><b>${esc(g.title)}</b><small>${g.minPlayers || 2}-${g.maxPlayers || 8} players</small></div>` : `<div class="dim small">${party.isHost ? 'Pick an online game for the party.' : 'Waiting for the leader to pick a game.'}</div>`}
     </div>
     <div class="pd-actions">
       ${party.isHost ? `<button class="btn sm" data-pick>${g ? 'CHANGE GAME' : 'PICK GAME'}</button><button class="btn sm primary" data-start ${g ? '' : 'disabled'}>▶ START</button>` : ''}
@@ -187,7 +187,7 @@ async function openInvite() {
     <p class="m-text">Or share the code <b class="pd-code">${esc(party.code)}</b>. They type it in PARTY ▸ JOIN.</p>
     <div class="inv-list">${fr.friends.map((f) => {
       const o = [...on.values()].find((x) => x.username === f.username);
-      return `<div class="inv-row">${avatarHTML(f.equipped, 30)}<span>${callsignHTML(f.username, f.equipped, 'sm')}<small>${o ? '<b class="on-dot">●</b> ONLINE' : 'offline'} · LV ${levelInfo(f.xp).level}</small></span><button class="btn sm" data-inv="${esc(f.username)}" ${o ? '' : 'disabled'}>INVITE</button></div>`;
+      return `<div class="inv-row">${avatarHTML(f.equipped, 30)}<span class="inv-n">${callsignHTML(f.username, f.equipped, 'sm')}<small>${o ? '<b class="on-dot">●</b> ONLINE' : 'offline'} · LV ${levelInfo(f.xp).level}</small></span><button class="btn sm" data-inv="${esc(f.username)}" ${o ? '' : 'disabled'}>INVITE</button></div>`;
     }).join('') || '<div class="empty-sm">No friends yet. Add some in FRIENDS.</div>'}</div>`);
   m.el.querySelectorAll('[data-inv]').forEach((b) => (b.onclick = async () => {
     const o = [...on.values()].find((x) => x.username === b.dataset.inv);
