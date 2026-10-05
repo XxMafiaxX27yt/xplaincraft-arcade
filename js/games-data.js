@@ -945,6 +945,56 @@ export const GAME_LIST = [
 "cover": "games/covers/tank-battle.png"
 },
 {
+"id": "bomb-tag",
+"n": 47,
+"title": "BOMB TAG",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Hot potato with a fuse. Whoever holds the bomb is IT: touch someone to pass it on. When the fuse runs out, the holder is out. The fuse gets shorter every round. Last one standing wins.",
+"controls": "Arrow keys / WASD (or the stick) to run · Space = sprint (same screen: P1 WASD + Space, P2 arrows + Enter)",
+"scoreLabel": "PLACE",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Bomb Tag"
+}
+],
+"file": "games/2d/bomb-tag.html",
+"dim": "2d"
+},
+{
+"id": "bomber-arena",
+"n": 59,
+"title": "BOMBER ARENA",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "Drop bombs, blast crates, grab power-ups (more bombs, bigger blasts, speed) and trap the others. Four corners, one survivor. First to 3 rounds. Bots fill empty corners.",
+"controls": "Arrow keys / WASD to move · Space = drop a bomb (same screen: P1 WASD + Space, P2 arrows + Enter)",
+"scoreLabel": "KILLS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Bomber Arena match"
+}
+],
+"file": "games/2d/bomber-arena.html",
+"dim": "2d"
+},
+{
 "id": "air-hockey",
 "n": 75,
 "title": "AIR HOCKEY",

@@ -1,0 +1,102 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bomber Arena</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bomber-arena","n":59,"title":"BOMBER ARENA","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":4,"desc":"Drop bombs, blast crates, grab power-ups (more bombs, bigger blasts, speed) and trap the others. Four corners, one survivor. First to 3 rounds. Bots fill empty corners.","controls":"Arrow keys / WASD to move · Space = drop a bomb (same screen: P1 WASD + Space, P2 arrows + Enter)","scoreLabel":"KILLS","tasks":[{"stat":"won","target":1,"text":"Win a Bomber Arena match"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GW = 15, GH = 11, T = 46, OX = (960 - GW * T) / 2, OY = (540 - GH * T) / 2 + 6;
+const COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a'], CORN = [[1, 1], [GW - 2, GH - 2], [GW - 2, 1], [1, GH - 2]];
+function round(s) {
+  s.g = []; for (let y = 0; y < GH; y++) { const r = []; for (let x = 0; x < GW; x++) r.push(x === 0 || y === 0 || x === GW - 1 || y === GH - 1 || (x % 2 === 0 && y % 2 === 0) ? 2 : Math.random() < 0.7 ? 1 : 0); s.g.push(r); }
+  s.p.forEach((p, i) => { const [cx, cy] = CORN[i]; p.x = cx; p.y = cy; p.alive = true; p.max = 1; p.range = 2; p.speed = 4.2; for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) if (s.g[cy + dy][cx + dx] === 1) s.g[cy + dy][cx + dx] = 0; });
+  s.bombs = []; s.fire = []; s.pw = []; s.between = 0;
+}
+const cellFree = (s, x, y, p) => { const gx = Math.round(x), gy = Math.round(y); if (s.g[gy]?.[gx] !== 0) return false; return !s.bombs.some((b) => b.x === gx && b.y === gy && !(p && Math.round(p.x) === gx && Math.round(p.y) === gy)); };
+function botIn(s, p) {
+  const gx = Math.round(p.x), gy = Math.round(p.y);
+  const danger = (x, y) => s.fire.some((f) => f.x === x && f.y === y) || s.bombs.some((b) => (b.x === x && Math.abs(b.y - y) <= b.r) || (b.y === y && Math.abs(b.x - x) <= b.r));
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => s.g[gy + dy][gx + dx] === 0 && !s.bombs.some((b) => b.x === gx + dx && b.y === gy + dy));
+  if (danger(gx, gy)) { const safe = dirs.find(([dx, dy]) => !danger(gx + dx, gy + dy)) || dirs[0]; return safe ? { x: safe[0], y: safe[1], a: false } : { x: 0, y: 0, a: false }; }
+  const nearCrate = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => s.g[gy + dy][gx + dx] === 1) || s.p.some((o) => o !== p && o.alive && Math.abs(o.x - p.x) + Math.abs(o.y - p.y) < 2.5);
+  p.botT = (p.botT || 0) - 1 / 60;
+  if (nearCrate && dirs.length && Math.random() < 0.05) return { x: 0, y: 0, a: true };
+  if (p.botT <= 0 || !p.bd) { p.bd = K.pick(dirs.filter(([dx, dy]) => !danger(gx + dx, gy + dy))) || [0, 0]; p.botT = 0.4; }
+  return { x: p.bd[0], y: p.bd[1], a: false };
+}
+function explode(s, b) {
+  b.dead = true; s.fx.push('boom');
+  const add = (x, y) => s.fire.push({ x, y, t: 0.5, owner: b.owner });
+  add(b.x, b.y);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 1; k <= b.r; k++) {
+    const x = b.x + dx * k, y = b.y + dy * k, c = s.g[y]?.[x];
+    if (c === 2 || c == null) break;
+    add(x, y);
+    if (c === 1) { s.g[y][x] = 0; if (Math.random() < 0.3) s.pw.push({ x, y, k: K.pick(['B', 'R', 'S']) }); break; }
+    const other = s.bombs.find((o) => !o.dead && o.x === x && o.y === y); if (other) other.t = 0;
+  }
+}
+function sim(s, dt) {
+  if (s.between > 0) { s.between -= dt; if (s.between <= 0) { if (s.p.some((p) => p.wins >= 3)) s.done = true; else round(s); } return; }
+  for (const p of s.p) {
+    if (!p.alive) continue;
+    const inp = p.bot ? botIn(s, p) : p.me ? K.pad(p.local || 0) : s.inputs[p.id] || { x: 0, y: 0, a: false };
+    let dx = Math.sign(inp.x), dy = dx ? 0 : Math.sign(inp.y);
+    const step = p.speed * dt;
+    if (dx) { const ty = Math.round(p.y); p.y += K.clamp(ty - p.y, -step, step); if (Math.abs(p.y - ty) < 0.05 && cellFree(s, p.x + dx * 0.55, ty, p)) p.x += dx * step; else if (Math.abs(p.y - ty) < 0.05) p.x += K.clamp(Math.round(p.x) - p.x, -step, step); }
+    if (dy) { const tx = Math.round(p.x); p.x += K.clamp(tx - p.x, -step, step); if (Math.abs(p.x - tx) < 0.05 && cellFree(s, tx, p.y + dy * 0.55, p)) p.y += dy * step; else if (Math.abs(p.x - tx) < 0.05) p.y += K.clamp(Math.round(p.y) - p.y, -step, step); }
+    const gx = Math.round(p.x), gy = Math.round(p.y);
+    if (inp.a && !p.held && s.bombs.filter((b) => b.owner === p.id && !b.dead).length < p.max && !s.bombs.some((b) => b.x === gx && b.y === gy)) { s.bombs.push({ x: gx, y: gy, t: 2.4, r: p.range, owner: p.id }); s.fx.push('click'); }
+    p.held = inp.a;
+    const pw = s.pw.findIndex((w) => w.x === gx && w.y === gy);
+    if (pw >= 0) { const k = s.pw.splice(pw, 1)[0].k; if (k === 'B') p.max++; if (k === 'R') p.range++; if (k === 'S') p.speed = Math.min(7, p.speed + 0.7); s.fx.push('power'); }
+  }
+  s.bombs.forEach((b) => { b.t -= dt; if (b.t <= 0 && !b.dead) explode(s, b); });
+  s.bombs = s.bombs.filter((b) => !b.dead);
+  s.fire.forEach((f) => (f.t -= dt)); s.fire = s.fire.filter((f) => f.t > 0);
+  s.pw = s.pw.filter((w) => !s.fire.some((f) => f.x === w.x && f.y === w.y && f.t < 0.45));
+  for (const p of s.p) if (p.alive && s.fire.some((f) => f.x === Math.round(p.x) && f.y === Math.round(p.y))) { p.alive = false; s.fx.push('hit'); const f = s.fire.find((f) => f.x === Math.round(p.x) && f.y === Math.round(p.y)); const k = s.p.find((o) => o.id === f.owner); if (k && k !== p) k.kills++; }
+  const alive = s.p.filter((p) => p.alive);
+  if (alive.length <= 1) { if (alive[0]) alive[0].wins++; s.lastWin = alive[0]?.id; s.between = 2.4; s.fx.push('win'); }
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const me = s.p.find((p) => p.me && (p.local || 0) === 0) || s.p[0], champ = s.p.slice().sort((a, b) => b.wins - a.wins)[0], won = !K.local && champ === me;
+  K.end(s, { score: me.kills, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'BOMBER CHAMPION' : `${champ.name} WINS`, text: s.p.map((p) => `${p.name} ${p.wins}`).join(' · ') });
+}
+K.game({
+  bg: '#0b0f0b',
+  init(s) { s.p = K.seats(4).slice(0, 4).map((p, i) => ({ ...p, col: COL[i], wins: 0, kills: 0 })); s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s); },
+  onNet(s, d, from) {
+    if (d.t === 'in' && K.net.isHost) s.inputs[from] = d.k;
+    if (d.t === 'st' && !K.net.isHost) { s.g = d.g; d.p.forEach((o, i) => { const p = s.p[i]; if (p) Object.assign(p, { x: o[0], y: o[1], alive: !!o[2], wins: o[3], kills: o[4] }); }); s.bombs = d.b.map(([x, y, t]) => ({ x, y, t })); s.fire = d.f.map(([x, y]) => ({ x, y, t: 0.3 })); s.pw = d.pw.map(([x, y, k]) => ({ x, y, k })); s.between = d.bt; s.lastWin = d.lw; d.fx.forEach((f) => K.sfx(f)); if (d.fx.includes('boom')) K.shake(6); if (d.done) finish(s); }
+  },
+  onLeave(s, id) { const p = s.p.find((x) => x.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'in', k: K.pad() }); s.sendT = 0.05; } return; }
+    sim(s, dt);
+    const fx = [...new Set(s.fx.splice(0))]; fx.forEach((f) => K.sfx(f)); if (fx.includes('boom')) K.shake(6);
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.done || fx.length) { K.net.send({ t: 'st', g: s.g, p: s.p.map((p) => [+p.x.toFixed(2), +p.y.toFixed(2), p.alive ? 1 : 0, p.wins, p.kills]), b: s.bombs.map((b) => [b.x, b.y, +b.t.toFixed(1)]), f: s.fire.map((f) => [f.x, f.y]), pw: s.pw.map((w) => [w.x, w.y, w.k]), bt: s.between, lw: s.lastWin, fx, done: !!s.done }); s.sendT = 0.06; } }
+    if (s.done) finish(s);
+  },
+  draw(s) {
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+      const c = s.g[y][x], X = OX + x * T, Y = OY + y * T;
+      if (c === 2) { K.rect(X, Y, T, T, '#3a4a3a'); K.rect(X + 3, Y + 3, T - 6, T - 6, '#4a5e4a', 4); }
+      else if (c === 1) { K.rect(X, Y, T, T, '#1a241a'); K.rect(X + 4, Y + 4, T - 8, T - 8, '#8a5a2a', 4); K.line(X + 6, Y + 6, X + T - 6, Y + T - 6, '#6a4220', 3); K.line(X + T - 6, Y + 6, X + 6, Y + T - 6, '#6a4220', 3); }
+      else K.rect(X, Y, T, T, (x + y) % 2 ? '#1a241a' : '#1d281d');
+    }
+    s.pw.forEach((w) => { const c = { B: '#ff3355', R: '#ffd93a', S: '#22e6ff' }[w.k]; K.glow(c, 12); K.rect(OX + w.x * T + 10, OY + w.y * T + 10, T - 20, T - 20, c, 6); K.noGlow(); K.text({ B: '●', R: '✸', S: '»' }[w.k], OX + w.x * T + T / 2, OY + w.y * T + T / 2 + 1, 16, '#111'); });
+    s.bombs.forEach((b) => { const pulse = 1 + Math.sin(K.time() * (10 + (2.4 - b.t) * 8)) * 0.1; K.circle(OX + b.x * T + T / 2, OY + b.y * T + T / 2 + 2, 15 * pulse, '#111'); K.circle(OX + b.x * T + T / 2 - 5, OY + b.y * T + T / 2 - 4, 4, '#555'); K.glow('#ff8a3a', 10); K.circle(OX + b.x * T + T / 2 + 9, OY + b.y * T + 6, 3, '#ffd93a'); K.noGlow(); });
+    s.fire.forEach((f) => { K.glow('#ff8a3a', 18); K.rect(OX + f.x * T + 4, OY + f.y * T + 4, T - 8, T - 8, Math.random() < 0.5 ? '#ffd93a' : '#ff8a3a', 8); K.noGlow(); });
+    s.p.forEach((p) => {
+      if (!p.alive) return;
+      const X = OX + p.x * T + T / 2, Y = OY + p.y * T + T / 2;
+      K.glow(p.col, 12); K.circle(X, Y, 16, p.col); K.noGlow(); K.rect(X - 10, Y - 4, 20, 8, '#111', 4); K.circle(X - 4, Y, 2, '#fff'); K.circle(X + 4, Y, 2, '#fff');
+      K.text(p.me && !K.local ? 'YOU' : p.name, X, Y - 26, 10, p.col, 'center', 'd');
+    });
+    s.p.forEach((p, i) => K.text(`${p.name} ${'★'.repeat(p.wins)}`, 20 + i * 235, 14, 12, p.alive ? p.col : '#555', 'left', 'd'));
+    if (s.between > 0) { const w = s.p.find((p) => p.id === s.lastWin); K.text(!w ? 'DRAW' : w.me && !K.local ? 'YOU WIN THE ROUND' : `${w.name} WINS THE ROUND`, 480, 270, 28, '#fff', 'center', 'd', 14); }
+  },
+  ai(s) { const p = s.p[0]; if (!p.alive) return; const i = botIn(s, p); K.vhold('ArrowLeft', i.x < 0); K.vhold('ArrowRight', i.x > 0); K.vhold('ArrowUp', i.y < 0); K.vhold('ArrowDown', i.y > 0); K.vhold('Space', i.a); },
+});
+</script></body></html>
