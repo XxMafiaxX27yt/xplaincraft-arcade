@@ -967,7 +967,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/bomb-tag.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/bomb-tag.png"
 },
 {
 "id": "bomber-arena",
@@ -992,7 +993,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/bomber-arena.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/bomber-arena.png"
 },
 {
 "id": "air-hockey",
@@ -1936,5 +1938,30 @@ export const GAME_LIST = [
 "file": "games/2d/draw-guess.html",
 "dim": "2d",
 "cover": "games/covers/draw-guess.png"
+},
+{
+"id": "together",
+"n": 100,
+"title": "TOGETHER",
+"genre": "mystery",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "A co-op puzzle platformer: nobody gets out alone. Stand on each other's heads to reach high ledges, hold buttons so a friend can pass, carry the key to the door. Eight levels. Everyone must reach the exit. Solo, you swap between two little blobs.",
+"controls": "← → / A D move · ↑ / W / Space jump · solo: Tab or Q swaps blob (same screen: P1 WASD, P2 arrows + Enter to jump)",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 4,
+"text": "Clear 4 levels of Together"
+}
+],
+"file": "games/2d/together.html",
+"dim": "2d"
 }
 ];
