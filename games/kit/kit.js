@@ -121,6 +121,33 @@
   K.vmouse = (x, y, click = false, down = click) => { mouse.x = x; mouse.y = y; mouse.down = down; if (click) mouse.clicked = true; };
   K.typed = () => [...tapped, ...vtapped].filter((c) => /^Key[A-Z]$/.test(c)).map((c) => c[3]);
 
+
+  // ---------- multiplayer helpers for arena games ----------
+  // K.seats(fill)  everyone in the game: online players, same-screen players, or just you, plus bots up to `fill`
+  //                [{ id, name, me, bot, local (same-screen index) }]
+  // K.pad(n)       controls of same-screen player n (or of you): { x, y, a, b } with x/y in -1..1, a/b = held
+  //                P1: WASD + Space / Shift · P2: arrows + Enter / Right-Shift · alone: arrows or WASD + Space or click / Shift
+  // K.isHost()     true when this device runs the game world (solo, same screen, or the online host)
+  K.seats = (fill = 2, botName = 'BOT') => {
+    let list;
+    if (K.net) list = K.net.players.map((p) => ({ id: p.id, name: p.username, me: p.id === K.net.me, bot: false }));
+    else if (K.local) list = Array.from({ length: K.local }, (_, i) => ({ id: 'p' + i, name: 'P' + (i + 1), me: true, bot: false, local: i }));
+    else list = [{ id: 'p0', name: 'YOU', me: true, bot: false, local: 0 }];
+    while (list.length < fill) list.push({ id: 'bot' + list.length, name: botName + ' ' + (list.length + 1), me: false, bot: true });
+    return list;
+  };
+  K.isHost = () => !K.net || K.net.isHost;
+  K.pad = (n = 0) => {
+    const k = (...c) => (K.down(...c) ? 1 : 0);
+    if (K.local) {
+      if (n === 0) return { x: k('KeyD') - k('KeyA'), y: k('KeyS') - k('KeyW'), a: !!k('Space', 'KeyF'), b: !!k('ShiftLeft', 'KeyG') };
+      return { x: k('ArrowRight') - k('ArrowLeft'), y: k('ArrowDown') - k('ArrowUp'), a: !!k('Enter', 'KeyL'), b: !!k('ShiftRight', 'KeyK') };
+    }
+    const d = K.dir();
+    return { x: d.x, y: d.y, a: !!k('Space') || mouse.down, b: !!k('ShiftLeft', 'ShiftRight', 'KeyE') };
+  };
+  K.mouse2 = () => mouse;
+
   // ---------- math ----------
   K.rand = (a = 1, b) => (b === undefined ? Math.random() * a : a + Math.random() * (b - a));
   K.irand = (a, b) => Math.floor(K.rand(a, b + 1));

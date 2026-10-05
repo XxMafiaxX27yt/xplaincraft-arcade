@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quiz Battle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"quiz-battle","n":86,"title":"QUIZ BATTLE","genre":"mind","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"Ten trivia questions, everyone answers at the same time. Right answers score more the faster you are, and a streak adds a bonus. Online for up to 8, or solo against three quiz bots.","controls":"Click / tap an answer (or 1-4)","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a Quiz Battle"},{"stat":"score","target":600,"text":"Score 600 in Quiz Battle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/trivia.js"></script>
+<script>
+const QN = 10, QT = 12, COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+const BTN = (i) => ({ x: 120 + (i % 2) * 370, y: 250 + Math.floor(i / 2) * 100, w: 350, h: 84 });
+function question(s) {
+  const q = s.qs[s.qi];
+  // same order for everyone: shuffle with the shared round seed
+  const opts = [1, 2, 3, 4].map((k) => q[k]); for (let i = 3; i > 0; i--) { const j = Math.floor(K.rng() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+  s.opts = opts; s.right = opts.indexOf(q[1]); s.t = QT; s.answer = -1; s.phase = 'ask'; s.picks = {};
+  s.pl.forEach((p) => { p.ans = -1; p.at = 0; if (p.bot) { p.botAt = K.rand(2, 9); p.botOk = Math.random() < p.skill; } });
+}
+function score(s) {
+  s.phase = 'reveal'; s.t = 3;
+  s.pl.forEach((p) => {
+    const ok = p.ans === s.right;
+    p.gain = ok ? Math.round(50 + (p.at / QT) * 50) + p.streak * 10 : 0;
+    p.streak = ok ? p.streak + 1 : 0; p.pts += p.gain;
+  });
+  const me = s.pl.find((p) => p.me); K.sfx(me && me.ans === s.right ? 'coin' : 'wrong');
+}
+K.game({
+  bg: '#0c0a20', touch: { stick: false, buttons: [] },
+  init(s) {
+    const pool = TRIVIA.map((q, i) => i); for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(K.rng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    s.qs = pool.slice(0, QN).map((i) => TRIVIA[i]); s.qi = 0;
+    s.pl = K.seats(K.net ? 1 : 4, 'QUIZBOT').map((p, i) => ({ ...p, col: COL[i % 8], pts: 0, streak: 0, skill: [0, 0.55, 0.7, 0.8][i] || 0.6 }));
+    s.over = false; question(s);
+  },
+  onNet(s, d, from) {
+    if (d.t === 'ans') { const p = s.pl.find((x) => x.id === from); if (p && p.ans < 0 && s.phase === 'ask') { p.ans = d.a; p.at = d.at; } }
+    if (d.t === 'next' && !K.net.isHost) { s.qi = d.qi; if (s.qi >= QN) finish(s); else question(s); }
+  },
+  onLeave(s, id) { s.pl = s.pl.filter((p) => p.id !== id); },
+  update(s, dt) {
+    s.t -= dt;
+    if (s.phase === 'ask') {
+      const me = s.pl.find((p) => p.me);
+      let a = -1;
+      for (let i = 0; i < 4; i++) if (K.tap('Digit' + (i + 1))) a = i;
+      if (K.mouse.clicked) for (let i = 0; i < 4; i++) if (K.inRect(K.mouse.x, K.mouse.y, BTN(i))) a = i;
+      if (a >= 0 && me && me.ans < 0) { me.ans = a; me.at = Math.max(0, s.t); K.sfx('click'); if (K.net) K.net.send({ t: 'ans', a, at: me.at }); }
+      s.pl.filter((p) => p.bot && p.ans < 0 && QT - s.t > p.botAt).forEach((p) => { p.ans = p.botOk ? s.right : K.pick([0, 1, 2, 3].filter((x) => x !== s.right)); p.at = s.t; });
+      if (s.t <= 0 || s.pl.every((p) => p.ans >= 0)) score(s);
+    } else if (s.phase === 'reveal' && s.t <= 0) {
+      if (K.net && !K.net.isHost) return; // wait for the host to move on
+      s.qi++;
+      if (K.net) K.net.send({ t: 'next', qi: s.qi });
+      if (s.qi >= QN) return finish(s);
+      question(s);
+    }
+  },
+  draw(s) {
+    if (s.qi >= QN) return;
+    const q = s.qs[s.qi];
+    K.text(`QUESTION ${s.qi + 1} / ${QN}  ·  ${q[5]}`, 480, 40, 15, '#8e88b8', 'center', 'd');
+    K.wrapText(q[0], 480, 110, 780, 28, '#fff', 1.25, 'center', 'u');
+    K.rect(120, 220, 720, 8, '#222', 4); K.rect(120, 220, 720 * Math.max(0, (s.phase === 'ask' ? s.t : 0) / QT), 8, s.t < 4 ? '#ff3355' : '#22e6ff', 4);
+    const me = s.pl.find((p) => p.me);
+    s.opts.forEach((o, i) => {
+      const b = BTN(i), reveal = s.phase === 'reveal';
+      let col = '#1d1a40';
+      if (reveal && i === s.right) col = '#1f8a4a'; else if (reveal && me && me.ans === i) col = '#8a1f30'; else if (me && me.ans === i) col = '#3a3480';
+      K.rect(b.x, b.y, b.w, b.h, col, 12); K.stroke(b.x, b.y, b.w, b.h, '#ffffff22', 2, 12);
+      K.text(String(i + 1), b.x + 26, b.y + b.h / 2, 18, '#8e88b8', 'center', 'd');
+      K.wrapText(o, b.x + b.w / 2 + 10, b.y + b.h / 2 - (o.length > 26 ? 10 : 0), b.w - 70, 20, '#fff', 1.1, 'center', 'u');
+      if (reveal) s.pl.filter((p) => p.ans === i).forEach((p, k) => K.circle(b.x + b.w - 16 - k * 16, b.y + 14, 6, p.col));
+    });
+    const sorted = s.pl.slice().sort((a, b) => b.pts - a.pts);
+    sorted.forEach((p, i) => { const x = 20 + i * (920 / sorted.length); K.text(`${p.me ? 'YOU' : p.name} ${p.pts}${s.phase === 'reveal' && p.gain ? ' +' + p.gain : ''}${p.ans >= 0 && s.phase === 'ask' ? ' ✓' : ''}`, x, 520, 13, p.col, 'left', 'd'); });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.phase === 'ask' && s.aw % 90 === 45) { const b = BTN(Math.random() < 0.7 ? s.right : 0); K.vmouse(b.x + 100, b.y + 40, true); } },
+});
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const sorted = s.pl.slice().sort((a, b) => b.pts - a.pts), me = s.pl.find((p) => p.me) || s.pl[0], won = sorted[0] === me;
+  K.end(s, { score: me.pts, won, stats: { won: won ? 1 : 0 }, title: won ? 'QUIZ CHAMPION' : `${sorted[0].name} WINS`, text: sorted.map((p) => `${p.me ? 'YOU' : p.name} ${p.pts}`).join(' · ') });
+}
+</script></body></html>

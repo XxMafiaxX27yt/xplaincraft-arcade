@@ -1,8 +1,8 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chess</title>
 <link rel="stylesheet" href="../kit/kit.css">
-<script type="application/json" id="meta">{"id":"chess","n":3,"title":"CHESS","genre":"mind","desc":"Full chess against the CPU: castling, en passant, promotion, check and mate. Pick EASY, MEDIUM or HARD. Beating HARD is worth the most.","controls":"Click / tap a piece, then a highlighted square","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Beat the CPU at Chess"}]}</script>
+<script type="application/json" id="meta">{"id":"chess","n":3,"title":"CHESS","genre":"mind","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":2,"desc":"Full chess: castling, en passant, promotion, check and mate. Play the CPU on EASY, MEDIUM or HARD, a friend on the same screen, or online (the leader plays white).","controls":"Click / tap a piece, then a highlighted square","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Beat the CPU at Chess"}]}</script>
 </head><body>
-<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/chesspieces.js"></script>
 <script>
 // board: 64 cells, piece = 'wP' style or null. index = r*8+c, r 0 = black's back rank (top)
 const SQ = 60, BX = 480 - SQ * 4, BY = 30;
@@ -15,7 +15,7 @@ const PST = {
   Q: [-20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10, -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0, 0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20],
   K: [-30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30, -20, -10, -20, -20, -20, -20, -20, -20, -10, 20, 20, 0, 0, 0, 0, 20, 20, 20, 30, 10, 0, 0, 10, 30, 20],
 };
-const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
+const GLYPH = { K: '♚︎', Q: '♛︎', R: '♜︎', B: '♝︎', N: '♞︎', P: '♟︎' }; // FE0E = draw as text, not colour emoji
 function startPos() {
   const b = Array(64).fill(null), back = 'RNBQKBNR';
   for (let c = 0; c < 8; c++) { b[c] = 'b' + back[c]; b[8 + c] = 'bP'; b[48 + c] = 'wP'; b[56 + c] = 'w' + back[c]; }
@@ -92,9 +92,36 @@ function bestMove(p, depth, noise) {
   for (const m of ms) { const v = -search(make(p, m), depth - 1, -1e9, 1e9) + K.rand(0, noise); if (v > bv) { bv = v; best = m; } }
   return best;
 }
+const mode = () => (K.net ? 'net' : K.local ? 'local' : 'cpu');
+const myColor = (s) => (mode() === 'net' ? (K.net.index === 0 ? 'w' : 'b') : mode() === 'local' ? s.p.turn : 'w');
+const flipped = (s) => mode() === 'net' && myColor(s) === 'b';
+const cellXY = (s, i) => { let [r, c] = rc(i); if (flipped(s)) { r = 7 - r; c = 7 - c; } return [BX + c * SQ, BY + r * SQ]; };
+function finishCheck(s) {
+  const ms = legal(s.p), chk = attacked(s.p, kingSq(s.p, s.p.turn), s.p.turn === 'w' ? 'b' : 'w');
+  s.status = chk ? 'CHECK' : '';
+  if (!ms.length) {
+    s.phase = 'over';
+    const winner = chk ? (s.p.turn === 'w' ? 'b' : 'w') : null;
+    const youWin = winner && (mode() === 'local' ? null : winner === (mode() === 'net' ? (K.net.index === 0 ? 'w' : 'b') : 'w'));
+    K.sfx(youWin ? 'win' : !winner ? 'wrong' : 'lose');
+    const title = !winner ? 'STALEMATE' : mode() === 'local' ? (winner === 'w' ? 'WHITE WINS' : 'BLACK WINS') : youWin ? 'CHECKMATE!' : 'CHECKMATED';
+    const score = youWin ? (mode() === 'cpu' ? s.level * 100 : 150) : !winner ? 30 : 0;
+    const text = mode() === 'cpu' ? ['', 'Easy', 'Medium', 'Hard'][s.level] + ' CPU' : mode() === 'net' ? `${K.net.players[0]?.username} (white) vs ${K.net.players[1]?.username || '?'} (black)` : 'Same screen';
+    setTimeout(() => K.end(s, { score, won: mode() === 'local' || !winner ? null : !!youWin, stats: { won: youWin ? 1 : 0 }, title, text }), 900);
+  } else if (chk) K.sfx('knock');
+}
+function doMove(s, m, send) {
+  const p = s.p, cap = m.ep ? (p.turn === 'w' ? 'bP' : 'wP') : p.b[m.t];
+  if (cap) s.captured[p.turn].push(cap);
+  s.p = make(p, m); s.last = m; K.sfx(cap ? 'hit' : 'click');
+  if (send && K.net) K.net.send({ t: 'mv', f: m.f, to: m.t });
+  finishCheck(s);
+}
 K.game({
   bg: '#0d0b18', touch: { stick: false, buttons: [] },
-  init(s) { s.p = startPos(); s.sel = -1; s.moves = []; s.level = 0; s.phase = 'pick'; s.last = null; s.think = 0; s.captured = { w: [], b: [] }; s.status = ''; },
+  init(s) { s.p = startPos(); s.sel = -1; s.moves = []; s.level = 0; s.phase = mode() === 'cpu' ? 'pick' : 'play'; s.last = null; s.think = 0; s.captured = { w: [], b: [] }; s.status = ''; },
+  onNet(s, d) { if (d.t === 'mv' && s.phase === 'play' && s.p.turn !== myColor(s)) { const m = legal(s.p).find((x) => x.f === d.f && x.t === d.to); if (m) doMove(s, m, false); } },
+  onLeave(s) { if (s.phase !== 'over') { s.phase = 'over'; K.end(s, { score: 150, won: true, stats: { won: 1 }, title: 'OPPONENT LEFT', text: 'You win by default.' }); } },
   update(s, dt) {
     if (s.phase === 'pick') {
       ['EASY', 'MEDIUM', 'HARD'].forEach((n, i) => { if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 })) { s.level = i + 1; s.phase = 'play'; K.sfx('select'); } });
@@ -103,33 +130,23 @@ K.game({
     }
     if (s.phase === 'over') return;
     const p = s.p;
-    const finishCheck = () => {
-      const ms = legal(s.p), chk = attacked(s.p, kingSq(s.p, s.p.turn), s.p.turn === 'w' ? 'b' : 'w');
-      s.status = chk ? 'CHECK' : '';
-      if (!ms.length) {
-        s.phase = 'over';
-        const youWin = chk && s.p.turn === 'b', draw = !chk;
-        K.sfx(youWin ? 'win' : draw ? 'wrong' : 'lose');
-        setTimeout(() => K.end(s, { score: youWin ? s.level * 100 : draw ? 30 : 0, won: youWin ? true : draw ? null : false, stats: { won: youWin ? 1 : 0 }, title: youWin ? 'CHECKMATE!' : draw ? 'STALEMATE' : 'CHECKMATED', text: ['', 'Easy', 'Medium', 'Hard'][s.level] + ' CPU' }), 900);
-      } else if (chk) K.sfx('knock');
-    };
-    const doMove = (m) => { const cap = m.ep ? (p.turn === 'w' ? 'bP' : 'wP') : p.b[m.t]; if (cap) s.captured[p.turn].push(cap); s.p = make(p, m); s.last = m; K.sfx(cap ? 'hit' : 'click'); finishCheck(); };
-    if (p.turn === 'b') {
+    if (mode() === 'cpu' && p.turn === 'b') {
       s.think += dt;
-      if (s.think > 0.45) { s.think = 0; const m = bestMove(p, [0, 1, 2, 3][s.level], [0, 140, 30, 0][s.level]); if (m) doMove(m); }
+      if (s.think > 0.45) { s.think = 0; const m = bestMove(p, [0, 1, 2, 3][s.level], [0, 140, 30, 0][s.level]); if (m) doMove(s, m, false); }
       return;
     }
-    if (!K.mouse.clicked) return;
-    const c = Math.floor((K.mouse.x - BX) / SQ), r = Math.floor((K.mouse.y - BY) / SQ);
+    if (p.turn !== myColor(s) || !K.mouse.clicked) return;
+    let c = Math.floor((K.mouse.x - BX) / SQ), r = Math.floor((K.mouse.y - BY) / SQ);
+    if (flipped(s)) { r = 7 - r; c = 7 - c; }
     if (!on(r, c)) { s.sel = -1; return; }
     const i = r * 8 + c, mv = s.moves.find((m) => m.t === i);
-    if (s.sel >= 0 && mv) { s.sel = -1; s.moves = []; doMove(mv); return; }
-    if (p.b[i] && p.b[i][0] === 'w') { s.sel = i; s.moves = legal(p).filter((m) => m.f === i); K.sfx('tick'); } else { s.sel = -1; s.moves = []; }
+    if (s.sel >= 0 && mv) { s.sel = -1; s.moves = []; doMove(s, mv, true); return; }
+    if (p.b[i] && p.b[i][0] === p.turn) { s.sel = i; s.moves = legal(p).filter((m) => m.f === i); K.sfx('tick'); } else { s.sel = -1; s.moves = []; }
   },
   draw(s) {
     const p = s.p;
     for (let i = 0; i < 64; i++) {
-      const [r, c] = rc(i), x = BX + c * SQ, y = BY + r * SQ;
+      const [r, c] = rc(i), [x, y] = cellXY(s, i);
       K.rect(x, y, SQ, SQ, (r + c) % 2 ? '#3a2f6e' : '#a99be0');
       if (s.last && (s.last.f === i || s.last.t === i)) K.rect(x, y, SQ, SQ, '#ffd93a55');
       if (i === s.sel) K.rect(x, y, SQ, SQ, '#22e6ff77');
@@ -137,18 +154,19 @@ K.game({
       if (x2) {
         const chk = x2[1] === 'K' && s.status && x2[0] === p.turn;
         if (chk) { K.glow('#ff3355', 20); K.circle(x + 30, y + 30, 26, '#ff335588'); K.noGlow(); }
-        K.text(GLYPH[x2[1]], x + 30, y + 33, 46, x2[0] === 'w' ? '#ffffff' : '#120a22', 'center', "'Segoe UI Symbol', 'Noto Sans Symbols 2', serif");
-        if (x2[0] === 'w') { K.ctx().strokeStyle = '#120a22'; K.ctx().lineWidth = 1; K.ctx().strokeText(GLYPH[x2[1]], x + 30, y + 33); }
+        CP.draw(K.ctx(), x2[1], x2[0], x + 30, y + 30, 52);
       }
     }
-    s.moves.forEach((m) => { const [r, c] = rc(m.t); K.circle(BX + c * SQ + 30, BY + r * SQ + 30, p.b[m.t] ? 26 : 9, p.b[m.t] ? '#ff2bd655' : '#22e6ffaa'); });
+    s.moves.forEach((m) => { const [x, y] = cellXY(s, m.t); K.circle(x + 30, y + 30, p.b[m.t] ? 26 : 9, p.b[m.t] ? '#ff2bd655' : '#22e6ffaa'); });
     K.stroke(BX, BY, SQ * 8, SQ * 8, '#8b5cf6', 3);
-    for (let c = 0; c < 8; c++) K.text('abcdefgh'[c], BX + c * SQ + 30, BY + SQ * 8 + 12, 12, '#8e88b8', 'center', 'm');
-    K.text(p.turn === 'w' ? 'YOUR MOVE' : 'CPU THINKING…', 110, 60, 18, p.turn === 'w' ? '#22e6ff' : '#ff2bd6', 'center', 'd');
+    for (let c = 0; c < 8; c++) K.text('abcdefgh'[flipped(s) ? 7 - c : c], BX + c * SQ + 30, BY + SQ * 8 + 12, 12, '#8e88b8', 'center', 'm');
+    const turnName = p.turn === 'w' ? 'WHITE' : 'BLACK';
+    const label = mode() === 'cpu' ? (p.turn === 'w' ? 'YOUR MOVE' : 'CPU THINKING…') : mode() === 'local' ? `${turnName} TO MOVE` : p.turn === myColor(s) ? 'YOUR MOVE' : `${K.net.players[p.turn === 'w' ? 0 : 1]?.username || 'OPPONENT'}…`;
+    K.text(label, 110, 60, 18, p.turn === 'w' ? '#22e6ff' : '#ff2bd6', 'center', 'd');
     if (s.status) K.text(s.status, 110, 100, 26, '#ff3355', 'center', 'd', 12);
-    K.text(['', 'EASY', 'MEDIUM', 'HARD'][s.level], 850, 60, 18, '#ffd93a', 'center', 'd');
-    s.captured.w.forEach((x, i) => K.text(GLYPH[x[1]], 800 + (i % 6) * 20, 110 + Math.floor(i / 6) * 26, 22, '#120a22', 'center', 'serif'));
-    s.captured.b.forEach((x, i) => K.text(GLYPH[x[1]], 30 + (i % 6) * 20, 160 + Math.floor(i / 6) * 26, 22, '#fff', 'center', 'serif'));
+    K.text(mode() === 'cpu' ? ['', 'EASY', 'MEDIUM', 'HARD'][s.level] : mode() === 'net' ? `YOU: ${myColor(s) === 'w' ? 'WHITE' : 'BLACK'}` : 'SAME SCREEN', 850, 60, 16, '#ffd93a', 'center', 'd');
+    s.captured.w.forEach((x, i) => CP.draw(K.ctx(), x[1], 'b', 800 + (i % 6) * 22, 110 + Math.floor(i / 6) * 28, 26));
+    s.captured.b.forEach((x, i) => CP.draw(K.ctx(), x[1], 'w', 30 + (i % 6) * 22, 160 + Math.floor(i / 6) * 28, 26));
     if (s.phase === 'pick') {
       K.rect(0, 0, 960, 540, 'rgba(5,4,12,.85)');
       K.text('CHOOSE THE CPU', 480, 140, 34, '#fff', 'center', 'd', 12);

@@ -1,0 +1,93 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tank Battle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tank-battle","n":20,"title":"TANK BATTLE","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":4,"desc":"Top-down tank brawl in a walled arena. Shells bounce off walls once, so angles matter. Three hits and you're scrap. Last tank rolling wins the round, first to 3 rounds wins. Bots fill empty seats.","controls":"↑ ↓ drive · ← → turn · Space fire (same screen: P1 WASD + Space, P2 arrows + Enter)","scoreLabel":"KILLS","tasks":[{"stat":"won","target":1,"text":"Win a match of Tank Battle"},{"stat":"score","target":5,"text":"Destroy 5 tanks in Tank Battle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a'];
+const WALLS = [[0, 0, 960, 16], [0, 524, 960, 16], [0, 0, 16, 540], [944, 0, 16, 540], [200, 120, 24, 150], [736, 270, 24, 150], [400, 250, 160, 24], [120, 400, 160, 24], [680, 120, 160, 24], [460, 60, 40, 80], [460, 400, 40, 80]];
+const SPAWN = [[80, 80, 0.6], [880, 460, Math.PI + 0.6], [880, 80, Math.PI - 0.6], [80, 460, -0.6]];
+const solid = (x, y, r) => WALLS.some(([wx, wy, ww, wh]) => x + r > wx && x - r < wx + ww && y + r > wy && y - r < wy + wh);
+function round(s) {
+  s.tk.forEach((t, i) => { const [x, y, a] = SPAWN[i]; Object.assign(t, { x, y, a, hp: 3, alive: true, cool: 0.5 }); });
+  s.sh = []; s.roundT = 0; s.between = 0;
+}
+function botInput(s, t) {
+  const foes = s.tk.filter((o) => o !== t && o.alive); if (!foes.length) return { x: 0, y: 0, a: false };
+  const f = foes.sort((a, b) => K.dist(a, t) - K.dist(b, t))[0];
+  let da = K.angle(t, f) - t.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+  const ahead = solid(t.x + Math.cos(t.a) * 40, t.y + Math.sin(t.a) * 40, 14);
+  t.wander = (t.wander || 0) - 1 / 60; if (ahead && t.wander <= 0) t.wander = 0.6;
+  return { x: t.wander > 0 ? 1 : Math.sign(da) * (Math.abs(da) > 0.15 ? 1 : 0), y: t.wander > 0 ? 0.6 : K.dist(f, t) > 220 ? -1 : 0.3, a: Math.abs(da) < 0.18 && Math.random() < 0.08 };
+}
+function sim(s, dt) {
+  s.roundT += dt;
+  for (const t of s.tk) {
+    if (!t.alive) continue;
+    const inp = t.bot ? botInput(s, t) : t.me ? K.pad(t.local || 0) : s.inputs[t.id] || { x: 0, y: 0, a: false };
+    t.a += inp.x * 2.6 * dt;
+    const sp = -inp.y * 170 * dt, nx = t.x + Math.cos(t.a) * sp, ny = t.y + Math.sin(t.a) * sp;
+    if (!solid(nx, t.y, 16) && !s.tk.some((o) => o !== t && o.alive && K.dist(o, { x: nx, y: t.y }) < 32)) t.x = nx;
+    if (!solid(t.x, ny, 16) && !s.tk.some((o) => o !== t && o.alive && K.dist(o, { x: t.x, y: ny }) < 32)) t.y = ny;
+    t.cool -= dt;
+    if (inp.a && t.cool <= 0) { t.cool = 0.55; s.sh.push({ x: t.x + Math.cos(t.a) * 26, y: t.y + Math.sin(t.a) * 26, vx: Math.cos(t.a) * 430, vy: Math.sin(t.a) * 430, owner: t.id, b: 1, life: 2.4 }); s.fx.push('laser'); }
+  }
+  for (const b of s.sh) {
+    b.life -= dt;
+    const nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
+    if (solid(nx, b.y, 3)) { if (b.b-- <= 0) b.life = 0; b.vx *= -1; s.fx.push('click'); } else b.x = nx;
+    if (solid(b.x, ny, 3)) { if (b.b-- <= 0) b.life = 0; b.vy *= -1; s.fx.push('click'); } else b.y = ny;
+    for (const t of s.tk) if (t.alive && b.life > 0 && K.dist(t, b) < 18 && !(t.id === b.owner && b.b === 1 && b.life > 2.2)) {
+      b.life = 0; t.hp--; s.fx.push('hit');
+      if (t.hp <= 0) { t.alive = false; s.fx.push('boom'); const k = s.tk.find((o) => o.id === b.owner); if (k && k !== t) k.kills++; }
+    }
+  }
+  s.sh = s.sh.filter((b) => b.life > 0);
+  const alive = s.tk.filter((t) => t.alive);
+  if (alive.length <= 1 && s.between <= 0) { s.between = 2.2; if (alive[0]) alive[0].wins++; s.fx.push('win'); s.lastWin = alive[0]?.id || null; }
+  if (s.between > 0) { s.between -= dt; if (s.between <= 0) { if (s.tk.some((t) => t.wins >= 3)) s.done = true; else round(s); } }
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const me = s.tk.find((t) => t.me && (t.local || 0) === 0) || s.tk[0], champ = s.tk.slice().sort((a, b) => b.wins - a.wins)[0];
+  const won = !K.local && champ === me;
+  K.end(s, { score: me.kills, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST TANK ROLLING' : `${champ.name} WINS`, text: s.tk.map((t) => `${t.name} ${t.wins}`).join(' · ') });
+}
+K.game({
+  bg: '#0d1410',
+  init(s) {
+    s.tk = K.seats(K.net ? Math.max(2, K.net.players.length) : K.local ? 2 : 2).slice(0, 4).map((p, i) => ({ ...p, col: COLS[i], kills: 0, wins: 0 }));
+    if (!K.net && !K.local) s.tk.push({ id: 'bot2', name: 'BOT 3', bot: true, col: COLS[2], kills: 0, wins: 0 });
+    s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s);
+  },
+  onNet(s, d, from) {
+    if (d.t === 'in' && K.net.isHost) s.inputs[from] = d.k;
+    if (d.t === 'st' && !K.net.isHost) { d.tk.forEach((o, i) => { const t = s.tk[i]; if (!t) return; Object.assign(t, { x: o[0], y: o[1], a: o[2], hp: o[3], alive: !!o[4], wins: o[5], kills: o[6] }); }); s.sh = d.sh.map(([x, y]) => ({ x, y })); s.between = d.bt; d.fx.forEach((f) => K.sfx(f)); if (d.done) finish(s); }
+  },
+  onLeave(s, id) { const t = s.tk.find((x) => x.id === id); if (t) { t.bot = true; t.me = false; } },
+  update(s, dt) {
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'in', k: K.pad() }); s.sendT = 0.05; } return; }
+    sim(s, dt);
+    const fx = s.fx.splice(0); [...new Set(fx)].forEach((f) => K.sfx(f)); if (fx.includes('boom')) K.shake(10);
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.done) { K.net.send({ t: 'st', tk: s.tk.map((t) => [Math.round(t.x), Math.round(t.y), +t.a.toFixed(2), t.hp, t.alive ? 1 : 0, t.wins, t.kills]), sh: s.sh.map((b) => [Math.round(b.x), Math.round(b.y)]), bt: s.between, fx: [...new Set(fx)], done: !!s.done }); s.sendT = 0.05; } }
+    if (s.done) finish(s);
+  },
+  draw(s) {
+    for (let x = 16; x < 944; x += 48) for (let y = 16; y < 524; y += 48) K.rect(x, y, 46, 46, (x + y) % 96 ? '#101a14' : '#0e1712');
+    WALLS.forEach(([x, y, w, h]) => { K.rect(x, y, w, h, '#2a3a30'); K.rect(x, y, w, 4, '#3a5040'); });
+    const c = K.ctx();
+    s.tk.forEach((t) => {
+      if (!t.alive) { K.alpha(0.4); K.circle(t.x, t.y, 16, '#222'); K.alpha(1); return; }
+      c.save(); c.translate(t.x, t.y); c.rotate(t.a);
+      K.rect(-18, -15, 36, 30, '#1a1a1a', 4); K.rect(-16, -13, 32, 26, t.col, 5); K.rect(-18, -17, 36, 6, '#333', 2); K.rect(-18, 11, 36, 6, '#333', 2);
+      K.rect(0, -4, 26, 8, '#ddd', 2); K.circle(0, 0, 9, '#fff'); c.restore();
+      for (let h = 0; h < 3; h++) K.rect(t.x - 15 + h * 11, t.y - 30, 9, 4, h < t.hp ? t.col : '#333');
+      K.text(t.me && !K.local ? 'YOU' : t.name, t.x, t.y + 30, 11, t.col, 'center', 'd');
+    });
+    s.sh.forEach((b) => { K.glow('#ffd93a', 10); K.circle(b.x, b.y, 4, '#fff'); }); K.noGlow();
+    s.tk.forEach((t, i) => K.text(`${t.name} ${'★'.repeat(t.wins)}`, 24 + i * 230, 30, 13, t.col, 'left', 'd'));
+    if (s.between > 0) { const w = s.tk.find((t) => t.id === s.lastWin); K.text(!w ? 'DRAW' : w.me && !K.local ? 'YOU WIN THE ROUND' : `${w.name} WINS THE ROUND`, 480, 270, 28, '#fff', 'center', 'd', 14); }
+  },
+  ai(s) { const me = s.tk[0], inp = botInput(s, me); K.vhold('ArrowLeft', inp.x < 0); K.vhold('ArrowRight', inp.x > 0); K.vhold('ArrowUp', inp.y < 0); K.vhold('ArrowDown', inp.y > 0); K.vhold('Space', inp.a); },
+});
+</script></body></html>

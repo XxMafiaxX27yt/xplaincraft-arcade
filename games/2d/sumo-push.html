@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sumo Push</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sumo-push","n":12,"title":"SUMO PUSH","genre":"mystery","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":8,"desc":"Up to 8 bouncy blobs on a shrinking ring. Bump everyone off, dash into them, and stay on. The floor gets smaller every few seconds and sometimes turns to ice. Last blob standing wins the round, first to 3.","controls":"Move with arrows / WASD (or the stick) · Space = DASH (same screen: P1 WASD + Space, P2 arrows + Enter)","scoreLabel":"KNOCKOUTS","tasks":[{"stat":"won","target":1,"text":"Win a Sumo Push match"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CX = 480, CY = 280, COLS = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
+function round(s) {
+  s.R = 230; s.ice = false; s.shrinkT = 6; s.between = 0;
+  s.b.forEach((b, i) => { const a = (i / s.b.length) * Math.PI * 2; Object.assign(b, { x: CX + Math.cos(a) * 140, y: CY + Math.sin(a) * 140, vx: 0, vy: 0, alive: true, dash: 0, cool: 0, lastHit: null }); });
+}
+function botIn(s, b) {
+  const alive = s.b.filter((o) => o !== b && o.alive); if (!alive.length) return { x: 0, y: 0, a: false };
+  const t = alive.sort((p, q) => K.dist(p, b) - K.dist(q, b))[0], toC = Math.hypot(b.x - CX, b.y - CY);
+  let dx = t.x - b.x, dy = t.y - b.y;
+  if (toC > s.R - 60) { dx = CX - b.x; dy = CY - b.y; }
+  const L = Math.hypot(dx, dy) || 1;
+  return { x: dx / L, y: dy / L, a: K.dist(t, b) < 90 && Math.random() < 0.05 };
+}
+function sim(s, dt) {
+  if (s.between > 0) { s.between -= dt; if (s.between <= 0) { if (s.b.some((b) => b.wins >= 3)) s.done = true; else round(s); } return; }
+  s.shrinkT -= dt;
+  if (s.shrinkT <= 0) { s.R = Math.max(90, s.R - 22); s.shrinkT = 5; s.ice = Math.random() < 0.3; s.fx.push(s.ice ? 'chime' : 'knock'); }
+  const fric = s.ice ? 0.9 : 0.25;
+  for (const b of s.b) {
+    if (!b.alive) continue;
+    const inp = b.bot ? botIn(s, b) : b.me ? K.pad(b.local || 0) : s.inputs[b.id] || { x: 0, y: 0, a: false };
+    const L = Math.hypot(inp.x, inp.y) || 1, acc = s.ice ? 380 : 900;
+    b.vx += (inp.x / L) * acc * dt * (inp.x || inp.y ? 1 : 0); b.vy += (inp.y / L) * acc * dt * (inp.x || inp.y ? 1 : 0);
+    b.cool -= dt; b.dash -= dt;
+    if (inp.a && b.cool <= 0) { const dl = Math.hypot(b.vx, b.vy) || 1; b.vx += (b.vx / dl) * 520; b.vy += (b.vy / dl) * 520; b.cool = 1.6; b.dash = 0.25; s.fx.push('whoosh'); }
+    b.vx *= Math.pow(fric, dt); b.vy *= Math.pow(fric, dt);
+    const sp = Math.hypot(b.vx, b.vy), max = b.dash > 0 ? 900 : 330; if (sp > max) { b.vx *= max / sp; b.vy *= max / sp; }
+    b.x += b.vx * dt; b.y += b.vy * dt;
+  }
+  for (let i = 0; i < s.b.length; i++) for (let j = i + 1; j < s.b.length; j++) {
+    const a = s.b[i], c = s.b[j]; if (!a.alive || !c.alive) continue;
+    const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
+    if (d < 44 && d > 0) {
+      const nx = dx / d, ny = dy / d, rel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
+      const ov = (44 - d) / 2; a.x -= nx * ov; a.y -= ny * ov; c.x += nx * ov; c.y += ny * ov;
+      if (rel > 0) { const k = rel * 1.35 + 60; a.vx -= nx * k * (c.dash > 0 ? 1.8 : 1); a.vy -= ny * k * (c.dash > 0 ? 1.8 : 1); c.vx += nx * k * (a.dash > 0 ? 1.8 : 1); c.vy += ny * k * (a.dash > 0 ? 1.8 : 1); a.lastHit = c.id; c.lastHit = a.id; s.fx.push('pop'); }
+    }
+  }
+  for (const b of s.b) if (b.alive && Math.hypot(b.x - CX, b.y - CY) > s.R + 6) { b.alive = false; s.fx.push('splash'); const k = s.b.find((o) => o.id === b.lastHit); if (k) k.kos++; }
+  const alive = s.b.filter((b) => b.alive);
+  if (alive.length <= 1) { if (alive[0]) alive[0].wins++; s.lastWin = alive[0]?.id; s.between = 2.4; s.fx.push('win'); }
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const me = s.b.find((b) => b.me && (b.local || 0) === 0) || s.b[0], champ = s.b.slice().sort((a, c) => c.wins - a.wins)[0], won = !K.local && champ === me;
+  K.end(s, { score: me.kos, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'SUMO CHAMPION' : `${champ.name} WINS`, text: s.b.map((b) => `${b.name} ${b.wins}`).join(' · ') });
+}
+K.game({
+  bg: '#0a0d1e',
+  init(s) { s.b = K.seats(K.net || K.local ? 2 : 4).map((p, i) => ({ ...p, col: COLS[i % 8], wins: 0, kos: 0 })); if (K.net && s.b.length < 4) while (s.b.length < 4) s.b.push({ id: 'bot' + s.b.length, name: 'BOT ' + (s.b.length + 1), bot: true, col: COLS[s.b.length], wins: 0, kos: 0 }); s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s); },
+  onNet(s, d, from) {
+    if (d.t === 'in' && K.net.isHost) s.inputs[from] = d.k;
+    if (d.t === 'st' && !K.net.isHost) { d.b.forEach((o, i) => { const b = s.b[i]; if (b) Object.assign(b, { x: o[0], y: o[1], alive: !!o[2], wins: o[3], kos: o[4], dash: o[5] }); }); s.R = d.R; s.ice = d.ice; s.between = d.bt; s.lastWin = d.lw; d.fx.forEach((f) => K.sfx(f)); if (d.done) finish(s); }
+  },
+  onLeave(s, id) { const b = s.b.find((x) => x.id === id); if (b) b.bot = true; },
+  update(s, dt) {
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'in', k: K.pad() }); s.sendT = 0.05; } return; }
+    sim(s, dt);
+    const fx = [...new Set(s.fx.splice(0))]; fx.forEach((f) => K.sfx(f));
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.done) { K.net.send({ t: 'st', b: s.b.map((b) => [Math.round(b.x), Math.round(b.y), b.alive ? 1 : 0, b.wins, b.kos, b.dash > 0 ? 1 : 0]), R: s.R, ice: s.ice, bt: s.between, lw: s.lastWin, fx, done: !!s.done }); s.sendT = 0.05; } }
+    if (s.done) finish(s);
+  },
+  draw(s) {
+    K.circle(CX, CY + 18, s.R + 14, '#05060f');
+    K.glow(s.ice ? '#bff6ff' : '#ff2bd6', 20); K.circle(CX, CY, s.R + 8, s.ice ? '#8fd8ff' : '#ff2bd6'); K.noGlow();
+    K.circle(CX, CY, s.R, s.ice ? '#cdeeff' : '#f2e3c8'); K.ring(CX, CY, s.R * 0.6, s.ice ? '#a8d8f0' : '#d8c4a0', 3);
+    s.b.forEach((b) => {
+      if (!b.alive) return;
+      K.alpha(0.3); K.circle(b.x, b.y + 16, 20, '#000'); K.alpha(1);
+      K.glow(b.col, b.dash > 0 ? 26 : 10); K.circle(b.x, b.y, 22, b.col); K.noGlow();
+      K.circle(b.x - 7, b.y - 5, 5, '#fff'); K.circle(b.x + 7, b.y - 5, 5, '#fff'); K.circle(b.x - 6, b.y - 5, 2.5, '#111'); K.circle(b.x + 8, b.y - 5, 2.5, '#111');
+      K.text(b.me && !K.local ? 'YOU' : b.name, b.x, b.y - 34, 11, b.col, 'center', 'd');
+    });
+    s.b.forEach((b, i) => K.text(`${b.name} ${'●'.repeat(b.wins)}`, 20 + (i % 4) * 235, 520 - Math.floor(i / 4) * 20, 12, b.alive ? b.col : '#555', 'left', 'd'));
+    if (s.ice) K.text('ICE!', 480, 30, 22, '#bff6ff', 'center', 'd', 10);
+    if (s.between > 0) { const w = s.b.find((b) => b.id === s.lastWin); K.text(!w ? 'EVERYONE FELL' : w.me && !K.local ? 'YOU WIN THE ROUND' : `${w.name} WINS THE ROUND`, 480, 60, 26, '#fff', 'center', 'd', 12); }
+  },
+  ai(s) { const b = s.b[0]; if (!b.alive) return; const i = botIn(s, b); K.vhold('ArrowLeft', i.x < -0.3); K.vhold('ArrowRight', i.x > 0.3); K.vhold('ArrowUp', i.y < -0.3); K.vhold('ArrowDown', i.y > 0.3); K.vhold('Space', i.a); },
+});
+</script></body></html>

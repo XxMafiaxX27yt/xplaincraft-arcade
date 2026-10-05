@@ -914,6 +914,37 @@ export const GAME_LIST = [
 "cover": "games/covers/whack-a-mole.png"
 },
 {
+"id": "tank-battle",
+"n": 20,
+"title": "TANK BATTLE",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "Top-down tank brawl in a walled arena. Shells bounce off walls once, so angles matter. Three hits and you're scrap. Last tank rolling wins the round, first to 3 rounds wins. Bots fill empty seats.",
+"controls": "↑ ↓ drive · ← → turn · Space fire (same screen: P1 WASD + Space, P2 arrows + Enter)",
+"scoreLabel": "KILLS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a match of Tank Battle"
+},
+{
+"stat": "score",
+"target": 5,
+"text": "Destroy 5 tanks in Tank Battle"
+}
+],
+"file": "games/2d/tank-battle.html",
+"dim": "2d",
+"cover": "games/covers/tank-battle.png"
+},
+{
 "id": "air-hockey",
 "n": 75,
 "title": "AIR HOCKEY",
@@ -1075,7 +1106,14 @@ export const GAME_LIST = [
 "n": 3,
 "title": "CHESS",
 "genre": "mind",
-"desc": "Full chess against the CPU: castling, en passant, promotion, check and mate. Pick EASY, MEDIUM or HARD. Beating HARD is worth the most.",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Full chess: castling, en passant, promotion, check and mate. Play the CPU on EASY, MEDIUM or HARD, a friend on the same screen, or online (the leader plays white).",
 "controls": "Click / tap a piece, then a highlighted square",
 "scoreLabel": "POINTS",
 "tasks": [
@@ -1087,9 +1125,6 @@ export const GAME_LIST = [
 ],
 "file": "games/2d/chess.html",
 "dim": "2d",
-"modes": [
-"sp"
-],
 "cover": "games/covers/chess.png"
 },
 {
@@ -1097,7 +1132,14 @@ export const GAME_LIST = [
 "n": 4,
 "title": "TIC TAC TOE",
 "genre": "mind",
-"desc": "Best of 9 rounds against the CPU. It starts sloppy and gets sharper every round you win. Can you beat the perfect player at the end?",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "Best of 9 rounds. Solo, the CPU starts sloppy and gets sharper every round until it plays perfectly. Or play a friend on the same screen or online; the starting player swaps each round.",
 "controls": "Click / tap a square (or 1-9 on the number pad layout)",
 "scoreLabel": "WINS",
 "tasks": [
@@ -1109,9 +1151,6 @@ export const GAME_LIST = [
 ],
 "file": "games/2d/tic-tac-toe.html",
 "dim": "2d",
-"modes": [
-"sp"
-],
 "cover": "games/covers/tic-tac-toe.png"
 },
 {
@@ -1409,6 +1448,36 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/hangman.png"
+},
+{
+"id": "quiz-battle",
+"n": 86,
+"title": "QUIZ BATTLE",
+"genre": "mind",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Ten trivia questions, everyone answers at the same time. Right answers score more the faster you are, and a streak adds a bonus. Online for up to 8, or solo against three quiz bots.",
+"controls": "Click / tap an answer (or 1-4)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Quiz Battle"
+},
+{
+"stat": "score",
+"target": 600,
+"text": "Score 600 in Quiz Battle"
+}
+],
+"file": "games/2d/quiz-battle.html",
+"dim": "2d",
+"cover": "games/covers/quiz-battle.png"
 },
 {
 "id": "match-3",
@@ -1767,6 +1836,32 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/cursor-chaos.png"
+},
+{
+"id": "sumo-push",
+"n": 12,
+"title": "SUMO PUSH",
+"genre": "mystery",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Up to 8 bouncy blobs on a shrinking ring. Bump everyone off, dash into them, and stay on. The floor gets smaller every few seconds and sometimes turns to ice. Last blob standing wins the round, first to 3.",
+"controls": "Move with arrows / WASD (or the stick) · Space = DASH (same screen: P1 WASD + Space, P2 arrows + Enter)",
+"scoreLabel": "KNOCKOUTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Sumo Push match"
+}
+],
+"file": "games/2d/sumo-push.html",
+"dim": "2d",
+"cover": "games/covers/sumo-push.png"
 },
 {
 "id": "draw-guess",
