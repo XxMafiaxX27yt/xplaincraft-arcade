@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shrink &amp; Grow</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"shrink-grow","n":26,"title":"SHRINK & GROW","genre":"mystery","desc":"A side-scrolling run where size is everything. Shrink to slip through tiny gaps, grow huge to smash through walls, but giants are slow and tiny ones are blown around. Switch at the right moment.","controls":"↑ / W / tap top half = GROW · ↓ / S / tap bottom half = SHRINK · Space = jump","scoreLabel":"METRES","tasks":[{"stat":"score","target":400,"text":"Run 400 m in Shrink & Grow"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GY = 440, PX = 200, SIZES = [14, 30, 60];
+function obstacle(s) {
+  const k = K.pick(['gap', 'wall', 'wind', 'pit', 'gap', 'wall']);
+  if (k === 'gap') s.obs.push({ k, x: 1000, w: 40, open: GY - 32 });          // only small fits under
+  if (k === 'wall') s.obs.push({ k, x: 1000, w: 30, h: 150, broken: false }); // only giant smashes
+  if (k === 'wind') s.obs.push({ k, x: 1000, w: 160 });                       // small gets blown back
+  if (k === 'pit') s.obs.push({ k, x: 1000, w: 90 });                         // jump (normal or giant)
+}
+K.game({
+  bg: '#101620',
+  init(s) { s.size = 1; s.r = 30; s.y = 0; s.vy = 0; s.dist = 0; s.obs = []; s.next = 1; s.push = 0; },
+  update(s, dt) {
+    if (K.tap('ArrowUp', 'KeyW') || (K.mouse.clicked && K.mouse.y < 220)) { if (s.size < 2) { s.size++; K.tone(220, 0.2, 'sawtooth', 0.05, -100); } }
+    if (K.tap('ArrowDown', 'KeyS') || (K.mouse.clicked && K.mouse.y > 320)) { if (s.size > 0) { s.size--; K.tone(660, 0.15, 'sine', 0.05, 300); } }
+    s.r = K.lerp(s.r, SIZES[s.size], dt * 12);
+    if ((K.tap('Space') || (K.mouse.clicked && K.mouse.y >= 220 && K.mouse.y <= 320)) && s.y === 0) { s.vy = s.size === 2 ? 520 : 640; K.sfx('jump'); }
+    s.vy -= 1600 * dt; s.y = Math.max(0, s.y + s.vy * dt); if (s.y === 0) s.vy = 0;
+    const speed = [300, 260, 170][s.size] + Math.min(140, s.dist * 0.15) - s.push;
+    s.push = Math.max(0, s.push - dt * 300);
+    s.dist += Math.max(0, speed) * dt / 10;
+    s.obs.forEach((o) => (o.x -= speed * dt)); s.obs = s.obs.filter((o) => o.x > -200);
+    s.next -= dt; if (s.next <= 0) { obstacle(s); s.next = K.rand(1.1, 1.9); }
+    const top = GY - s.y - s.r * 2, left = PX - s.r, right = PX + s.r;
+    for (const o of s.obs) {
+      if (right < o.x || left > o.x + o.w) continue;
+      let dead = false;
+      if (o.k === 'gap' && top < o.open && s.y < 50) dead = true;
+      if (o.k === 'wall' && !o.broken) { if (s.size === 2) { o.broken = true; K.sfx('boom'); K.shake(10); K.burst(o.x + 15, GY - 70, '#8a8aa8', 20); } else if (s.y < o.h) dead = true; }
+      if (o.k === 'wind' && s.size === 0) s.push = 520;
+      if (o.k === 'pit' && s.y === 0 && PX > o.x + 10 && PX < o.x + o.w - 10 && s.size > 0) dead = true;
+      if (dead) { K.sfx('hit'); K.shake(12); return K.end(s, { score: Math.floor(s.dist), won: null, title: o.k === 'gap' ? 'TOO BIG' : o.k === 'wall' ? 'TOO SMALL' : 'FELL IN', text: `${Math.floor(s.dist)} m` }); }
+    }
+  },
+  draw(s) {
+    K.rect(0, GY, 960, 100, '#1d2838'); K.rect(0, GY, 960, 3, '#22e6ff');
+    s.obs.forEach((o) => {
+      if (o.k === 'gap') { K.rect(o.x, 0, o.w, o.open, '#2a3a50'); K.stroke(o.x, 0, o.w, o.open, '#22e6ff', 2); }
+      if (o.k === 'wall' && !o.broken) { K.rect(o.x, GY - o.h, o.w, o.h, '#5a5a78'); for (let y = GY - o.h; y < GY; y += 20) K.line(o.x, y, o.x + o.w, y, '#3a3a50', 2); }
+      if (o.k === 'wind') { K.alpha(0.3); for (let i = 0; i < 6; i++) K.line(o.x + ((K.time() * 300 + i * 40) % o.w), GY - 30 - i * 20, o.x + ((K.time() * 300 + i * 40) % o.w) - 30, GY - 30 - i * 20, '#bff6ff', 2); K.alpha(1); K.text('💨', o.x + o.w / 2, GY - 160, 28, '#fff'); }
+      if (o.k === 'pit') { K.rect(o.x, GY, o.w, 100, '#05060a'); }
+    });
+    const y = GY - s.y - s.r, col = ['#3dffa0', '#22e6ff', '#ff2bd6'][s.size];
+    K.glow(col, 16); K.circle(PX, y, s.r, col); K.noGlow(); K.circle(PX + s.r * 0.35, y - s.r * 0.2, Math.max(2, s.r * 0.15), '#111');
+    K.text(`${Math.floor(s.dist)} m`, 20, 26, 20, '#fff', 'left', 'd');
+    K.text(['TINY', 'NORMAL', 'GIANT'][s.size], 940, 26, 18, col, 'right', 'd');
+    K.text('↑ GROW  ↓ SHRINK  SPACE JUMP', 480, 515, 13, '#8e88b8', 'center', 'm');
+  },
+  ai(s) {
+    const o = s.obs.find((q) => q.x + q.w > PX - 40 && q.x < PX + 220);
+    const want = !o ? 1 : o.k === 'gap' ? 0 : o.k === 'wall' ? 2 : o.k === 'wind' ? 1 : 1;
+    if (s.size < want) K.vtap('ArrowUp'); else if (s.size > want) K.vtap('ArrowDown');
+    if (o && o.k === 'pit' && o.x - PX < 60 && s.y === 0) K.vtap('Space');
+  },
+});
+</script></body></html>

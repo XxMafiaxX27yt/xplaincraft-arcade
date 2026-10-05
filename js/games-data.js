@@ -1963,7 +1963,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/mahjong-tiles.png"
 },
 {
 "id": "jigsaw",
@@ -1984,7 +1985,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/jigsaw.png"
 },
 {
 "id": "block-blast",
@@ -2049,7 +2051,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/aquarium.png"
 },
 {
 "id": "zen-sand",
@@ -2136,7 +2139,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/night-sky.png"
 },
 {
 "id": "tetris",
@@ -2157,7 +2161,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/tetris.png"
 },
 {
 "id": "bubble-wrap",
@@ -2178,7 +2183,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/bubble-wrap.png"
 },
 {
 "id": "gravity-flip",
@@ -2291,6 +2297,27 @@ export const GAME_LIST = [
 "cover": "games/covers/tiny-planet.png"
 },
 {
+"id": "floor-is-lava",
+"n": 10,
+"title": "THE FLOOR IS LAVA",
+"genre": "mystery",
+"desc": "The floor tiles turn to lava, but the lava follows a secret rule that changes every round: maybe it follows you, maybe it spreads in lines, maybe it copies your last steps. Watch the warning glow, figure out the rule, survive.",
+"controls": "Arrow keys / WASD or swipe, tile by tile",
+"scoreLabel": "ROUNDS",
+"tasks": [
+{
+"stat": "score",
+"target": 6,
+"text": "Survive 6 rounds of The Floor Is Lava"
+}
+],
+"file": "games/2d/floor-is-lava.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "cursor-chaos",
 "n": 11,
 "title": "CURSOR CHAOS",
@@ -2338,6 +2365,111 @@ export const GAME_LIST = [
 "file": "games/2d/sumo-push.html",
 "dim": "2d",
 "cover": "games/covers/sumo-push.png"
+},
+{
+"id": "shrink-grow",
+"n": 26,
+"title": "SHRINK & GROW",
+"genre": "mystery",
+"desc": "A side-scrolling run where size is everything. Shrink to slip through tiny gaps, grow huge to smash through walls, but giants are slow and tiny ones are blown around. Switch at the right moment.",
+"controls": "↑ / W / tap top half = GROW · ↓ / S / tap bottom half = SHRINK · Space = jump",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 400,
+"text": "Run 400 m in Shrink & Grow"
+}
+],
+"file": "games/2d/shrink-grow.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "copy-cat",
+"n": 38,
+"title": "COPY CAT",
+"genre": "mystery",
+"desc": "Every enemy copies what you do, a few seconds later. Walk into the gem and so will they. Lead them into the spikes, make them chase each other, never let your own past catch you. A new copycat joins every gem.",
+"controls": "Arrow keys / WASD or the stick",
+"scoreLabel": "GEMS",
+"tasks": [
+{
+"stat": "score",
+"target": 10,
+"text": "Grab 10 gems in Copy Cat"
+}
+],
+"file": "games/2d/copy-cat.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "delay-controls",
+"n": 39,
+"title": "DELAY CONTROLS",
+"genre": "mystery",
+"desc": "Everything you press happens one second later. Steer a little ship through a field of mines to the gates, plan your moves ahead, and watch your ghost show where you are about to go. The lag grows with every gate.",
+"controls": "Arrow keys / WASD (or drag) - but it happens later",
+"scoreLabel": "GATES",
+"tasks": [
+{
+"stat": "score",
+"target": 6,
+"text": "Pass 6 gates in Delay Controls"
+}
+],
+"file": "games/2d/delay-controls.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "ice-world",
+"n": 40,
+"title": "SLIPPERY ICE WORLD",
+"genre": "mystery",
+"desc": "Nothing has friction. Once you start sliding you keep going until you hit something. Slide across frozen rooms to collect every fish and reach the exit, using rocks as brakes. Holes in the ice mean a cold swim.",
+"controls": "Arrow keys / WASD or swipe: slide until you hit something · R = restart room",
+"scoreLabel": "ROOMS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Clear 5 rooms in Slippery Ice World"
+}
+],
+"file": "games/2d/ice-world.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "black-hole",
+"n": 48,
+"title": "BLACK HOLE",
+"genre": "mystery",
+"desc": "You are a tiny black hole loose in a city. Swallow things smaller than you to grow: cones, bins, cars, trees, houses, towers. Two minutes. Can you eat the whole town?",
+"controls": "Move with the mouse / drag, or arrow keys / WASD",
+"scoreLabel": "PERCENT EATEN",
+"tasks": [
+{
+"stat": "score",
+"target": 50,
+"text": "Eat 50% of the city in Black Hole"
+}
+],
+"file": "games/2d/black-hole.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "draw-guess",

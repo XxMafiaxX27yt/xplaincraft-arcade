@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Slippery Ice World</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"ice-world","n":40,"title":"SLIPPERY ICE WORLD","genre":"mystery","desc":"Nothing has friction. Once you start sliding you keep going until you hit something. Slide across frozen rooms to collect every fish and reach the exit, using rocks as brakes. Holes in the ice mean a cold swim.","controls":"Arrow keys / WASD or swipe: slide until you hit something · R = restart room","scoreLabel":"ROOMS","tasks":[{"stat":"score","target":5,"text":"Clear 5 rooms in Slippery Ice World"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 13, H = 9, T = 54, OX = 480 - (W * T) / 2, OY = 30;
+// room generator: place rocks, then make sure every fish and the exit can be reached by sliding (BFS)
+function slide(g, x, y, dx, dy) { while (true) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H || g[ny][nx] === '#') return [x, y]; x = nx; y = ny; if (g[y][x] === 'o') return [x, y, 'hole']; if (g[y][x] === 'E') return [x, y]; } }
+function reach(g, sx, sy) { const seen = new Set([sx + ',' + sy]), q = [[sx, sy]]; const stops = new Set(); while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const r = slide(g, x, y, dx, dy); if (r[2]) continue; const k = r[0] + ',' + r[1]; if (!seen.has(k)) { seen.add(k); q.push([r[0], r[1]]); } } } return seen; }
+function passes(g, x, y, dx, dy) { const out = []; while (true) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H || g[ny][nx] === '#') break; x = nx; y = ny; out.push(x + ',' + y); if (g[y][x] === 'o' || g[y][x] === 'E') break; } return out; }
+function room(s) {
+  for (let tries = 0; tries < 400; tries++) {
+    const g = Array.from({ length: H }, () => Array(W).fill('.'));
+    for (let i = 0; i < 14 + s.lv * 2; i++) g[K.irand(0, H - 1)][K.irand(0, W - 1)] = '#';
+    for (let i = 0; i < Math.min(5, s.lv); i++) g[K.irand(0, H - 1)][K.irand(0, W - 1)] = 'o';
+    const sx = 0, sy = K.irand(0, H - 1); if (g[sy][sx] !== '.') continue;
+    const stops = reach(g, sx, sy); if (stops.size < 8) continue;
+    // cells you slide over from any stop
+    const over = new Set(); stops.forEach((k) => { const [x, y] = k.split(',').map(Number); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const p = passes(g, x, y, dx, dy); if (!p.some((q) => { const [a, b] = q.split(',').map(Number); return g[b][a] === 'o'; })) p.forEach((q) => over.add(q)); } });
+    const stopList = [...stops].filter((k) => k !== sx + ',' + sy), overList = [...over].filter((k) => { const [a, b] = k.split(',').map(Number); return g[b][a] === '.'; });
+    if (stopList.length < 3 || overList.length < 6) continue;
+    const ex = K.pick(stopList).split(',').map(Number); g[ex[1]][ex[0]] = 'E';
+    const all = reach(g, sx, sy); if (!all.has(ex[0] + ',' + ex[1])) continue;
+    // no dead ends: from every place you can stop, the exit must still be reachable
+    if ([...all].some((k) => { const [a, b] = k.split(',').map(Number); return !reach(g, a, b).has(ex[0] + ',' + ex[1]); })) continue;
+    s.g = g; s.p = [sx, sy]; s.start = [sx, sy];
+    s.fish = K.shuffle(overList.filter((k) => k !== ex.join(','))).slice(0, 3 + Math.min(3, s.lv)).map((k) => k.split(',').map(Number));
+    s.moving = null; s.moves = 0; return;
+  }
+}
+K.game({
+  bg: '#0c1a2a',
+  init(s) { s.lv = 0; room(s); s.fx = [s.p[0] * T, s.p[1] * T]; },
+  update(s, dt) {
+    if (K.tap('KeyR')) { s.lv = s.lv; room(s); s.fx = [s.p[0] * T, s.p[1] * T]; K.sfx('whoosh'); return; }
+    if (s.moving) {
+      const [tx, ty] = s.moving.to, sp = 900 * dt;
+      s.fx[0] += K.clamp(tx * T - s.fx[0], -sp, sp); s.fx[1] += K.clamp(ty * T - s.fx[1], -sp, sp);
+      const cx = Math.round(s.fx[0] / T), cy = Math.round(s.fx[1] / T);
+      s.fish = s.fish.filter(([x, y]) => { if (x === cx && y === cy) { K.sfx('coin'); return false; } return true; });
+      if (Math.abs(s.fx[0] - tx * T) < 1 && Math.abs(s.fx[1] - ty * T) < 1) {
+        s.p = [tx, ty]; const hole = s.moving.hole; s.moving = null; K.sfx('knock');
+        if (hole) { K.sfx('splash'); K.shake(8); return K.end(s, { score: s.lv, won: false, title: 'SPLASH', text: `Room ${s.lv + 1}. Cold water!` }); }
+        if (s.g[ty][tx] === 'E' && !s.fish.length) { s.lv++; K.sfx('win'); room(s); s.fx = [s.p[0] * T, s.p[1] * T]; if (s.lv >= 12) K.end(s, { score: s.lv, won: true, title: 'ICE MASTER' }); }
+      }
+      return;
+    }
+    const d = K.tapDir(); if (!d) return;
+    const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[d];
+    const r = slide(s.g, s.p[0], s.p[1], dx, dy);
+    if (r[0] === s.p[0] && r[1] === s.p[1]) { K.sfx('wrong'); return; }
+    s.moving = { to: [r[0], r[1]], hole: r[2] === 'hole' }; s.moves++; K.sfx('whoosh');
+  },
+  draw(s) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const c = s.g[y][x], X = OX + x * T, Y = OY + y * T;
+      K.rect(X, Y, T, T, (x + y) % 2 ? '#bfe6ff' : '#cdeeff'); K.alpha(0.3); K.line(X + 8, Y + 10, X + 22, Y + 4, '#fff', 2); K.alpha(1);
+      if (c === '#') { K.circle(X + T / 2, Y + T / 2 + 4, T * 0.42, '#5a6a7a'); K.circle(X + T / 2 - 6, Y + T / 2 - 2, T * 0.3, '#7a8a9a'); }
+      if (c === 'o') { K.circle(X + T / 2, Y + T / 2, T * 0.4, '#0a3a6a'); K.ring(X + T / 2, Y + T / 2, T * 0.4, '#fff', 3); }
+      if (c === 'E') { K.glow(s.fish.length ? '#ff3355' : '#3dffa0', 14); K.rect(X + 8, Y + 6, T - 16, T - 12, s.fish.length ? '#5a1a28' : '#1f8a4a', 8); K.noGlow(); K.text(s.fish.length ? '🔒' : 'EXIT', X + T / 2, Y + T / 2, 11, '#fff', 'center', 'd'); }
+    }
+    s.fish.forEach(([x, y]) => K.text('🐟', OX + x * T + T / 2, OY + y * T + T / 2 + 2, 26, '#fff'));
+    const px = OX + s.fx[0] + T / 2, py = OY + s.fx[1] + T / 2;
+    K.circle(px, py + 4, 18, '#00000033'); K.circle(px, py, 17, '#1a1a2a'); K.circle(px, py + 4, 11, '#f4f4ff'); K.poly([[px - 4, py - 2], [px + 4, py - 2], [px, py + 4]], '#ffb43a'); K.circle(px - 6, py - 7, 2.5, '#fff'); K.circle(px + 6, py - 7, 2.5, '#fff');
+    K.text(`ROOM ${s.lv + 1}`, 20, 515, 18, '#bff6ff', 'left', 'd'); K.text(`🐟 left: ${s.fish.length}`, 480, 515, 16, '#fff', 'center', 'd'); K.text('R = restart room', 940, 515, 13, '#8e88b8', 'right', 'm');
+  },
+  ai(s) { if (s.moving) return; s.aw = (s.aw || 0) + 1; if (s.aw % 15 === 0) { const opts = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].filter((k) => { const [dx, dy] = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[k]; return !slide(s.g, s.p[0], s.p[1], dx, dy)[2]; }); if (opts.length) K.vtap(K.pick(opts)); } },
+});
+</script></body></html>

@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Black Hole</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"black-hole","n":48,"title":"BLACK HOLE","genre":"mystery","desc":"You are a tiny black hole loose in a city. Swallow things smaller than you to grow: cones, bins, cars, trees, houses, towers. Two minutes. Can you eat the whole town?","controls":"Move with the mouse / drag, or arrow keys / WASD","scoreLabel":"PERCENT EATEN","tasks":[{"stat":"score","target":50,"text":"Eat 50% of the city in Black Hole"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WW = 2200, WH = 1500;
+const KINDS = [['🚧', 9], ['🗑', 11], ['🌳', 18], ['🚗', 22], ['🚌', 32], ['🏠', 44], ['🏪', 56], ['🏢', 74], ['🏰', 96]];
+K.game({
+  bg: '#1c2230',
+  init(s) {
+    s.h = { x: WW / 2, y: WH / 2, r: 16 }; s.items = []; s.time = 120; s.cam = { x: WW / 2, y: WH / 2 };
+    for (let i = 0; i < 420; i++) { const k = K.pick(KINDS.slice(0, 4 + Math.floor(Math.random() * 6))); s.items.push({ x: K.rand(40, WW - 40), y: K.rand(40, WH - 40), e: k[0], r: k[1] * K.rand(0.85, 1.15), gone: false, fall: 0 }); }
+    s.total = s.items.reduce((a, it) => a + it.r * it.r, 0); s.eaten = 0;
+  },
+  update(s, dt) {
+    s.time -= dt;
+    const d = K.dir(), h = s.h, sp = 220 + h.r * 0.8;
+    if (d.x || d.y) { h.x += d.x * sp * dt; h.y += d.y * sp * dt; }
+    else if (K.mouse.down || K.mouse.moved) { const tx = s.cam.x - 480 + K.mouse.x, ty = s.cam.y - 270 + K.mouse.y, a = Math.atan2(ty - h.y, tx - h.x), dist = Math.hypot(tx - h.x, ty - h.y); if (dist > 10) { h.x += Math.cos(a) * Math.min(sp, dist * 3) * dt; h.y += Math.sin(a) * Math.min(sp, dist * 3) * dt; } }
+    h.x = K.clamp(h.x, 0, WW); h.y = K.clamp(h.y, 0, WH);
+    for (const it of s.items) {
+      if (it.gone) continue;
+      if (it.fall > 0) { it.fall += dt * 3; it.x = K.lerp(it.x, h.x, dt * 6); it.y = K.lerp(it.y, h.y, dt * 6); if (it.fall > 1) { it.gone = true; s.eaten += it.r * it.r; h.r = Math.sqrt(h.r * h.r + it.r * it.r * 0.18); } continue; }
+      const dd = Math.hypot(it.x - h.x, it.y - h.y);
+      if (dd < h.r && it.r < h.r * 0.92) { it.fall = 0.01; K.tone(300 + Math.min(600, it.r * 6), 0.12, 'sine', 0.04, -200); }
+    }
+    s.cam.x = K.lerp(s.cam.x, K.clamp(h.x, 480, WW - 480), dt * 5); s.cam.y = K.lerp(s.cam.y, K.clamp(h.y, 270, WH - 270), dt * 5);
+    const pct = Math.round((s.eaten / s.total) * 100);
+    if (s.time <= 0 || pct >= 100) { K.sfx('win'); K.end(s, { score: pct, won: pct >= 60, title: pct >= 100 ? 'THE TOWN IS GONE' : 'TIME', text: `You ate ${pct}% of the city.` }); }
+  },
+  draw(s) {
+    const c = K.ctx(); c.save(); c.translate(480 - s.cam.x, 270 - s.cam.y);
+    K.rect(0, 0, WW, WH, '#3a4a3a');
+    for (let x = 0; x < WW; x += 300) K.rect(x + 120, 0, 60, WH, '#2a2e36'); for (let y = 0; y < WH; y += 300) K.rect(0, y + 120, WW, 60, '#2a2e36');
+    for (let x = 0; x < WW; x += 300) for (let y = 0; y < WH; y += 40) K.rect(x + 148, y, 4, 20, '#c9c9a0');
+    const h = s.h;
+    s.items.forEach((it) => { if (it.gone || Math.abs(it.x - s.cam.x) > 560 || Math.abs(it.y - s.cam.y) > 360) return; const k = it.fall > 0 ? Math.max(0.05, 1 - it.fall) : 1; K.text(it.e, it.x, it.y, it.r * 1.9 * k, '#fff'); });
+    c.fillStyle = K.rgrad(h.x, h.y, h.r * 1.4, ['#000', '#000', '#2a0a4a', 'rgba(120,40,200,0)']); c.beginPath(); c.arc(h.x, h.y, h.r * 1.4, 0, 6.28); c.fill();
+    K.ring(h.x, h.y, h.r, '#c45cff', 2);
+    for (let i = 0; i < 3; i++) { K.alpha(0.3); K.ring(h.x, h.y, h.r * (1.1 + ((K.time() * 0.5 + i / 3) % 1) * 0.4), '#c45cff', 1); } K.alpha(1);
+    c.restore();
+    const pct = Math.round((s.eaten / s.total) * 100);
+    K.rect(20, 20, 300, 14, '#00000066', 7); K.rect(20, 20, 3 * pct, 14, '#c45cff', 7); K.text(`${pct}% EATEN`, 330, 27, 14, '#fff', 'left', 'd');
+    K.text(`${Math.max(0, Math.ceil(s.time))}s`, 940, 27, 20, s.time < 15 ? '#ff3355' : '#fff', 'right', 'd');
+    K.rect(800, 400, 150, 102, '#00000066', 6); s.items.forEach((it) => { if (!it.gone && it.r > 30) K.rect(800 + (it.x / WW) * 150, 400 + (it.y / WH) * 102, 2, 2, '#ffffff88'); }); K.circle(800 + (h.x / WW) * 150, 400 + (h.y / WH) * 102, 3, '#c45cff');
+  },
+  ai(s) { const h = s.h, t = s.items.filter((it) => !it.gone && it.r < h.r * 0.9).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0]; if (!t) return; K.vhold('ArrowLeft', t.x < h.x - 5); K.vhold('ArrowRight', t.x > h.x + 5); K.vhold('ArrowUp', t.y < h.y - 5); K.vhold('ArrowDown', t.y > h.y + 5); },
+});
+</script></body></html>

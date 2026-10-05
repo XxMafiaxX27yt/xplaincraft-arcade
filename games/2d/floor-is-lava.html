@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Floor Is Lava</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"floor-is-lava","n":10,"title":"THE FLOOR IS LAVA","genre":"mystery","desc":"The floor tiles turn to lava, but the lava follows a secret rule that changes every round: maybe it follows you, maybe it spreads in lines, maybe it copies your last steps. Watch the warning glow, figure out the rule, survive.","controls":"Arrow keys / WASD or swipe, tile by tile","scoreLabel":"ROUNDS","tasks":[{"stat":"score","target":6,"text":"Survive 6 rounds of The Floor Is Lava"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 9, T = 52, BX = 480 - (N * T) / 2, BY = 290 - (N * T) / 2;
+const RULES = [
+  ['RANDOM', 'Lava pops up anywhere. Just keep moving.', (s) => { const o = []; for (let i = 0; i < 10 + s.round * 2; i++) o.push([K.irand(0, N - 1), K.irand(0, N - 1)]); return o; }],
+  ['FOLLOWER', 'Lava appears where you just were.', (s) => s.trail.slice(-4)],
+  ['LINES', 'Whole rows and columns burn.', () => { const o = [], r = K.irand(0, N - 1), c = K.irand(0, N - 1); for (let i = 0; i < N; i++) { o.push([i, r]); if (Math.random() < 0.6) o.push([c, i]); } return o; }],
+  ['RINGS', 'Lava spreads outward from the centre in rings.', (s) => { const ring = s.tick % 5, o = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (Math.max(Math.abs(x - 4), Math.abs(y - 4)) === ring) o.push([x, y]); return o; }],
+  ['CHECKER', 'Black squares, then white squares. Switch in time.', (s) => { const o = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if ((x + y + s.tick) % 2 === 0 && Math.random() < 0.8) o.push([x, y]); return o; }],
+  ['MIRROR', 'Lava appears on the opposite side of the board from you.', (s) => { const o = [[N - 1 - s.p[0], N - 1 - s.p[1]], [s.p[0], N - 1 - s.p[1]], [N - 1 - s.p[0], s.p[1]]]; for (let i = 0; i < 6 + s.round; i++) o.push([K.irand(0, N - 1), K.irand(0, N - 1)]); return o.concat(s.trail.slice(-1)); }],
+  ['HUNTER', 'Lava closes in around you.', (s) => { const o = []; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if ((Math.abs(dx) === 2 || Math.abs(dy) === 2) && Math.random() < 0.55) o.push([s.p[0] + dx, s.p[1] + dy]); return o; }],
+];
+function round(s) { s.round++; s.rule = s.round <= 2 ? s.round - 1 : K.irand(0, RULES.length - 1); s.tick = 0; s.phase = 'warn'; s.t = 1.2; s.ticks = 6 + Math.min(6, s.round); s.lava = new Set(); s.warn = []; s.show = 2.5; }
+K.game({
+  bg: '#140806',
+  init(s) { s.p = [4, 4]; s.round = 0; s.trail = []; round(s); },
+  update(s, dt) {
+    s.t -= dt; s.show -= dt;
+    const d = K.tapDir();
+    if (d) { const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[d]; const nx = K.clamp(s.p[0] + dx, 0, N - 1), ny = K.clamp(s.p[1] + dy, 0, N - 1); if (nx !== s.p[0] || ny !== s.p[1]) { s.trail.push(s.p.slice()); s.trail = s.trail.slice(-8); s.p = [nx, ny]; K.sfx('step'); } }
+    if (s.phase === 'warn' && s.t <= 0) { s.lava = new Set(s.warn.map(([x, y]) => x + ',' + y)); s.phase = 'burn'; s.t = 0.9; K.sfx('boom'); K.shake(4); }
+    else if (s.phase === 'burn' && s.t <= 0) {
+      s.tick++; s.lava.clear();
+      if (s.tick >= s.ticks) { K.sfx('win'); if (s.round >= 12) return K.end(s, { score: s.round, won: true, title: 'LAVA MASTER', text: 'Twelve rules survived.' }); round(s); return; }
+      s.phase = 'warn'; s.t = Math.max(0.55, 1.1 - s.round * 0.04);
+    }
+    if (s.phase === 'warn' && s.warnFor !== s.tick + ':' + s.round) { s.warnFor = s.tick + ':' + s.round; s.warn = RULES[s.rule][2](s).filter(([x, y]) => x >= 0 && y >= 0 && x < N && y < N); }
+    if (s.phase === 'burn' && s.lava.has(s.p[0] + ',' + s.p[1])) { K.sfx('scare'); K.flash('#ff4a1a', 0.4); return K.end(s, { score: s.round - 1, won: false, title: 'TOASTED', text: `The rule was ${RULES[s.rule][0]}: ${RULES[s.rule][1]}` }); }
+  },
+  draw(s) {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const k = x + ',' + y, X = BX + x * T, Y = BY + y * T, warn = s.phase === 'warn' && s.warn.some(([a, b]) => a === x && b === y), lava = s.lava.has(k);
+      K.rect(X + 2, Y + 2, T - 4, T - 4, lava ? `hsl(${15 + Math.sin(K.time() * 10 + x) * 10},100%,${50 + Math.random() * 8}%)` : warn ? `rgba(255,${120 - (1 - s.t) * 60},40,${0.25 + (1.2 - s.t) * 0.5})` : (x + y) % 2 ? '#3a2a24' : '#2e211c', 6);
+      if (lava) { K.glow('#ff4a1a', 14); K.rect(X + 8, Y + 8, T - 16, T - 16, '#ffd93a', 4); K.noGlow(); }
+    }
+    const [px, py] = s.p; K.glow('#22e6ff', 14); K.circle(BX + px * T + T / 2, BY + py * T + T / 2, 16, '#22e6ff'); K.noGlow();
+    K.text(`ROUND ${s.round}`, 110, 120, 24, '#fff', 'center', 'd');
+    K.text(`${Math.max(0, s.ticks - s.tick)} WAVES LEFT`, 110, 160, 14, '#ff8a3a', 'center', 'd');
+    if (s.show > 0 && s.round <= 2) K.wrapText(`RULE: ${RULES[s.rule][1]}`, 480, 22, 700, 16, '#ffd93a');
+    else K.text('What is the rule this round?', 480, 22, 15, '#8e88b8', 'center', 'u');
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 10) return;
+    const bad = new Set(s.warn.map(([x, y]) => x + ',' + y)), opts = [[0, -1, 'ArrowUp'], [0, 1, 'ArrowDown'], [-1, 0, 'ArrowLeft'], [1, 0, 'ArrowRight']].filter(([dx, dy]) => { const x = s.p[0] + dx, y = s.p[1] + dy; return x >= 0 && y >= 0 && x < N && y < N && !bad.has(x + ',' + y); });
+    if (bad.has(s.p[0] + ',' + s.p[1]) && opts.length) K.vtap(K.pick(opts)[2]);
+  },
+});
+</script></body></html>

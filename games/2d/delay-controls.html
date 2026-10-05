@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delay Controls</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"delay-controls","n":39,"title":"DELAY CONTROLS","genre":"mystery","desc":"Everything you press happens one second later. Steer a little ship through a field of mines to the gates, plan your moves ahead, and watch your ghost show where you are about to go. The lag grows with every gate.","controls":"Arrow keys / WASD (or drag) - but it happens later","scoreLabel":"GATES","tasks":[{"stat":"score","target":6,"text":"Pass 6 gates in Delay Controls"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function field(s) { s.gate = { x: K.rand(700, 900), y: K.rand(80, 460) }; s.mines = []; for (let i = 0; i < 10 + s.gates * 3; i++) { let m; do { m = { x: K.rand(140, 900), y: K.rand(40, 500), r: K.rand(14, 22), ph: K.rand(0, 6) }; } while (K.dist(m, s.gate) < 80 || K.dist(m, s.p) < 120); s.mines.push(m); } }
+K.game({
+  bg: '#08101a',
+  init(s) { s.p = { x: 80, y: 270, vx: 0, vy: 0 }; s.gates = 0; s.delay = 0.8; s.queue = []; s.time = 0; field(s); },
+  update(s, dt) {
+    s.time += dt;
+    let d = K.dir();
+    if (!d.x && !d.y && K.mouse.down) { const a = K.angle(s.p, K.mouse); d = { x: Math.cos(a), y: Math.sin(a) }; }
+    s.queue.push({ t: s.time + s.delay, d });
+    let now = { x: 0, y: 0 }; while (s.queue.length && s.queue[0].t <= s.time) now = s.queue.shift().d;
+    s.p.vx = K.lerp(s.p.vx, now.x * 230, dt * 6); s.p.vy = K.lerp(s.p.vy, now.y * 230, dt * 6);
+    s.p.x = K.clamp(s.p.x + s.p.vx * dt, 14, 946); s.p.y = K.clamp(s.p.y + s.p.vy * dt, 14, 526);
+    // ghost: replay the queued inputs to show where you'll be
+    let g = { x: s.p.x, y: s.p.y, vx: s.p.vx, vy: s.p.vy }; s.ghost = [];
+    for (let i = 0; i < s.queue.length; i += 3) { const q = s.queue[i].d; for (let k = 0; k < 3; k++) { g.vx = K.lerp(g.vx, q.x * 230, dt * 6); g.vy = K.lerp(g.vy, q.y * 230, dt * 6); g.x += g.vx * dt; g.y += g.vy * dt; } s.ghost.push({ x: g.x, y: g.y }); }
+    for (const m of s.mines) if (K.dist(m, s.p) < m.r + 10) { K.sfx('boom'); K.shake(14); K.burst(s.p.x, s.p.y, ['#ff8a3a', '#fff'], 30); return K.end(s, { score: s.gates, won: null, title: 'BOOM', text: `Lag was ${s.delay.toFixed(1)} s` }); }
+    if (K.dist(s.gate, s.p) < 30) { s.gates++; s.delay = Math.min(2, s.delay + 0.15); K.sfx('win'); K.flash('#3dffa0', 0.15); s.p.x = 80; s.p.y = K.rand(100, 440); s.p.vx = s.p.vy = 0; s.queue = []; field(s); }
+  },
+  draw(s) {
+    K.grid(40, '#22e6ff', 0.05);
+    s.mines.forEach((m) => { const p = 1 + Math.sin(K.time() * 4 + m.ph) * 0.1; K.glow('#ff3355', 12); K.circle(m.x, m.y, m.r * p, '#3a0a14'); K.ring(m.x, m.y, m.r * p, '#ff3355', 2); K.noGlow(); K.circle(m.x, m.y, 3, '#ff3355'); });
+    K.glow('#3dffa0', 18); K.ring(s.gate.x, s.gate.y, 26 + Math.sin(K.time() * 5) * 3, '#3dffa0', 4); K.noGlow();
+    (s.ghost || []).forEach((g, i, a) => { K.alpha(0.15 + (i / a.length) * 0.4); K.circle(g.x, g.y, 4, '#22e6ff'); }); K.alpha(1);
+    const last = s.ghost?.[s.ghost.length - 1]; if (last) { K.alpha(0.4); K.circle(last.x, last.y, 10, '#22e6ff'); K.alpha(1); }
+    K.glow('#22e6ff', 14); K.circle(s.p.x, s.p.y, 10, '#22e6ff'); K.noGlow();
+    K.text(`GATES ${s.gates}`, 20, 26, 18, '#3dffa0', 'left', 'd'); K.text(`LAG ${s.delay.toFixed(1)} s`, 940, 26, 18, '#ffd93a', 'right', 'd');
+  },
+  ai(s) { const t = s.gate, a = K.angle(s.p, t); K.vhold('ArrowRight', Math.cos(a) > 0.3); K.vhold('ArrowLeft', Math.cos(a) < -0.3); K.vhold('ArrowDown', Math.sin(a) > 0.3); K.vhold('ArrowUp', Math.sin(a) < -0.3); },
+});
+</script></body></html>

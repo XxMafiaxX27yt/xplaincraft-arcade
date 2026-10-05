@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Copy Cat</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"copy-cat","n":38,"title":"COPY CAT","genre":"mystery","desc":"Every enemy copies what you do, a few seconds later. Walk into the gem and so will they. Lead them into the spikes, make them chase each other, never let your own past catch you. A new copycat joins every gem.","controls":"Arrow keys / WASD or the stick","scoreLabel":"GEMS","tasks":[{"stat":"score","target":10,"text":"Grab 10 gems in Copy Cat"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SPIKES = [[300, 160], [660, 160], [300, 380], [660, 380], [480, 270]];
+const gem = () => { let g; do { g = { x: K.rand(80, 880), y: K.rand(80, 460) }; } while (SPIKES.some(([x, y]) => Math.hypot(x - g.x, y - g.y) < 70)); return g; };
+K.game({
+  bg: '#0d0a18',
+  init(s) { s.p = { x: 120, y: 270 }; s.hist = []; s.cats = []; s.score = 0; s.g = gem(); s.t = 0; },
+  update(s, dt) {
+    s.t += dt;
+    const d = K.dir(), sp = 210;
+    s.p.x = K.clamp(s.p.x + d.x * sp * dt, 16, 944); s.p.y = K.clamp(s.p.y + d.y * sp * dt, 16, 524);
+    s.hist.push({ t: s.t, dx: d.x, dy: d.y }); while (s.hist.length && s.hist[0].t < s.t - 10) s.hist.shift();
+    for (const c of s.cats) {
+      if (c.dead) { c.dead -= dt; if (c.dead <= 0) { c.dead = 0; c.x = c.sx; c.y = c.sy; } continue; }
+      const want = s.t - c.lag; const h = s.hist.find((q) => q.t >= want);
+      if (h && s.t > c.born + c.lag) { c.x = K.clamp(c.x + h.dx * sp * dt, 16, 944); c.y = K.clamp(c.y + h.dy * sp * dt, 16, 524); }
+      if (SPIKES.some(([x, y]) => Math.hypot(x - c.x, y - c.y) < 26)) { c.dead = 2; K.sfx('pop'); K.burst(c.x, c.y, c.col, 14); }
+      if (Math.hypot(c.x - s.p.x, c.y - s.p.y) < 26) { K.sfx('scare'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'COPIED', text: `You were caught by yourself, ${c.lag.toFixed(1)} s ago.` }); }
+    }
+    if (SPIKES.some(([x, y]) => Math.hypot(x - s.p.x, y - s.p.y) < 24)) { K.sfx('hit'); K.shake(10); return K.end(s, { score: s.score, won: null, title: 'SPIKED', text: `${s.score} gems` }); }
+    if (Math.hypot(s.g.x - s.p.x, s.g.y - s.p.y) < 26) {
+      s.score++; K.sfx('coin'); s.g = gem();
+      const lag = Math.max(0.9, 3 - s.cats.length * 0.25);
+      s.cats.push({ x: s.p.x, y: s.p.y, sx: s.p.x, sy: s.p.y, lag, born: s.t, col: `hsl(${s.cats.length * 55},90%,60%)`, dead: 0 });
+    }
+  },
+  draw(s) {
+    K.grid(40, '#c45cff', 0.06);
+    SPIKES.forEach(([x, y]) => { for (let i = 0; i < 8; i++) { const a = (i / 8) * 6.283 + K.time(); K.poly([[x + Math.cos(a) * 10, y + Math.sin(a) * 10], [x + Math.cos(a + 0.4) * 24, y + Math.sin(a + 0.4) * 24], [x + Math.cos(a + 0.8) * 10, y + Math.sin(a + 0.8) * 10]], '#ff3355'); } K.circle(x, y, 11, '#5a1020'); });
+    K.glow('#ffd93a', 16); K.poly([[s.g.x, s.g.y - 14], [s.g.x + 11, s.g.y], [s.g.x, s.g.y + 14], [s.g.x - 11, s.g.y]], '#ffd93a'); K.noGlow();
+    s.cats.forEach((c) => { if (c.dead) return; K.alpha(Math.min(1, (s.t - c.born) / c.lag)); K.glow(c.col, 10); K.circle(c.x, c.y, 14, c.col); K.noGlow(); K.circle(c.x - 5, c.y - 3, 3, '#111'); K.circle(c.x + 5, c.y - 3, 3, '#111'); K.alpha(1); K.text(`${c.lag.toFixed(1)}s`, c.x, c.y - 22, 9, c.col, 'center', 'm'); });
+    K.glow('#22e6ff', 14); K.circle(s.p.x, s.p.y, 14, '#22e6ff'); K.noGlow(); K.circle(s.p.x - 5, s.p.y - 3, 3, '#05040c'); K.circle(s.p.x + 5, s.p.y - 3, 3, '#05040c');
+    K.text(`GEMS ${s.score}`, 20, 26, 18, '#ffd93a', 'left', 'd'); K.text(`${s.cats.length} COPYCATS`, 940, 26, 14, '#c45cff', 'right', 'd');
+  },
+  ai(s) { const a = K.angle(s.p, s.g); let x = Math.cos(a), y = Math.sin(a); const c = s.cats.find((q) => !q.dead && Math.hypot(q.x - s.p.x, q.y - s.p.y) < 90); if (c) { x = s.p.x - c.x; y = s.p.y - c.y; } K.vhold('ArrowRight', x > 0.3); K.vhold('ArrowLeft', x < -0.3); K.vhold('ArrowDown', y > 0.3); K.vhold('ArrowUp', y < -0.3); },
+});
+</script></body></html>
