@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tower of Hanoi</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tower-of-hanoi","n":31,"title":"TOWER OF HANOI","genre":"mind","desc":"Move the whole tower from the left peg to the right peg, one disc at a time, never putting a bigger disc on a smaller one. 3 discs to start, one more each level. The perfect solution takes 2ⁿ − 1 moves; match it for a gold star.","controls":"Click / tap a peg to pick up its top disc, then a peg to drop it (or keys 1 2 3)","scoreLabel":"LEVELS","tasks":[{"stat":"score","target":3,"text":"Solve 3 Tower of Hanoi levels"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PX = [240, 480, 720], BASE = 440;
+function level(s) { s.pegs = [Array.from({ length: s.n }, (_, i) => s.n - i), [], []]; s.held = null; s.moves = 0; s.lift = 0; s.plan = null; }
+K.game({
+  bg: '#141020', touch: { stick: false, buttons: [] },
+  init(s) { s.n = 3; s.solved = 0; s.stars = 0; level(s); s.done = 0; },
+  update(s, dt) {
+    s.lift = K.lerp(s.lift, s.held ? 1 : 0, dt * 14);
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.n++; if (s.n > 8) return K.end(s, { score: s.solved, won: true, title: 'MASTER OF THE TOWERS', text: `${s.stars} perfect solutions` }); level(s); } return; }
+    let p = -1;
+    for (let i = 0; i < 3; i++) if (K.tap('Digit' + (i + 1))) p = i;
+    if (K.mouse.clicked) PX.forEach((x, i) => { if (Math.abs(K.mouse.x - x) < 115) p = i; });
+    if (p < 0) return;
+    if (s.held == null) { if (s.pegs[p].length) { s.held = { d: s.pegs[p].pop(), from: p }; K.sfx('tick'); } return; }
+    const top = s.pegs[p][s.pegs[p].length - 1];
+    if (top && top < s.held.d) { K.sfx('wrong'); K.shake(4); return; }
+    s.pegs[p].push(s.held.d); if (p !== s.held.from) s.moves++; s.held = null; K.sfx('click');
+    if (s.pegs[2].length === s.n) { s.solved++; const perfect = s.moves === 2 ** s.n - 1; if (perfect) s.stars++; K.sfx('win'); K.floatText(perfect ? '★ PERFECT' : 'SOLVED', 480, 120, '#ffd93a', 26); s.done = 1.6; }
+  },
+  draw(s) {
+    K.rect(120, BASE, 720, 16, '#5a3a22', 6);
+    PX.forEach((x, i) => { K.rect(x - 6, BASE - 230, 12, 230, '#7a5232', 6); K.text(String(i + 1), x, BASE + 34, 14, '#8e88b8', 'center', 'd'); });
+    const disc = (d, x, y) => { const w = 40 + d * 22; K.glow(`hsl(${d * 40},80%,60%)`, 8); K.rect(x - w / 2, y - 22, w, 22, `hsl(${d * 40},80%,60%)`, 10); K.noGlow(); };
+    s.pegs.forEach((peg, i) => peg.forEach((d, k) => disc(d, PX[i], BASE - k * 24)));
+    if (s.held) { const x = K.mouse.moved ? K.clamp(K.mouse.x, 200, 760) : PX[s.held.from]; disc(s.held.d, x, BASE - 260 * s.lift - 20); }
+    K.text(`${s.n} DISCS`, 480, 40, 22, '#fff', 'center', 'd'); K.text(`MOVES ${s.moves} · BEST ${2 ** s.n - 1}`, 480, 72, 15, '#8e88b8', 'center', 'm'); K.text(`★ ${s.stars}`, 940, 30, 18, '#ffd93a', 'right', 'd');
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 18 || s.done > 0) return;
+    if (!s.plan) { s.plan = []; const go = (n, a, b, c) => { if (!n) return; go(n - 1, a, c, b); s.plan.push([a, c]); go(n - 1, b, a, c); }; go(s.n, 0, 1, 2); s.step = 0; }
+    const mv = s.plan[s.step]; if (!mv) return; if (s.held == null) K.vtap('Digit' + (mv[0] + 1)); else { K.vtap('Digit' + (mv[1] + 1)); s.step++; if (s.step >= s.plan.length) s.plan = null; }
+  },
+});
+</script></body></html>

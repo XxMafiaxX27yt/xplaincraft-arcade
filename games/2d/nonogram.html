@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nonogram</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"nonogram","n":20,"title":"NONOGRAM","genre":"mind","desc":"Picture logic. The numbers on each row and column tell you how many filled squares are in each run, in order. Fill the right squares and a little pixel picture appears. Mark squares you know are empty with an X.","controls":"Click / tap = fill · right-click (or X mode) = mark empty · drag to paint several","scoreLabel":"PICTURES","tasks":[{"stat":"score","target":3,"text":"Solve 3 Nonogram pictures"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PICS = [
+  ['HEART', ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000', '0000000'].slice(0, 6)],
+  ['HOUSE', ['0001000', '0011100', '0111110', '1111111', '0110110', '0110110', '0111110']],
+  ['CAT', ['1000001', '1100011', '1111111', '1011101', '1111111', '0111110', '0011100']],
+  ['SMILE', ['0111110', '1000001', '1010101', '1000001', '1011101', '1000001', '0111110']],
+  ['TREE', ['00010000', '00111000', '01111100', '00111000', '01111100', '11111110', '00010000', '00010000']],
+  ['ROCKET', ['00011000', '00111100', '00111100', '00100100', '00111100', '01111110', '11011011', '10011001']],
+  ['DUCK', ['00110000', '01111000', '11011000', '00011111', '00111111', '00111110', '00011100', '00000000'].slice(0, 7)],
+  ['GHOST', ['00111100', '01111110', '11011011', '11111111', '11111111', '11111111', '10101010', '00000000'].slice(0, 7)],
+  ['KEY', ['011100000', '100010000', '100011111', '100010101', '011100101'].concat([])],
+  ['MUSHROOM', ['001111100', '011011110', '111111011', '110111111', '011111110', '000101000', '000101000', '001111100']],
+];
+const runs = (arr) => { const r = []; let n = 0; arr.forEach((v) => { if (v) n++; else if (n) { r.push(n); n = 0; } }); if (n) r.push(n); return r.length ? r : [0]; };
+function load(s) {
+  const [name, rows] = PICS[s.i]; s.name = name; s.sol = rows.map((r) => [...r].map(Number)); s.h = s.sol.length; s.w = s.sol[0].length;
+  s.g = s.sol.map((r) => r.map(() => 0)); s.rowC = s.sol.map(runs); s.colC = s.sol[0].map((_, x) => runs(s.sol.map((r) => r[x])));
+  s.T = Math.min(46, Math.floor(360 / Math.max(s.w, s.h))); s.ox = 480 - (s.w * s.T) / 2 + 60; s.oy = 160; s.done = 0; s.paint = null; s.mist = 0;
+}
+// solved when every row and column matches its clues (any valid picture counts)
+const solved = (s) => s.rowC.every((r, y) => runs(s.g[y].map((v) => (v === 1 ? 1 : 0))).join() === r.join()) && s.colC.every((c, x) => runs(s.g.map((r) => (r[x] === 1 ? 1 : 0))).join() === c.join());
+K.game({
+  bg: '#0e1220', touch: { stick: false, buttons: [] },
+  init(s) { s.i = 0; s.score = 0; s.xmode = false; load(s); },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.i++; if (s.i >= PICS.length) return K.end(s, { score: s.score, won: true, title: 'GALLERY COMPLETE' }); load(s); } return; }
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 460, w: 140, h: 44 })) { s.xmode = !s.xmode; return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 790, y: 460, w: 140, h: 44 })) return K.end(s, { score: s.score, won: null, title: 'NICE WORK', text: `${s.score} pictures` });
+    const cx = Math.floor((m.x - s.ox) / s.T), cy = Math.floor((m.y - s.oy) / s.T), inside = cx >= 0 && cy >= 0 && cx < s.w && cy < s.h;
+    if ((m.clicked || m.right) && inside) { const mark = m.right || s.xmode ? 2 : 1; s.paint = s.g[cy][cx] === mark ? 0 : mark; }
+    if (!m.down && !m.right) s.paint = null;
+    if (s.paint != null && inside && s.g[cy][cx] !== s.paint) { s.g[cy][cx] = s.paint; K.tone(s.paint === 1 ? 520 : 300, 0.04, 'triangle', 0.04); if (solved(s)) { s.score++; s.done = 2; K.sfx('win'); } }
+  },
+  draw(s) {
+    const T = s.T;
+    s.rowC.forEach((r, y) => { const ok = runs(s.g[y].map((v) => (v === 1 ? 1 : 0))).join() === r.join(); K.text(r.join(' '), s.ox - 10, s.oy + y * T + T / 2, 15, ok ? '#3dffa0' : '#fff', 'right', 'd'); });
+    s.colC.forEach((c, x) => { const ok = runs(s.g.map((r) => (r[x] === 1 ? 1 : 0))).join() === c.join(); c.forEach((n, k) => K.text(String(n), s.ox + x * T + T / 2, s.oy - 14 - (c.length - 1 - k) * 18, 15, ok ? '#3dffa0' : '#fff', 'center', 'd')); });
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
+      const v = s.g[y][x], X = s.ox + x * T, Y = s.oy + y * T;
+      K.rect(X + 1, Y + 1, T - 2, T - 2, v === 1 ? (s.done > 0 ? `hsl(${(x * 30 + y * 20) % 360},80%,60%)` : '#22e6ff') : '#1c2238', 3);
+      if (v === 2) { K.line(X + 8, Y + 8, X + T - 8, Y + T - 8, '#ff3355', 2); K.line(X + T - 8, Y + 8, X + 8, Y + T - 8, '#ff3355', 2); }
+    }
+    for (let x = 0; x <= s.w; x += 5) K.line(s.ox + x * T, s.oy, s.ox + x * T, s.oy + s.h * T, '#8b5cf6', 2);
+    for (let y = 0; y <= s.h; y += 5) K.line(s.ox, s.oy + y * T, s.ox + s.w * T, s.oy + y * T, '#8b5cf6', 2);
+    K.text(s.done > 0 ? s.name : `PICTURE ${s.i + 1} / ${PICS.length}`, 160, 60, 22, s.done > 0 ? '#ffd93a' : '#fff', 'center', 'd', s.done > 0 ? 12 : 0);
+    K.button(30, 460, 140, 44, s.xmode ? 'MODE: ✕' : 'MODE: FILL', { color: s.xmode ? '#ff3355' : '#22e6ff', size: 12 });
+    K.button(790, 460, 140, 44, 'FINISH', { color: '#8e88b8', size: 12 });
+  },
+  ai(s) { if (s.done > 0) return; s.aw = (s.aw || 0) + 1; if (s.aw % 6) return; for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.sol[y][x] && s.g[y][x] !== 1) { s.g[y][x] = 1; if (solved(s)) { s.done = 2; } return; } },
+});
+</script></body></html>

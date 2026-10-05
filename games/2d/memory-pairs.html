@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Memory Pairs</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"memory-pairs","n":90,"title":"MEMORY PAIRS","genre":"mind","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":4,"desc":"The classic card-flip memory game. Turn two cards; a pair stays face up and you go again. Solo you race the clock and your flip count; with friends you take turns and steal the pairs they forgot.","controls":"Click / tap a card to flip it","scoreLabel":"PAIRS","tasks":[{"stat":"score","target":12,"text":"Find 12 pairs in Memory Pairs"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ICONS = ['🍎', '🍋', '🍇', '🍉', '🌸', '⭐', '🌙', '🔥', '💧', '🍀', '🐟', '🦋', '🎈', '🎵', '💎', '🔔', '🚀', '👾'];
+const COLS = 6, ROWS = 4, CW = 100, CH = 112, BX = 480 - (COLS * CW) / 2 + 30, BY = 50, PC = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a'];
+const mode = () => (K.net ? 'net' : K.local ? 'local' : 'sp');
+function deal(s) { const pick = ICONS.slice(); for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(K.rng() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; } const ic = pick.slice(0, (COLS * ROWS) / 2); const d = ic.concat(ic); for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(K.rng() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } s.cards = d.map((e) => ({ e, up: false, owner: -1, flip: 0 })); }
+function flip(s, i, send) {
+  const c = s.cards[i]; if (!c || c.up || s.open.length >= 2 || s.wait > 0) return;
+  c.up = true; s.open.push(i); s.flips++; K.sfx('click'); if (send && K.net) K.net.send({ t: 'flip', i });
+  if (s.open.length === 2) {
+    const [a, b] = s.open.map((k) => s.cards[k]);
+    if (a.e === b.e) { a.owner = b.owner = s.turn; s.pts[s.turn]++; s.open = []; K.sfx('coin'); if (s.cards.every((x) => x.up)) finish(s); }
+    else { s.wait = 0.9; }
+  }
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const me = mode() === 'net' ? K.net.index : 0, best = Math.max(...s.pts), won = mode() === 'sp' ? true : s.pts[me] === best && s.pts.filter((p) => p === best).length === 1;
+  K.end(s, { score: s.pts[me], won: mode() === 'local' ? null : won, title: mode() === 'sp' ? 'ALL PAIRS FOUND' : won ? 'YOU WIN' : 'GOOD GAME', text: mode() === 'sp' ? `${s.flips} flips in ${Math.round(s.time)} s` : s.names.map((n, i) => `${n} ${s.pts[i]}`).join(' · ') });
+}
+K.game({
+  bg: '#101026', touch: { stick: false, buttons: [] },
+  init(s) { deal(s); s.n = mode() === 'net' ? K.net.players.length : mode() === 'local' ? 2 : 1; s.names = mode() === 'net' ? K.net.players.map((p) => p.username) : mode() === 'local' ? ['P1', 'P2'] : ['YOU']; s.pts = Array(s.n).fill(0); s.turn = 0; s.open = []; s.wait = 0; s.flips = 0; s.time = 0; s.over = false; },
+  onNet(s, d) { if (d.t === 'flip' && s.turn !== K.net.index) flip(s, d.i, false); },
+  onLeave(s, id) { if (!s.over) finish(s); },
+  update(s, dt) {
+    s.time += dt;
+    s.cards.forEach((c) => (c.flip = K.lerp(c.flip, c.up ? 1 : 0, dt * 12)));
+    if (s.wait > 0) { s.wait -= dt; if (s.wait <= 0) { s.open.forEach((k) => (s.cards[k].up = false)); s.open = []; s.turn = (s.turn + 1) % s.n; K.sfx('wrong'); } return; }
+    if (mode() === 'net' && s.turn !== K.net.index) return;
+    if (!K.mouse.clicked) return;
+    const x = Math.floor((K.mouse.x - BX) / CW), y = Math.floor((K.mouse.y - BY) / CH);
+    if (x >= 0 && y >= 0 && x < COLS && y < ROWS) flip(s, y * COLS + x, true);
+  },
+  draw(s) {
+    s.cards.forEach((c, i) => {
+      const x = BX + (i % COLS) * CW + 6, y = BY + Math.floor(i / COLS) * CH + 6, w = CW - 12, h = CH - 12, f = c.flip, sx = Math.abs(Math.cos(f * Math.PI));
+      const ctx = K.ctx(); ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(Math.max(0.02, sx), 1);
+      if (f < 0.5) { K.rect(-w / 2, -h / 2, w, h, '#2a2460', 10); K.stroke(-w / 2 + 6, -h / 2 + 6, w - 12, h - 12, '#8b5cf6', 2, 6); K.text('?', 0, 2, 30, '#8b5cf6', 'center', 'd'); }
+      else { K.rect(-w / 2, -h / 2, w, h, '#f4f0ff', 10); if (c.owner >= 0) K.stroke(-w / 2, -h / 2, w, h, PC[c.owner], 4, 10); K.text(c.e, 0, 2, 40, '#111'); }
+      ctx.restore();
+    });
+    if (s.n > 1) s.names.forEach((n, i) => K.text(`${s.turn === i ? '▶ ' : ''}${n} ${s.pts[i]}`, 20, 80 + i * 30, 15, PC[i], 'left', 'd'));
+    else { K.text(`FLIPS ${s.flips}`, 20, 80, 16, '#fff', 'left', 'd'); K.text(`${Math.floor(s.time)} s`, 20, 110, 16, '#8e88b8', 'left', 'd'); }
+    if (mode() === 'net') K.text(s.turn === K.net.index ? 'YOUR TURN' : `${s.names[s.turn]}'S TURN`, 480, 26, 16, PC[s.turn], 'center', 'd');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 25 || s.wait > 0) return; const hidden = s.cards.map((c, i) => (c.up ? -1 : i)).filter((i) => i >= 0); if (!hidden.length) return; flip(s, K.pick(hidden), false); },
+});
+</script></body></html>

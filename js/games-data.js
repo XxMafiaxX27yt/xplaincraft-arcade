@@ -1213,7 +1213,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/pac-chase.png"
 },
 {
 "id": "missile-defense",
@@ -1256,7 +1257,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/galaga-dive.png"
 },
 {
 "id": "catapult",
@@ -1277,7 +1279,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/catapult.png"
 },
 {
 "id": "bowling",
@@ -1298,7 +1301,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/bowling.png"
 },
 {
 "id": "archery",
@@ -1319,7 +1323,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/archery.png"
 },
 {
 "id": "jetpack-run",
@@ -1340,7 +1345,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/jetpack-run.png"
 },
 {
 "id": "lumberjack",
@@ -1926,6 +1932,27 @@ export const GAME_LIST = [
 "cover": "games/covers/mastermind.png"
 },
 {
+"id": "nonogram",
+"n": 20,
+"title": "NONOGRAM",
+"genre": "mind",
+"desc": "Picture logic. The numbers on each row and column tell you how many filled squares are in each run, in order. Fill the right squares and a little pixel picture appears. Mark squares you know are empty with an X.",
+"controls": "Click / tap = fill · right-click (or X mode) = mark empty · drag to paint several",
+"scoreLabel": "PICTURES",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Solve 3 Nonogram pictures"
+}
+],
+"file": "games/2d/nonogram.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "stroop-test",
 "n": 21,
 "title": "STROOP TEST",
@@ -2040,6 +2067,27 @@ export const GAME_LIST = [
 "cover": "games/covers/reversi.png"
 },
 {
+"id": "tower-of-hanoi",
+"n": 31,
+"title": "TOWER OF HANOI",
+"genre": "mind",
+"desc": "Move the whole tower from the left peg to the right peg, one disc at a time, never putting a bigger disc on a smaller one. 3 discs to start, one more each level. The perfect solution takes 2ⁿ − 1 moves; match it for a gold star.",
+"controls": "Click / tap a peg to pick up its top disc, then a peg to drop it (or keys 1 2 3)",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Solve 3 Tower of Hanoi levels"
+}
+],
+"file": "games/2d/tower-of-hanoi.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "rush-hour",
 "n": 32,
 "title": "RUSH HOUR",
@@ -2084,6 +2132,48 @@ export const GAME_LIST = [
 "cover": "games/covers/sokoban.png"
 },
 {
+"id": "number-memory",
+"n": 44,
+"title": "NUMBER MEMORY",
+"genre": "mind",
+"desc": "A number flashes on screen. When it disappears, type it back. Every correct answer adds one more digit. The average person remembers 7. How long can your number get?",
+"controls": "Type the digits (or the on-screen keypad) + Enter",
+"scoreLabel": "DIGITS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Remember an 8-digit number"
+}
+],
+"file": "games/2d/number-memory.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "chimp-test",
+"n": 45,
+"title": "CHIMP TEST",
+"genre": "mind",
+"desc": "Numbers appear scattered on a grid. Click 1 first, and every other number hides; then click the rest in order from memory. Each round adds a number. Chimpanzees famously beat most humans at this. Three strikes.",
+"controls": "Click / tap the squares in order: 1, 2, 3…",
+"scoreLabel": "NUMBERS",
+"tasks": [
+{
+"stat": "score",
+"target": 9,
+"text": "Reach 9 numbers in the Chimp Test"
+}
+],
+"file": "games/2d/chimp-test.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "quiz-battle",
 "n": 86,
 "title": "QUIZ BATTLE",
@@ -2112,6 +2202,31 @@ export const GAME_LIST = [
 "file": "games/2d/quiz-battle.html",
 "dim": "2d",
 "cover": "games/covers/quiz-battle.png"
+},
+{
+"id": "memory-pairs",
+"n": 90,
+"title": "MEMORY PAIRS",
+"genre": "mind",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "The classic card-flip memory game. Turn two cards; a pair stays face up and you go again. Solo you race the clock and your flip count; with friends you take turns and steal the pairs they forgot.",
+"controls": "Click / tap a card to flip it",
+"scoreLabel": "PAIRS",
+"tasks": [
+{
+"stat": "score",
+"target": 12,
+"text": "Find 12 pairs in Memory Pairs"
+}
+],
+"file": "games/2d/memory-pairs.html",
+"dim": "2d"
 },
 {
 "id": "match-3",

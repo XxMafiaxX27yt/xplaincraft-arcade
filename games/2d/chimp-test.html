@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chimp Test</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"chimp-test","n":45,"title":"CHIMP TEST","genre":"mind","desc":"Numbers appear scattered on a grid. Click 1 first, and every other number hides; then click the rest in order from memory. Each round adds a number. Chimpanzees famously beat most humans at this. Three strikes.","controls":"Click / tap the squares in order: 1, 2, 3…","scoreLabel":"NUMBERS","tasks":[{"stat":"score","target":9,"text":"Reach 9 numbers in the Chimp Test"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GW = 8, GH = 5, T = 84, BX = 480 - (GW * T) / 2, BY = 70;
+function round(s) { const cells = K.shuffle([...Array(GW * GH).keys()]).slice(0, s.n); s.pos = cells; s.next = 0; s.hidden = false; s.flash = 0; }
+K.game({
+  bg: '#0f1a14', touch: { stick: false, buttons: [] },
+  init(s) { s.n = 4; s.strikes = 0; round(s); },
+  update(s, dt) {
+    s.flash -= dt;
+    if (!K.mouse.clicked) return;
+    const x = Math.floor((K.mouse.x - BX) / T), y = Math.floor((K.mouse.y - BY) / T); if (x < 0 || y < 0 || x >= GW || y >= GH) return;
+    const c = y * GW + x, idx = s.pos.indexOf(c);
+    if (idx < 0 || idx < s.next) return;
+    if (idx === s.next) { s.next++; s.hidden = true; K.tone(400 + s.next * 50, 0.08, 'triangle', 0.06); if (s.next >= s.n) { K.sfx('coin'); s.n++; round(s); } }
+    else { s.strikes++; s.flash = 0.8; K.sfx('wrong'); K.shake(6); if (s.strikes >= 3) return K.end(s, { score: s.n - 1, won: null, title: 'THREE STRIKES', text: `You reached ${s.n - 1} numbers.` }); round(s); }
+  },
+  draw(s) {
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) K.rect(BX + x * T + 4, BY + y * T + 4, T - 8, T - 8, '#132a1e', 10);
+    s.pos.forEach((c, i) => { if (i < s.next) return; const x = BX + (c % GW) * T, y = BY + Math.floor(c / GW) * T; K.rect(x + 4, y + 4, T - 8, T - 8, s.hidden ? '#e8f4ee' : '#1f8a4a', 10); if (!s.hidden) K.text(String(i + 1), x + T / 2, y + T / 2 + 2, 34, '#fff', 'center', 'd'); });
+    if (s.flash > 0) { K.alpha(s.flash); K.rect(0, 0, 960, 540, '#ff335533'); K.alpha(1); }
+    K.text(`NUMBERS ${s.n}`, 20, 30, 18, '#3dffa0', 'left', 'd'); K.text('✖'.repeat(s.strikes) + '·'.repeat(3 - s.strikes), 940, 30, 20, '#ff3355', 'right');
+    if (!s.hidden) K.text('click 1 first: the rest will hide', 480, 500, 15, '#8ec9a8', 'center', 'u');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 18) return; const c = s.pos[s.next]; if (c != null) K.vmouse(BX + (c % GW) * T + 40, BY + Math.floor(c / GW) * T + 40, true); },
+});
+</script></body></html>
