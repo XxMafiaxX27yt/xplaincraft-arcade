@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fog Road</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"fog-road","n":28,"title":"FOG ROAD","genre":"horror","desc":"Walk the old road home through fog so thick you can see three metres. Something follows you. When its footsteps get close, stop and turn around: it hates being looked at. Keep to the road, reach the town lights.","controls":"Hold ↑ / W (or hold the screen) to walk · Space / tap = turn around and look · ← → stay on the road","scoreLabel":"METRES","tasks":[{"stat":"score","target":600,"text":"Walk 600 m down the Fog Road"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GOAL = 1000;
+K.game({
+  bg: '#9aa0a4',
+  init(s) { s.d = 0; s.x = 0; s.curve = 0; s.f = 18; s.look = 0; s.step = 0; s.fstep = 1; s.signs = []; s.drone = null; for (let i = 60; i < GOAL; i += K.rand(70, 140)) s.signs.push({ d: i, side: Math.random() < 0.5 ? -1 : 1, t: K.pick(['🌲', '🌲', '🪨', '🪧', '🌳', '⚰']) }); },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(60, 0.025, 'triangle');
+    const walking = (K.down('ArrowUp', 'KeyW') || (K.mouse.down && !K.mouse.clicked)) && s.look <= 0;
+    const d = K.dir();
+    if (K.tap('Space') || (K.mouse.clicked && K.mouse.y < 120)) { s.look = 1.1; K.sfx('whoosh'); }
+    s.look -= dt;
+    if (walking) { s.d += 6 * dt; s.step -= dt; if (s.step <= 0) { K.sfx('step'); s.step = 0.45; } }
+    s.curve = Math.sin(s.d / 40) * 0.8 + Math.sin(s.d / 13) * 0.3;
+    s.x += (d.x * 1.4 - (walking ? s.curve * 0.5 : 0)) * dt;
+    if (Math.abs(s.x) > 1.2) { s.x *= 0.98; if (Math.random() < dt * 2) K.sfx('creak'); }
+    // the follower: closes in while you walk, faster off the road, backs away when you look
+    const off = Math.abs(s.x) > 1 ? 2 : 1;
+    if (s.look > 0) s.f = Math.min(30, s.f + 22 * dt);
+    else s.f -= (walking ? 1.1 : 0.55) * off * dt * (1 + s.d / GOAL);
+    s.fstep -= dt; if (s.fstep <= 0) { K.noise(0.06, K.clamp(0.25 - s.f / 120, 0.02, 0.25), 350); s.fstep = Math.max(0.25, s.f / 30); }
+    if (s.f <= 0) { K.sfx('scare'); K.flash('#fff', 0.6); K.shake(20); return K.end(s, { score: Math.floor(s.d), won: false, title: 'IT CAUGHT UP', text: `${Math.floor(s.d)} m down the road.` }); }
+    if (s.d >= GOAL) { K.sfx('win'); return K.end(s, { score: GOAL, won: true, title: 'TOWN LIGHTS', text: 'You made it home. Lock the door.' }); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    K.rect(0, 0, 960, 540, '#8a9094');
+    // road in perspective
+    const hz = 200, cx = 480 - s.x * 260;
+    for (let i = 0; i < 40; i++) {
+      const z = 1 - i / 40, y = hz + (540 - hz) * z * z, w = 40 + 900 * z * z, bend = s.curve * (1 - z) * 200;
+      K.rect(cx + bend - w / 2, y, w, 18 * z + 2, i % 2 ? '#4a4a4c' : '#525254');
+      if ((i + Math.floor(s.d * 2)) % 4 === 0) K.rect(cx + bend - 3 * z, y, 6 * z + 1, 12 * z + 1, '#c9c9b0');
+    }
+    s.signs.forEach((sg) => { const rel = sg.d - s.d; if (rel < 0 || rel > 22) return; const z = 1 - rel / 22, y = hz + (540 - hz) * z * z, x = cx + s.curve * (1 - z) * 200 + sg.side * (120 + 500 * z * z); K.alpha(K.clamp(z * 1.5, 0, 1)); K.text(sg.t, x, y - 40 * z, 20 + 90 * z * z, '#fff'); K.alpha(1); });
+    // fog
+    c.fillStyle = K.grad(0, 0, 0, 540, ['rgba(150,156,160,1)', 'rgba(150,156,160,.96)', 'rgba(150,156,160,.55)', 'rgba(150,156,160,.15)']); c.fillRect(0, 0, 960, 540);
+    if (s.d > GOAL - 60) { K.alpha((s.d - (GOAL - 60)) / 60); for (let i = 0; i < 6; i++) { K.glow('#ffd59a', 20); K.circle(420 + i * 24, hz + 10, 4, '#ffd59a'); } K.noGlow(); K.alpha(1); }
+    if (s.look > 0) {
+      K.rect(0, 0, 960, 540, 'rgba(60,64,68,.6)');
+      const sz = K.clamp(180 - s.f * 5, 20, 200);
+      K.alpha(K.clamp(1 - s.f / 30, 0.15, 1)); K.rect(480 - sz / 4, 360 - sz, sz / 2, sz, '#111'); K.circle(480, 360 - sz - sz / 6, sz / 5, '#111'); K.alpha(1);
+      K.text('YOU LOOK BACK', 480, 60, 20, '#fff', 'center', 'd');
+    }
+    K.vignette(0.6);
+    const danger = K.clamp(1 - s.f / 18, 0, 1);
+    if (danger > 0.3 && s.look <= 0) { K.alpha(danger * 0.5); K.rect(0, 0, 960, 540, '#300'); K.alpha(1); K.text('footsteps… close', 480, 500, 16, '#fff', 'center', 'm'); }
+    K.text(`${Math.floor(s.d)} / ${GOAL} m`, 20, 26, 16, '#202428', 'left', 'd');
+    if (Math.abs(s.x) > 1.1) K.text('YOU ARE OFF THE ROAD', 480, 460, 16, '#300', 'center', 'd');
+  },
+  ai(s) { K.vhold('ArrowUp', s.look <= 0); if (s.f < 7 && s.look <= 0) K.vtap('Space'); K.vhold('ArrowLeft', s.x > 0.3); K.vhold('ArrowRight', s.x < -0.3); },
+});
+</script></body></html>

@@ -174,13 +174,24 @@
   K.grid = (size, color, alpha = 0.15) => { K.alpha(alpha); for (let x = 0; x <= W; x += size) K.line(x, 0, x, H, color, 1); for (let y = 0; y <= H; y += size) K.line(0, y, W, y, color, 1); K.alpha(1); };
   K.vignette = (strength = 0.7) => { ctx.fillStyle = K.rgrad(W / 2, H / 2, W * 0.7, ['rgba(0,0,0,0)', `rgba(0,0,0,${strength})`]); ctx.fillRect(0, 0, W, H); };
   // darkness with a light hole (horror flashlight)
+  // (drawn on its own layer so overlapping lights add up instead of cancelling out)
+  let dk = null;
   K.darkness = (lights, alpha = 0.96) => {
-    ctx.save(); ctx.fillStyle = `rgba(0,0,0,${alpha})`; ctx.beginPath(); ctx.rect(0, 0, W, H);
-    lights.forEach((l) => { ctx.moveTo(l.x + l.r, l.y); ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2, true); });
-    ctx.fill('evenodd');
-    lights.forEach((l) => { ctx.fillStyle = K.rgrad(l.x, l.y, l.r, ['rgba(0,0,0,0)', 'rgba(0,0,0,0)', `rgba(0,0,0,${alpha})`]); ctx.beginPath(); ctx.arc(l.x, l.y, l.r + 1, 0, Math.PI * 2); ctx.fill(); });
-    ctx.restore();
+    if (!dk) { dk = document.createElement('canvas'); dk.width = W; dk.height = H; }
+    const d = dk.getContext('2d');
+    d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, W, H);
+    d.fillStyle = `rgba(0,0,0,${alpha})`; d.fillRect(0, 0, W, H);
+    d.globalCompositeOperation = 'destination-out';
+    lights.forEach((l) => {
+      if (!(l.r > 0)) return;
+      const g = d.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.5, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      d.fillStyle = g; d.beginPath(); d.arc(l.x, l.y, l.r, 0, Math.PI * 2); d.fill();
+    });
+    d.globalCompositeOperation = 'source-over';
+    ctx.drawImage(dk, 0, 0, W, H);
   };
+
   // immediate-mode button: draws and returns true when clicked
   K.button = (x, y, w, h, label, opt = {}) => {
     const hover = K.inRect(mouse.x, mouse.y, { x, y, w, h });

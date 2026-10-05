@@ -463,6 +463,138 @@ export const GAME_LIST = [
 "cover": "games/covers/night-shift-store.png"
 },
 {
+"id": "the-well",
+"n": 22,
+"title": "THE WELL",
+"genre": "horror",
+"desc": "An old well behind the farmhouse. Lower the bucket and see what comes up. The deeper you go, the stranger it gets. If the rope suddenly goes tight, LET GO, or whatever is down there pulls you in.",
+"controls": "Hold Space / mouse to lower the bucket, release to pull it up · tap fast when the rope jerks",
+"scoreLabel": "FINDS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Pull up 8 things from The Well"
+}
+],
+"file": "games/2d/the-well.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-well.png"
+},
+{
+"id": "candle",
+"n": 23,
+"title": "CANDLE",
+"genre": "horror",
+"desc": "The power is out. Your candle is burning down and the light shrinks with it. Find the spare candles hidden around the dark house and light them before yours dies. Things in the dark only move when your light is small.",
+"controls": "Arrow keys / WASD to walk · E (or tap) next to a candle to light it",
+"scoreLabel": "SECONDS",
+"tasks": [
+{
+"stat": "score",
+"target": 90,
+"text": "Keep the light for 90 seconds in Candle"
+}
+],
+"file": "games/2d/candle.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/candle.png"
+},
+{
+"id": "knock-knock",
+"n": 24,
+"title": "KNOCK KNOCK",
+"genre": "horror",
+"desc": "Your family has a secret knock. Memorise it, because tonight people keep knocking. Same knock: open the door, it's family. Any other knock: keep it shut. Things outside are learning the rhythm.",
+"controls": "Listen · O = open · K = keep shut (or tap the buttons) · R replays the secret knock (twice per game)",
+"scoreLabel": "NIGHT VISITORS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Answer 8 knocks right in Knock Knock"
+}
+],
+"file": "games/2d/knock-knock.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/knock-knock.png"
+},
+{
+"id": "the-attic",
+"n": 25,
+"title": "THE ATTIC",
+"genre": "horror",
+"desc": "Something scratches above your bedroom every night. Climb into the attic with a torch and find what is making the noise. Follow the sound (headphones help, the rings show it too) and open the right box. Open the wrong ones and you wake it up.",
+"controls": "Mouse / touch aims the torch · arrow keys / WASD walk · click a box (or E nearby) to open it",
+"scoreLabel": "NIGHTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Survive 3 nights in The Attic"
+}
+],
+"file": "games/2d/the-attic.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-attic.png"
+},
+{
+"id": "fog-road",
+"n": 28,
+"title": "FOG ROAD",
+"genre": "horror",
+"desc": "Walk the old road home through fog so thick you can see three metres. Something follows you. When its footsteps get close, stop and turn around: it hates being looked at. Keep to the road, reach the town lights.",
+"controls": "Hold ↑ / W (or hold the screen) to walk · Space / tap = turn around and look · ← → stay on the road",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 600,
+"text": "Walk 600 m down the Fog Road"
+}
+],
+"file": "games/2d/fog-road.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/fog-road.png"
+},
+{
+"id": "blink",
+"n": 35,
+"title": "BLINK",
+"genre": "horror",
+"desc": "The statues only move when you can't see them. Your eyes dry out and you WILL blink, so blink on purpose when it's safe. Cross each gallery to the door before they reach you.",
+"controls": "Arrow keys / WASD to move · hold B (or the eye button) to blink on purpose",
+"scoreLabel": "GALLERIES",
+"tasks": [
+{
+"stat": "score",
+"target": 4,
+"text": "Cross 4 galleries in Blink"
+}
+],
+"file": "games/2d/blink.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/blink.png"
+},
+{
 "id": "breakout",
 "n": 1,
 "title": "BREAKOUT",

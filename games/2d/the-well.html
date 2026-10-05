@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Well</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-well","n":22,"title":"THE WELL","genre":"horror","desc":"An old well behind the farmhouse. Lower the bucket and see what comes up. The deeper you go, the stranger it gets. If the rope suddenly goes tight, LET GO, or whatever is down there pulls you in.","controls":"Hold Space / mouse to lower the bucket, release to pull it up · tap fast when the rope jerks","scoreLabel":"FINDS","tasks":[{"stat":"score","target":8,"text":"Pull up 8 things from The Well"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// what you can pull up, by depth band: [name, value, colour, line]
+const LOOT = [
+  [['clear water', 0, '#6ad1ff', 'Cold, clean water.'], ['a frog', 1, '#3dbb4a', 'It looks at you, then hops away.'], ['an old coin', 2, '#ffd93a', '1952. Still shiny.'], ['a lost marble', 1, '#c45cff', 'You had one just like it.']],
+  [['a rusty key', 3, '#b87a3a', 'Tagged: "CELLAR".'], ['a doll\'s shoe', 2, '#ff9bc8', 'Tiny. Wet. Warm?'], ['a wedding ring', 4, '#ffd93a', 'Engraved: "until the end".'], ['black water', 0, '#222', 'It smells like pennies.']],
+  [['a child\'s drawing', 4, '#fff', 'It shows you, standing at this well.'], ['a pocket watch', 5, '#ccc', 'Stopped at 3:33.'], ['a tooth', 3, '#eee', 'Human. Small.'], ['your own phone', 6, '#22e6ff', 'It\'s in your pocket. And it\'s here.']],
+  [['a hand', 8, '#b8a090', 'It lets go of the bucket. Slowly.'], ['a photo of you, asleep', 8, '#fff', 'Taken last night. From inside your room.'], ['nothing, the bucket is gone', 0, '#000', 'The rope was cut clean.']],
+];
+const MAXD = 100;
+K.game({
+  bg: '#0a0806',
+  init(s) { s.depth = 0; s.state = 'idle'; s.finds = []; s.msg = 'Lower the bucket.'; s.tug = 0; s.tugT = 0; s.held = 0; s.sanity = 1; s.mash = 0; s.last = null; s.drip = 0; s.amb = null; },
+  update(s, dt) {
+    if (!s.amb && !K.attract) s.amb = K.drone(48, 0.03);
+    const hold = K.down('Space') || K.mouse.down;
+    s.drip -= dt; if (s.drip <= 0) { K.sfx('drip'); s.drip = K.rand(1.5, 4); }
+    if (s.state === 'tug') {
+      s.tugT -= dt;
+      if (K.tap('Space') || K.mouse.clicked) { s.mash++; K.sfx('hit'); K.shake(5); }
+      if (s.mash >= 6) { s.state = 'idle'; s.depth = 0; s.msg = 'You let go. The rope snaps back up, empty. Something laughs below.'; K.sfx('whoosh'); s.sanity -= 0.2; return; }
+      if (s.tugT <= 0) { K.sfx('scare'); K.flash('#000', 1); return K.end(s, { score: s.finds.length, won: false, title: 'PULLED IN', text: `The well keeps what it wants. ${s.finds.length} finds.` }); }
+      s.depth = Math.min(MAXD, s.depth + 30 * dt);
+      return;
+    }
+    if (hold) { s.depth = Math.min(MAXD, s.depth + 22 * dt); s.state = 'down'; if (Math.random() < dt * 3) K.sfx('creak'); }
+    else if (s.depth > 0) {
+      s.depth = Math.max(0, s.depth - 30 * dt); s.state = 'up';
+      if (s.depth <= 0 && s.maxThis > 3) {
+        const band = Math.min(3, Math.floor(s.maxThis / 26)), item = K.pick(LOOT[band]);
+        s.finds.push(item); s.last = item; s.msg = `You pull up ${item[0]}. ${item[3]}`; s.maxThis = 0;
+        if (item[1]) K.sfx(band >= 3 ? 'scare' : 'coin'); else K.sfx('splash');
+        s.sanity -= band * 0.08; if (band >= 3) K.shake(10);
+        if (s.sanity <= 0 || s.finds.length >= 12) return K.end(s, { score: s.finds.length, won: s.sanity > 0, title: s.sanity > 0 ? 'ENOUGH FOR TONIGHT' : 'YOU STOP SLEEPING', text: `${s.finds.length} things came up. The last: ${item[0]}.` });
+      }
+    } else s.state = 'idle';
+    if (s.state === 'down') { s.maxThis = Math.max(s.maxThis || 0, s.depth); if (s.depth > 35 && Math.random() < dt * (s.depth / 300)) { s.state = 'tug'; s.tugT = 1.8; s.mash = 0; s.msg = 'THE ROPE GOES TIGHT. LET GO! (tap fast)'; K.sfx('scare'); K.shake(14); } }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#141020', '#050404']));
+    K.circle(820, 80, 30, '#d8d8c0'); K.circle(832, 74, 30, '#141020');
+    for (let i = 0; i < 9; i++) K.rect(i * 110, 380 - (i % 3) * 30, 6, 40 + (i % 3) * 30, '#0a0806');
+    K.rect(0, 420, 960, 120, '#0e0a08');
+    // well
+    K.rect(380, 300, 200, 130, '#3a3530', 6); for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) K.stroke(380 + c * 40 + (r % 2) * 20, 300 + r * 32, 40, 32, '#2a2622', 2);
+    K.rect(372, 292, 216, 16, '#4a4540', 4);
+    K.rect(390, 160, 10, 140, '#4a3020'); K.rect(560, 160, 10, 140, '#4a3020'); K.rect(380, 150, 200, 14, '#5a3a24', 4);
+    K.circle(480, 180, 18, '#5a3a24');
+    const rope = 300 + s.depth * 1.2 * (s.state === 'tug' ? 1 + Math.sin(K.time() * 40) * 0.02 : 1);
+    K.line(480, 180, 480 + (s.state === 'tug' ? Math.sin(K.time() * 50) * 4 : 0), Math.min(rope, 296), '#c9b080', 3);
+    if (s.depth < 5) { K.rect(462, 250, 36, 34, '#6a4a2a', 4); K.rect(458, 248, 44, 6, '#888', 2); }
+    // cutaway of the shaft on the right
+    K.rect(680, 140, 150, 360, '#050403', 8); K.stroke(680, 140, 150, 360, '#3a3530', 2, 8);
+    K.text('DEPTH', 755, 128, 12, '#8e88b8', 'center', 'm');
+    const by = 150 + (s.depth / MAXD) * 330;
+    K.line(755, 150, 755, by, '#c9b080', 2); K.rect(743, by, 24, 18, '#6a4a2a', 3);
+    for (let d = 1; d < 4; d++) K.text(['', 'cold', 'colder', 'wrong'][d], 820, 150 + (d * 26 / MAXD) * 330, 11, '#5a5470', 'right', 'm');
+    if (s.depth > 60) { K.alpha((s.depth - 60) / 60); K.circle(755 + Math.sin(K.time()) * 20, 480, 6, '#ff3355'); K.circle(769 + Math.sin(K.time()) * 20, 480, 6, '#ff3355'); K.alpha(1); }
+    K.wrapText(s.msg, 300, 470, 520, 18, s.state === 'tug' ? '#ff3355' : '#e8e0d0');
+    K.text(`FINDS ${s.finds.length}`, 20, 26, 18, '#e8e0d0', 'left', 'd');
+    K.rect(20, 44, 160, 6, '#222', 3); K.rect(20, 44, 160 * Math.max(0, s.sanity), 6, '#c45cff', 3); K.text('NERVE', 188, 47, 10, '#c45cff', 'left', 'm');
+    s.finds.slice(-6).forEach((f, i) => K.circle(30 + i * 22, 74, 7, f[2]));
+    K.vignette(0.85);
+    if (s.state === 'tug') { K.alpha(0.25 + Math.sin(K.time() * 30) * 0.1); K.rect(0, 0, 960, 540, '#400'); K.alpha(1); }
+  },
+  ai(s) { s.aiT = (s.aiT || 0) + 1 / 60; K.vhold('Space', s.state !== 'tug' && (s.aiT % 6) < 3); if (s.state === 'tug') K.vtap('Space'); },
+});
+</script></body></html>

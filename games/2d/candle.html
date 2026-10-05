@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Candle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"candle","n":23,"title":"CANDLE","genre":"horror","desc":"The power is out. Your candle is burning down and the light shrinks with it. Find the spare candles hidden around the dark house and light them before yours dies. Things in the dark only move when your light is small.","controls":"Arrow keys / WASD to walk · E (or tap) next to a candle to light it","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":90,"text":"Keep the light for 90 seconds in Candle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WALLS = [[0, 0, 960, 20], [0, 520, 960, 20], [0, 0, 20, 540], [940, 0, 20, 540], [300, 20, 20, 200], [300, 300, 20, 220], [620, 180, 20, 360], [620, 20, 20, 90], [20, 260, 200, 20], [320, 180, 200, 20], [640, 300, 220, 20]];
+const hitWall = (x, y, r) => WALLS.some(([wx, wy, ww, wh]) => x + r > wx && x - r < wx + ww && y + r > wy && y - r < wy + wh);
+function spot() { let x, y; do { x = K.rand(60, 900); y = K.rand(60, 480); } while (hitWall(x, y, 30)); return { x, y }; }
+K.game({
+  bg: '#000',
+  init(s) {
+    s.p = { x: 120, y: 120 }; s.wax = 1; s.time = 0; s.lit = []; s.spares = [spot(), spot(), spot()]; s.shadows = [{ ...spot(), seen: 0 }, { ...spot(), seen: 0 }]; s.flick = 1; s.whisper = 3; s.drone = null;
+  },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(41, 0.04);
+    s.time += dt;
+    s.wax -= dt / (26 + s.lit.length * 2);
+    const r = 40 + s.wax * 190, d = K.dir();
+    const nx = s.p.x + d.x * 150 * dt, ny = s.p.y + d.y * 150 * dt;
+    if (!hitWall(nx, s.p.y, 12)) s.p.x = nx; if (!hitWall(s.p.x, ny, 12)) s.p.y = ny;
+    const near = s.spares.findIndex((c) => K.dist(c, s.p) < 40);
+    if (near >= 0 && (K.tap('KeyE', 'Space') || K.mouse.clicked)) { const c = s.spares.splice(near, 1)[0]; s.lit.push({ ...c, life: 1 }); s.wax = 1; K.sfx('chime'); s.spares.push(spot()); if (s.time > 40 && s.spares.length < 4) s.spares.push(spot()); }
+    s.lit.forEach((c) => (c.life -= dt / 40)); s.lit = s.lit.filter((c) => c.life > 0);
+    // the dark things creep when your light is small and you are not near a lit candle
+    for (const sh of s.shadows) {
+      const d2 = K.dist(sh, s.p), inLight = d2 < r * 0.8 || s.lit.some((c) => K.dist(sh, c) < 60 + c.life * 120);
+      if (!inLight) { const a = K.angle(sh, s.p), sp = (1 - s.wax) * 110 + 15; const ax = sh.x + Math.cos(a) * sp * dt, ay = sh.y + Math.sin(a) * sp * dt; if (!hitWall(ax, sh.y, 10)) sh.x = ax; if (!hitWall(sh.x, ay, 10)) sh.y = ay; }
+      else { const a = K.angle(s.p, sh); sh.x += Math.cos(a) * 60 * dt; sh.y += Math.sin(a) * 60 * dt; }
+      if (d2 < 22) { K.sfx('scare'); K.flash('#000', 1); return K.end(s, { score: Math.floor(s.time), won: false, title: 'THE DARK TOOK YOU', text: `${Math.floor(s.time)} seconds of light.` }); }
+    }
+    if (s.time > 30 && s.shadows.length < 3) s.shadows.push({ ...spot(), seen: 0 });
+    if (s.time > 70 && s.shadows.length < 4) s.shadows.push({ ...spot(), seen: 0 });
+    if (s.wax <= 0) { K.sfx('lose'); return K.end(s, { score: Math.floor(s.time), won: false, title: 'THE CANDLE WENT OUT', text: `${Math.floor(s.time)} seconds.` }); }
+    s.whisper -= dt; if (s.whisper <= 0) { K.sfx('whisper'); s.whisper = K.rand(4, 9) * (0.5 + s.wax); }
+    s.flick = 1 + Math.sin(s.time * 13) * 0.04 + (Math.random() < 0.03 ? -0.15 : 0);
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#2a2018');
+    for (let i = 0; i < 24; i++) K.rect((i % 6) * 160, Math.floor(i / 6) * 135, 158, 133, (i % 2) ? '#2e2319' : '#281e15');
+    WALLS.forEach(([x, y, w, h]) => K.rect(x, y, w, h, '#120d09'));
+    [[200, 400, '🪑'], [460, 90, '🛏'], [780, 420, '📺'], [780, 110, '🚪'], [120, 440, '📚']].forEach(([x, y, e]) => K.text(e, x, y, 40, '#fff'));
+    s.spares.forEach((c) => { K.rect(c.x - 5, c.y - 14, 10, 22, '#f0e6d0', 2); K.line(c.x, c.y - 14, c.x, c.y - 19, '#222', 2); });
+    s.lit.forEach((c) => { K.rect(c.x - 5, c.y - 14 + (1 - c.life) * 14, 10, 22 - (1 - c.life) * 14, '#f0e6d0', 2); K.glow('#ffb43a', 18); K.circle(c.x, c.y - 20 + (1 - c.life) * 14, 4, '#ffd93a'); K.noGlow(); });
+    s.shadows.forEach((sh) => { K.alpha(0.9); K.circle(sh.x, sh.y, 18, '#000'); K.circle(sh.x - 6, sh.y - 4, 2.5, '#ff3355'); K.circle(sh.x + 6, sh.y - 4, 2.5, '#ff3355'); K.alpha(1); });
+    const p = s.p, r = (40 + s.wax * 190) * s.flick;
+    K.circle(p.x, p.y, 11, '#d8c8a8'); K.rect(p.x + 8, p.y - 10, 6, 12 * s.wax + 4, '#f0e6d0', 2); K.glow('#ffb43a', 16); K.circle(p.x + 11, p.y - 13, 3, '#ffd93a'); K.noGlow();
+    K.darkness([{ x: p.x, y: p.y, r }, ...s.lit.map((c) => ({ x: c.x, y: c.y, r: (60 + c.life * 120) * s.flick }))], 0.97);
+    const near = s.spares.some((c) => K.dist(c, s.p) < 40);
+    if (near) K.text('E / TAP: LIGHT IT', p.x, p.y - 34, 14, '#ffd93a', 'center', 'd');
+    K.rect(20, 20, 140, 8, '#222', 4); K.rect(20, 20, 140 * s.wax, 8, s.wax < 0.25 ? '#ff3355' : '#ffb43a', 4); K.text('WAX', 168, 24, 11, '#ffb43a', 'left', 'm');
+    K.text(`${Math.floor(s.time)} s`, 940, 24, 16, '#8e88b8', 'right', 'm');
+  },
+  ai(s) { const t = s.spares.slice().sort((a, b) => K.dist(a, s.p) - K.dist(b, s.p))[0]; if (!t) return; K.vhold('ArrowLeft', t.x < s.p.x - 8); K.vhold('ArrowRight', t.x > s.p.x + 8); K.vhold('ArrowUp', t.y < s.p.y - 8); K.vhold('ArrowDown', t.y > s.p.y + 8); if (K.dist(t, s.p) < 38) K.vtap('KeyE'); },
+});
+</script></body></html>

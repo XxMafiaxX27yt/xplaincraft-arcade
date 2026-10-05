@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Knock Knock</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"knock-knock","n":24,"title":"KNOCK KNOCK","genre":"horror","desc":"Your family has a secret knock. Memorise it, because tonight people keep knocking. Same knock: open the door, it's family. Any other knock: keep it shut. Things outside are learning the rhythm.","controls":"Listen · O = open · K = keep shut (or tap the buttons) · R replays the secret knock (twice per game)","scoreLabel":"NIGHT VISITORS","tasks":[{"stat":"score","target":8,"text":"Answer 8 knocks right in Knock Knock"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// a knock = gaps in seconds between knocks
+const mk = () => Array.from({ length: K.irand(3, 4) }, () => K.pick([0.18, 0.18, 0.42, 0.7]));
+function variant(base, level) {
+  const v = base.slice();
+  const r = Math.random();
+  if (r < 0.35) v[K.irand(0, v.length - 1)] = K.pick([0.18, 0.42, 0.7].filter((x) => x !== v[0]));
+  else if (r < 0.6) v.push(K.pick([0.18, 0.42]));
+  else if (r < 0.8 && v.length > 2) v.pop();
+  else { const i = K.irand(0, v.length - 1); v[i] = Math.max(0.12, v[i] + (Math.random() < 0.5 ? -1 : 1) * Math.max(0.1, 0.24 - level * 0.015)); }
+  return v.length === base.length && v.every((x, i) => Math.abs(x - base[i]) < 0.05) ? variant(base, level) : v;
+}
+const same = (a, b) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 0.05);
+function play(s, pattern) { s.queue = [0, ...pattern].map((g, i, arr) => arr.slice(0, i + 1).reduce((a, x) => a + x, 0)); s.qt = 0; s.lit = []; }
+K.game({
+  bg: '#08070c', touch: { stick: false, buttons: [] },
+  init(s) { s.secret = mk(); s.phase = 'learn'; s.t = 1; s.score = 0; s.replays = 2; s.count = 0; play(s, s.secret); s.queue = s.queue.map((x) => x + 1); s.msg = 'THIS IS YOUR FAMILY\'S KNOCK. REMEMBER IT.'; },
+  update(s, dt) {
+    s.qt += dt;
+    while (s.queue.length && s.qt >= s.queue[0]) { s.queue.shift(); K.sfx('knock'); K.shake(3); s.lit.push(0.25); }
+    s.lit = s.lit.map((x) => x - dt).filter((x) => x > 0);
+    if (s.phase === 'learn') { if (!s.queue.length) { s.t -= dt; if (s.t <= 0) { if (s.count++ < 1) { play(s, s.secret); s.queue = s.queue.map((x) => x + 0.6); s.t = 1; } else { s.phase = 'wait'; s.t = 2; s.msg = '…'; } } } return; }
+    if (s.phase === 'wait') { s.t -= dt; if (s.t <= 0) { s.real = Math.random() < 0.42; s.knock = s.real ? s.secret.slice() : variant(s.secret, s.score); play(s, s.knock); s.phase = 'knock'; s.msg = 'Someone is knocking.'; } return; }
+    if (s.phase === 'knock' && !s.queue.length) s.phase = 'decide';
+    if (s.phase === 'decide' || s.phase === 'knock') {
+      if ((K.tap('KeyR') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 40, y: 470, w: 170, h: 44 }))) && s.replays > 0 && s.phase === 'decide') { s.replays--; s.phase = 'replay'; play(s, s.secret); s.msg = 'You remember…'; return; }
+      let ans = null;
+      if (K.tap('KeyO') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 440, w: 140, h: 54 }))) ans = 'open';
+      if (K.tap('KeyK') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 490, y: 440, w: 140, h: 54 }))) ans = 'shut';
+      if (!ans || s.phase === 'knock') return;
+      const right = (ans === 'open') === s.real;
+      if (!right) { K.sfx('scare'); K.flash('#300', 0.8); K.shake(20); return K.end(s, { score: s.score, won: false, title: ans === 'open' ? 'THAT WAS NOT FAMILY' : 'YOU LEFT MOM OUTSIDE', text: ans === 'open' ? 'It knocked almost right.' : 'She knocked the right way. You didn\'t open. In the morning she was gone.' }); }
+      s.score++; K.sfx(s.real ? 'chime' : 'creak');
+      s.msg = s.real ? K.pick(['It\'s your brother. He goes upstairs without a word.', 'It\'s Dad. "Why are all the lights off?"', 'It\'s Grandma. She brought soup.']) : K.pick(['The knocking stops. Footsteps walk away. Slowly.', 'A long scratch down the door.', 'Silence. Then breathing, right at the keyhole.']);
+      s.phase = 'wait'; s.t = 2.5;
+      if (s.score >= 15) return K.end(s, { score: s.score, won: true, title: 'MORNING', text: 'The sun comes up. Everyone who should be inside is inside.' });
+    }
+    if (s.phase === 'replay' && !s.queue.length) { s.phase = 'decide'; s.msg = 'Open, or keep it shut?'; }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#0c0a10');
+    K.rect(330, 60, 300, 360, '#3a2416', 8); K.rect(345, 75, 270, 330, '#4a2e1c', 6);
+    for (let i = 0; i < 3; i++) K.stroke(365, 95 + i * 105, 230, 90, '#2a180c', 3, 4);
+    K.circle(590, 250, 10, '#c9a24a');
+    s.lit.forEach((l) => { K.alpha(l * 3); K.ring(480, 220, 40 + (0.25 - l) * 300, '#ffd59a', 4); }); K.alpha(1);
+    K.rect(330, 420, 300, 10, '#1a120a');
+    const lightUnder = s.phase === 'knock' || s.phase === 'decide';
+    if (lightUnder) { K.alpha(0.6 + Math.sin(K.time() * 9) * 0.2); K.rect(360, 416, 240, 4, s.real === false ? '#7a1020' : '#ffd59a'); K.alpha(1); K.rect(420 + Math.sin(K.time() * 2) * 30, 416, 30, 4, '#000'); }
+    K.wrapText(s.msg, 480, 24, 860, 20, s.phase === 'learn' ? '#ffd93a' : '#e8e0f0');
+    if (s.phase === 'decide') { K.button(330, 440, 140, 54, 'OPEN (O)', { color: '#3dffa0' }); K.button(490, 440, 140, 54, 'SHUT (K)', { color: '#ff3355' }); }
+    K.button(40, 470, 170, 44, `REMEMBER (R) ×${s.replays}`, { color: s.replays && s.phase === 'decide' ? '#22e6ff' : '#333', size: 12 });
+    K.text(`VISITORS ${s.score}`, 920, 30, 16, '#8e88b8', 'right', 'd');
+    K.vignette(0.8);
+  },
+  ai(s) { if (s.phase === 'decide') { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0) K.vtap(same(s.knock, s.secret) ? 'KeyO' : 'KeyK'); } },
+});
+</script></body></html>

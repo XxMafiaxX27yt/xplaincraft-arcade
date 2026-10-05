@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blink</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"blink","n":35,"title":"BLINK","genre":"horror","desc":"The statues only move when you can't see them. Your eyes dry out and you WILL blink, so blink on purpose when it's safe. Cross each gallery to the door before they reach you.","controls":"Arrow keys / WASD to move · hold B (or the eye button) to blink on purpose","scoreLabel":"GALLERIES","tasks":[{"stat":"score","target":4,"text":"Cross 4 galleries in Blink"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function room(s) {
+  s.p = { x: 80, y: 270 }; s.door = { x: 900, y: K.rand(120, 420) }; s.dry = 0; s.blink = 0;
+  s.st = Array.from({ length: 2 + s.lv }, () => ({ x: K.rand(300, 860), y: K.rand(70, 470), pose: K.irand(0, 2) }));
+}
+K.game({
+  bg: '#141018', touch: { buttons: [['KeyB', '👁']] },
+  init(s) { s.lv = 0; room(s); s.drone = null; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(45, 0.03);
+    const want = K.down('KeyB') || (K.mouse.down && K.inRect(K.mouse.x, K.mouse.y, { x: 860, y: 460, w: 80, h: 60 }));
+    s.dry += dt / Math.max(2.2, 5 - s.lv * 0.3);
+    if (want && s.blink <= 0) { s.blink = 0.3; s.dry = 0; }
+    if (s.dry >= 1 && s.blink <= 0) { s.blink = 0.55; s.dry = 0; K.sfx('heart'); }
+    const closed = s.blink > 0;
+    if (closed) {
+      s.blink -= dt;
+      for (const st of s.st) { const a = K.angle(st, s.p); st.x += Math.cos(a) * (230 + s.lv * 30) * dt; st.y += Math.sin(a) * (230 + s.lv * 30) * dt; if (Math.random() < dt * 4) st.pose = K.irand(0, 2); }
+      if (s.blink <= 0) K.sfx('creak');
+    }
+    const d = K.dir(); s.p.x = K.clamp(s.p.x + d.x * 170 * dt, 20, 940); s.p.y = K.clamp(s.p.y + d.y * 170 * dt, 40, 500);
+    for (const st of s.st) if (K.dist(st, s.p) < 30) { K.sfx('scare'); K.flash('#fff', 0.5); K.shake(20); return K.end(s, { score: s.lv, won: false, title: 'YOU BLINKED', text: `${s.lv} galler${s.lv === 1 ? 'y' : 'ies'} crossed.` }); }
+    if (K.dist(s.door, s.p) < 34) { s.lv++; K.sfx('win'); if (s.lv >= 8) return K.end(s, { score: s.lv, won: true, title: 'OUT OF THE MUSEUM', text: 'You never blink again.' }); room(s); }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#1d1820');
+    for (let x = 0; x < 960; x += 80) for (let y = 0; y < 540; y += 80) K.rect(x + 2, y + 2, 76, 76, (x + y) % 160 ? '#221c26' : '#1a151e');
+    [[200, 40], [520, 40], [760, 500]].forEach(([x, y]) => { K.rect(x, y - 16, 90, 50, '#3a2a1a', 3); K.rect(x + 6, y - 10, 78, 38, '#5a4a6a', 2); });
+    K.glow('#ffd59a', 14); K.rect(s.door.x - 18, s.door.y - 32, 36, 64, '#ffd59a', 4); K.noGlow(); K.rect(s.door.x - 14, s.door.y - 28, 28, 56, '#2a1a10', 3);
+    s.st.forEach((st) => {
+      K.circle(st.x, st.y + 26, 18, 'rgba(0,0,0,.4)');
+      K.rect(st.x - 13, st.y - 18, 26, 44, '#9a9aa2', 8); K.circle(st.x, st.y - 28, 13, '#a8a8b0');
+      if (st.pose === 0) { K.line(st.x - 12, st.y - 10, st.x - 26, st.y - 34, '#9a9aa2', 8); K.line(st.x + 12, st.y - 10, st.x + 26, st.y - 34, '#9a9aa2', 8); }
+      else if (st.pose === 1) { K.line(st.x - 12, st.y - 10, st.x - 4, st.y - 30, '#9a9aa2', 8); K.line(st.x + 12, st.y - 10, st.x + 4, st.y - 30, '#9a9aa2', 8); }
+      else { K.line(st.x - 12, st.y - 8, st.x - 30, st.y + 4, '#9a9aa2', 8); K.line(st.x + 12, st.y - 8, st.x + 34, st.y - 12, '#9a9aa2', 8); }
+    });
+    K.glow('#22e6ff', 12); K.circle(s.p.x, s.p.y, 12, '#22e6ff'); K.noGlow();
+    K.darkness([{ x: s.p.x, y: s.p.y, r: 260 }], 0.8);
+    // eyelids
+    const lid = s.blink > 0 ? 1 : Math.max(0, (s.dry - 0.75) * 0.8);
+    K.rect(0, 0, 960, 270 * lid, '#000'); K.rect(0, 540 - 270 * lid, 960, 270 * lid, '#000');
+    K.rect(20, 20, 200, 8, '#222', 4); K.rect(20, 20, 200 * s.dry, 8, s.dry > 0.75 ? '#ff3355' : '#22e6ff', 4); K.text('EYES DRYING', 228, 24, 11, '#8e88b8', 'left', 'm');
+    K.text(`GALLERY ${s.lv + 1}`, 940, 24, 16, '#c9c3ff', 'right', 'd');
+    K.text('👁', 900, 492, 34, '#fff'); K.text('B', 900, 524, 12, '#8e88b8', 'center', 'm');
+  },
+  ai(s) {
+    K.vhold('ArrowRight', s.door.x > s.p.x + 8); K.vhold('ArrowLeft', s.door.x < s.p.x - 8); K.vhold('ArrowUp', s.door.y < s.p.y - 8); K.vhold('ArrowDown', s.door.y > s.p.y + 8);
+    const nearest = Math.min(...s.st.map((st) => K.dist(st, s.p)));
+    K.vhold('KeyB', s.dry > 0.6 && nearest > 200);
+  },
+});
+</script></body></html>

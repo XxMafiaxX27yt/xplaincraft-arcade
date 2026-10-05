@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Attic</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-attic","n":25,"title":"THE ATTIC","genre":"horror","desc":"Something scratches above your bedroom every night. Climb into the attic with a torch and find what is making the noise. Follow the sound (headphones help, the rings show it too) and open the right box. Open the wrong ones and you wake it up.","controls":"Mouse / touch aims the torch · arrow keys / WASD walk · click a box (or E nearby) to open it","scoreLabel":"NIGHTS","tasks":[{"stat":"score","target":3,"text":"Survive 3 nights in The Attic"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SOURCES = ['a music box, playing by itself', 'a radio, tuned to your name', 'a cat that was never yours', 'your old baby monitor, still on', 'a jar full of moths', 'a clock ticking backwards'];
+function night(s) {
+  s.boxes = []; const n = 6 + s.night * 2;
+  for (let i = 0; i < n; i++) { let b; do { b = { x: K.rand(80, 880), y: K.rand(170, 470), w: K.rand(50, 80), h: K.rand(40, 60), open: false }; } while (s.boxes.some((o) => Math.abs(o.x - b.x) < 90 && Math.abs(o.y - b.y) < 70)); s.boxes.push(b); }
+  s.src = K.irand(0, n - 1); s.wake = 0; s.noiseT = 1; s.rings = []; s.p = { x: 480, y: 500 }; s.msg = `Night ${s.night + 1}. The scratching starts again.`; s.msgT = 3;
+}
+K.game({
+  bg: '#000',
+  init(s) { s.night = 0; s.found = 0; night(s); s.drone = null; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(52, 0.03);
+    const d = K.dir(); s.p.x = K.clamp(s.p.x + d.x * 160 * dt, 30, 930); s.p.y = K.clamp(s.p.y + d.y * 160 * dt, 140, 510);
+    s.msgT -= dt;
+    s.noiseT -= dt;
+    const src = s.boxes[s.src];
+    if (s.noiseT <= 0) {
+      const dist = K.dist({ x: src.x + src.w / 2, y: src.y + src.h / 2 }, s.p), vol = K.clamp(1 - dist / 700, 0.08, 1);
+      K.noise(0.18, 0.12 * vol, 900 + Math.random() * 400, 0, 3); K.noise(0.12, 0.08 * vol, 1400, 0.22, 3);
+      s.rings.push({ x: src.x + src.w / 2, y: src.y + src.h / 2, r: 6, a: vol }); s.noiseT = K.rand(1, 2.2);
+    }
+    s.rings.forEach((r) => { r.r += 160 * dt; r.a -= dt * 0.6; }); s.rings = s.rings.filter((r) => r.a > 0);
+    s.wake = Math.max(0, s.wake - dt * 0.02);
+    let pick = -1;
+    if (K.mouse.clicked) pick = s.boxes.findIndex((b) => !b.open && K.inRect(K.mouse.x, K.mouse.y, b) && K.dist({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, s.p) < 220);
+    if (K.tap('KeyE', 'Space')) pick = s.boxes.findIndex((b) => !b.open && K.dist({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, s.p) < 80);
+    if (pick < 0) return;
+    const b = s.boxes[pick]; b.open = true;
+    if (pick === s.src) {
+      s.found++; K.sfx('chime'); s.msg = `It was ${K.pick(SOURCES)}. You take it downstairs. Quiet. For now.`; s.msgT = 3.5;
+      s.night++; if (s.night >= 5) return K.end(s, { score: s.night, won: true, title: 'THE ATTIC IS QUIET', text: 'Five nights. Five things. You stop going up there.' });
+      setTimeout(() => night(s), 2600);
+    } else {
+      s.wake += 0.34; K.sfx('creak'); K.shake(4); s.msg = K.pick(['Old clothes. Damp.', 'Christmas lights, tangled.', 'Photos with the faces scratched out.', 'Empty. But warm.', 'A note: "STOP LOOKING".']); s.msgT = 2;
+      if (s.wake >= 1) { K.sfx('scare'); K.flash('#200', 0.8); K.shake(22); return K.end(s, { score: s.night, won: false, title: 'IT WOKE UP', text: `You made too much noise. ${s.night} night${s.night === 1 ? '' : 's'} survived.` }); }
+    }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, '#1a120c');
+    for (let i = 0; i < 12; i++) K.line(i * 90, 0, 480, 120, '#2a1c12', 8);
+    K.rect(0, 130, 960, 410, '#20160e'); for (let x = 0; x < 960; x += 60) K.line(x, 130, x, 540, '#160f09', 3);
+    s.boxes.forEach((b) => { K.rect(b.x, b.y, b.w, b.h, b.open ? '#3a2a1a' : '#6a4a2a', 4); K.line(b.x, b.y + b.h / 2, b.x + b.w, b.y + b.h / 2, '#4a3220', 2); if (b.open) K.rect(b.x + 4, b.y + 4, b.w - 8, 10, '#110a05'); });
+    K.rect(450, 500, 60, 40, '#0a0705');
+    const a = K.angle(s.p, K.mouse);
+    K.circle(s.p.x, s.p.y, 12, '#bbb');
+    const c = K.ctx(); c.save(); c.fillStyle = 'rgba(0,0,0,.94)'; c.beginPath(); c.rect(0, 0, 960, 540);
+    c.moveTo(s.p.x, s.p.y); c.arc(s.p.x, s.p.y, 340, a - 0.38, a + 0.38); c.lineTo(s.p.x, s.p.y); c.moveTo(s.p.x + 50, s.p.y); c.arc(s.p.x, s.p.y, 50, 0, 6.28, true);
+    c.fill('evenodd'); c.restore();
+    s.rings.forEach((r) => { K.alpha(r.a * 0.6); K.ring(r.x, r.y, r.r, '#c45cff', 2); }); K.alpha(1);
+    if (s.wake > 0.4) { K.alpha(s.wake - 0.3); K.circle(880, 160, 8, '#ff3355'); K.circle(900, 160, 8, '#ff3355'); K.alpha(1); }
+    K.rect(20, 20, 160, 8, '#222', 4); K.rect(20, 20, 160 * s.wake, 8, '#ff3355', 4); K.text('NOISE', 188, 24, 11, '#ff3355', 'left', 'm');
+    K.text(`NIGHT ${Math.min(5, s.night + 1)} / 5`, 940, 24, 16, '#c9b8a0', 'right', 'd');
+    if (s.msgT > 0) K.wrapText(s.msg, 480, 80, 700, 18, '#e8dcc8');
+  },
+  ai(s) { const b = s.boxes[s.src], t = { x: b.x + b.w / 2, y: b.y + b.h / 2 }; K.vmouse(t.x, t.y); K.vhold('ArrowLeft', t.x < s.p.x - 10); K.vhold('ArrowRight', t.x > s.p.x + 10); K.vhold('ArrowUp', t.y < s.p.y - 10); K.vhold('ArrowDown', t.y > s.p.y + 10); if (K.dist(t, s.p) < 70) K.vtap('KeyE'); },
+});
+</script></body></html>
