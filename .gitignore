@@ -1,4 +1,5 @@
 tools/out/
+tools/qa_accounts.json
 __pycache__/
 *.pyc
 .DS_Store

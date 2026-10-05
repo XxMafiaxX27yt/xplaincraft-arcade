@@ -3,14 +3,17 @@ the other joins by code, the leader picks a game and starts, then both should be
 
   python tools/test_mp.py [game-id]        (default pong-duel; needs tools/serve.py on :8787)
 Screenshots: tools/out/mp_A.png, mp_B.png
+Accounts come from tools/qa_accounts.json (not in git): [["name", "password"], ["name", "password"]]
 """
-import sys, os, time
+import sys, os, time, json
 from playwright.sync_api import sync_playwright
 
 GAME = sys.argv[1] if len(sys.argv) > 1 else 'pong-duel'
 BASE = 'http://localhost:8787/'
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
-ACC = [('QA_Bot1', 'REDACTED'), ('QA_Bot2', 'REDACTED')]
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(HERE, 'out')
+with open(os.path.join(HERE, 'qa_accounts.json'), encoding='utf-8') as f:
+    ACC = [tuple(a) for a in json.load(f)]
 
 
 def login(p, user, pw):
