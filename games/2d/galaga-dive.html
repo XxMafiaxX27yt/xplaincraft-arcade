@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Galaga Dive</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"galaga-dive","n":28,"title":"GALAGA DIVE","genre":"fun","desc":"Alien bugs swoop in, form up, then peel off to dive-bomb you in curling attacks. Shoot them in formation or mid-dive (diving bugs are worth double). Every few waves, a challenge stage of bugs that don't shoot back.","controls":"← → move · Space fire (two shots on screen)","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in Galaga Dive"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COL = ['#3dffa0', '#ff2bd6', '#ffd93a'];
+function wave(s) {
+  s.wave++; s.bugs = []; s.challenge = s.wave % 4 === 0;
+  const rows = [2, 2, 1].map((n, i) => i), cols = 8;
+  for (let r = 0; r < 4; r++) for (let c = 0; c < cols; c++) { const fx = 270 + c * 56, fy = 70 + r * 44, from = c % 2 ? 1 : -1; s.bugs.push({ fx, fy, x: from > 0 ? 1000 : -40, y: 300 + r * 30, st: 'enter', t: -(r * 0.35 + c * 0.08), type: r === 0 ? 2 : r < 2 ? 1 : 0, hp: r === 0 ? 2 : 1, side: from }); }
+}
+K.game({
+  bg: '#02020c',
+  init(s) { s.px = 480; s.shots = []; s.eb = []; s.score = 0; s.lives = 3; s.wave = 0; s.sway = 0; s.inv = 0; s.stars = Array.from({ length: 90 }, () => [K.rand(0, 960), K.rand(0, 540), K.rand(20, 120)]); wave(s); },
+  update(s, dt) {
+    s.sway += dt; s.inv -= dt;
+    s.stars.forEach((st) => { st[1] += st[2] * dt; if (st[1] > 540) st[1] = 0; });
+    const d = K.dir(); s.px = K.clamp(s.px + d.x * 360 * dt, 30, 930);
+    if (K.tap('Space') && s.shots.length < 2) { s.shots.push({ x: s.px, y: 470 }); K.sfx('laser'); }
+    s.shots.forEach((b) => (b.y -= 700 * dt)); s.shots = s.shots.filter((b) => b.y > -10);
+    const swayX = Math.sin(s.sway) * 30;
+    for (const b of s.bugs) {
+      b.t += dt; if (b.t < 0) continue;
+      if (b.st === 'enter') { const tx = b.fx + swayX, ty = b.fy; b.x = K.lerp(b.x, tx, Math.min(1, dt * 2.6)); b.y = K.lerp(b.y, ty, Math.min(1, dt * 2.6)) + Math.sin(b.t * 6) * 2; if (Math.hypot(b.x - tx, b.y - ty) < 6) b.st = 'form'; }
+      else if (b.st === 'form') { b.x = b.fx + swayX; b.y = b.fy; if (!s.challenge && Math.random() < dt * (0.04 + s.wave * 0.01)) { b.st = 'dive'; b.dt = 0; b.ox = b.x; b.oy = b.y; K.sfx('whoosh'); } }
+      else if (b.st === 'dive') {
+        b.dt += dt; b.x = b.ox + Math.sin(b.dt * 2.2) * 160 * b.side + (s.px - b.ox) * Math.min(1, b.dt * 0.5); b.y = b.oy + b.dt * 200;
+        if (Math.random() < dt * 1.2 && !s.challenge) s.eb.push({ x: b.x, y: b.y, vx: (s.px - b.x) * 0.4, vy: 300 });
+        if (b.y > 580) { b.y = -30; b.st = 'enter'; b.t = 0; }
+      }
+      for (const sh of s.shots) if (!b.dead && Math.abs(sh.x - b.x) < 18 && Math.abs(sh.y - b.y) < 16) { sh.y = -99; b.hp--; if (b.hp <= 0) { b.dead = true; const pts = [50, 80, 150][b.type] * (b.st === 'dive' ? 2 : 1); s.score += pts; K.burst(b.x, b.y, COL[b.type], 14); K.sfx('pop'); if (b.st === 'dive') K.floatText(String(pts), b.x, b.y, '#fff', 14); } else K.sfx('click'); }
+      if (!b.dead && s.inv <= 0 && Math.abs(b.x - s.px) < 24 && Math.abs(b.y - 490) < 20) { b.dead = true; hit(s); }
+    }
+    s.bugs = s.bugs.filter((b) => !b.dead);
+    s.eb.forEach((e) => { e.x += e.vx * dt; e.y += e.vy * dt; if (s.inv <= 0 && Math.abs(e.x - s.px) < 16 && Math.abs(e.y - 490) < 16) { e.y = 999; hit(s); } }); s.eb = s.eb.filter((e) => e.y < 560);
+    if (s.lives <= 0) return K.end(s, { score: s.score, won: null, title: 'SHIP DOWN', text: `Wave ${s.wave}` });
+    if (!s.bugs.length) { if (s.challenge) { s.score += 1000; K.floatText('PERFECT CHALLENGE +1000', 480, 260, '#ffd93a', 22); } K.sfx('win'); wave(s); }
+    if (s.challenge && s.bugs.every((b) => b.st === 'form')) { s.bugs.forEach((b) => { b.st = 'dive'; b.dt = 0; b.ox = b.x; b.oy = b.y; }); }
+  },
+  draw(s) {
+    s.stars.forEach(([x, y, v]) => K.rect(x, y, 2, v / 40, '#ffffff66'));
+    s.bugs.forEach((b) => { if (b.t < 0) return; const c = COL[b.type], f = Math.sin(K.time() * 12) * 4; K.glow(c, 10); K.circle(b.x, b.y, 10, c); K.poly([[b.x - 10, b.y], [b.x - 20, b.y - 8 + f], [b.x - 14, b.y + 6]], c); K.poly([[b.x + 10, b.y], [b.x + 20, b.y - 8 + f], [b.x + 14, b.y + 6]], c); K.noGlow(); K.circle(b.x - 4, b.y - 2, 2.5, '#111'); K.circle(b.x + 4, b.y - 2, 2.5, '#111'); if (b.hp > 1) K.ring(b.x, b.y, 14, '#fff', 1.5); });
+    s.shots.forEach((b) => { K.glow('#22e6ff', 10); K.rect(b.x - 2, b.y - 12, 4, 14, '#bff6ff'); K.noGlow(); });
+    s.eb.forEach((e) => K.circle(e.x, e.y, 4, '#ff3355'));
+    if (s.inv <= 0 || Math.sin(K.time() * 30) > 0) { K.glow('#22e6ff', 14); K.poly([[s.px, 470], [s.px + 18, 505], [s.px, 498], [s.px - 18, 505]], '#22e6ff'); K.noGlow(); }
+    K.text(String(s.score), 20, 24, 20, '#fff', 'left', 'd'); K.text('▲'.repeat(Math.max(0, s.lives)), 940, 24, 16, '#22e6ff', 'right'); K.text(s.challenge ? 'CHALLENGE STAGE' : `WAVE ${s.wave}`, 480, 24, 14, s.challenge ? '#ffd93a' : '#8e88b8', 'center', 'd');
+  },
+  ai(s) { const t = s.bugs.filter((b) => b.t > 0).sort((a, b) => b.y - a.y)[0]; const danger = s.eb.find((e) => e.y > 400 && Math.abs(e.x - s.px) < 30); const tx = danger ? s.px + (danger.x < s.px ? 80 : -80) : t ? t.x : 480; K.vhold('ArrowLeft', tx < s.px - 6); K.vhold('ArrowRight', tx > s.px + 6); if (t && Math.abs(t.x - s.px) < 30) K.vtap('Space'); },
+});
+function hit(s) { s.lives--; s.inv = 2; K.sfx('boom'); K.shake(12); K.burst(s.px, 490, ['#22e6ff', '#fff'], 24); }
+</script></body></html>

@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Archery</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"archery","n":33,"title":"ARCHERY","genre":"fun","desc":"Draw the bow, hold your breath, release. Wind pushes the arrow sideways and gravity pulls it down, and the target moves further away each round. Ten arrows; the bullseye is worth 10.","controls":"Hold the mouse / Space to draw, aim with the mouse (or ↑ ↓), release to shoot","scoreLabel":"POINTS","tasks":[{"stat":"score","target":70,"text":"Score 70 in Archery"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const BX = 120, BY = 330;
+function round(s) { s.dist = 520 + s.n * 26; s.tx = Math.min(890, BX + s.dist); s.ty = K.rand(220, 380); s.wind = K.rand(-1, 1) * (0.5 + s.n * 0.15); s.arrow = null; s.draw = 0; s.aim = -0.1; }
+K.game({
+  bg: '#9ad8ff',
+  init(s) { s.n = 0; s.score = 0; s.hits = []; round(s); s.sway = 0; },
+  update(s, dt) {
+    s.sway += dt;
+    if (!s.arrow) {
+      if (K.mouse.moved || K.mouse.down) s.aim = K.clamp(Math.atan2(K.mouse.y - BY, K.mouse.x - BX), -1, 0.6);
+      const d = K.dir(); s.aim = K.clamp(s.aim + d.y * dt * 0.8, -1, 0.6);
+      const hold = K.mouse.down || K.down('Space');
+      if (hold) s.draw = Math.min(1, s.draw + dt * 1.2);
+      else if (s.draw > 0.1) { const a = s.aim + Math.sin(s.sway * 3) * 0.02 * s.draw, v = 300 + s.draw * 620; s.arrow = { x: BX, y: BY, vx: Math.cos(a) * v, vy: Math.sin(a) * v, stuck: false }; s.draw = 0; K.sfx('whoosh'); }
+      else s.draw = 0;
+      return;
+    }
+    const ar = s.arrow;
+    if (!ar.stuck) {
+      ar.vy += 300 * dt; ar.vx += s.wind * 40 * dt * 0; ar.y += ar.vy * dt; ar.x += ar.vx * dt; ar.y += s.wind * 26 * dt;
+      if (ar.x >= s.tx - 6 && ar.x <= s.tx + 6) {
+        const off = Math.abs(ar.y - s.ty);
+        if (off < 70) { const pts = Math.max(1, 10 - Math.floor(off / 7)); ar.stuck = true; ar.pts = pts; s.score += pts; s.hits.push(pts); K.sfx(pts >= 9 ? 'win' : 'knock'); K.floatText(pts === 10 ? 'BULLSEYE!' : `+${pts}`, s.tx, s.ty - 90, '#ffd93a', 22); ar.t = 1.2; }
+      }
+      if (!ar.stuck && (ar.y > 540 || ar.x > 980)) { ar.stuck = true; ar.pts = 0; s.hits.push(0); ar.t = 0.8; K.sfx('wrong'); }
+    } else { ar.t -= dt; if (ar.t <= 0) { s.n++; if (s.n >= 10) return K.end(s, { score: s.score, won: null, title: s.score >= 80 ? 'ROBIN HOOD' : 'NICE SHOOTING', text: s.hits.join(' · ') }); round(s); } }
+  },
+  draw(s) {
+    K.rect(0, 380, 960, 160, '#5a9a3a');
+    [[200, 120], [600, 80]].forEach(([x, y]) => { K.circle(x, y, 26, '#fff'); K.circle(x + 26, y + 6, 20, '#fff'); });
+    K.rect(s.tx - 4, s.ty + 70, 8, 400 - s.ty, '#6a4220');
+    [70, 56, 42, 28, 14].forEach((r, i) => K.circle(s.tx, s.ty, r, ['#fff', '#111', '#3a8bff', '#ff3355', '#ffd93a'][i]));
+    // wind flag
+    K.line(880, 60, 880, 120, '#555', 3); K.poly([[880, 60], [880 + s.wind * 40, 70], [880, 80]], '#ff3355'); K.text(`WIND ${s.wind > 0 ? '↓' : '↑'} ${Math.abs(s.wind).toFixed(1)}`, 880, 136, 12, '#fff', 'center', 'd');
+    // archer
+    K.circle(BX - 20, BY - 40, 12, '#f1c9a5'); K.rect(BX - 28, BY - 28, 16, 50, '#2a6a3a', 5);
+    const c = K.ctx(); c.save(); c.translate(BX, BY); c.rotate(s.aim);
+    c.strokeStyle = '#6a4220'; c.lineWidth = 5; c.beginPath(); c.arc(0, 0, 44, -1.2, 1.2); c.stroke();
+    const pull = s.arrow ? 0 : s.draw * 34; K.line(Math.cos(1.2) * 44, -Math.sin(1.2) * 44, -pull, 0, '#ddd', 1.5); K.line(Math.cos(1.2) * 44, Math.sin(1.2) * 44, -pull, 0, '#ddd', 1.5);
+    if (!s.arrow) { K.line(-pull, 0, 60 - pull, 0, '#8a5a2a', 3); K.poly([[60 - pull, -4], [70 - pull, 0], [60 - pull, 4]], '#ccc'); }
+    c.restore();
+    if (s.arrow) { const a = Math.atan2(s.arrow.vy, s.arrow.vx); c.save(); c.translate(s.arrow.x, s.arrow.y); c.rotate(s.arrow.stuck ? 0 : a); K.line(-50, 0, 0, 0, '#8a5a2a', 3); K.poly([[0, -4], [10, 0], [0, 4]], '#ccc'); K.poly([[-50, 0], [-44, -6], [-40, 0]], '#ff3355'); c.restore(); }
+    if (!s.arrow && s.draw > 0) { let x = BX, y = BY, v = 300 + s.draw * 620, vx = Math.cos(s.aim) * v, vy = Math.sin(s.aim) * v; for (let i = 0; i < 10; i++) { vy += 300 * 0.03; x += vx * 0.03; y += vy * 0.03; K.circle(x, y, 2, '#ffffff99'); } }
+    K.text(`ARROW ${Math.min(10, s.n + 1)} / 10`, 20, 26, 16, '#fff', 'left', 'd'); K.text(String(s.score), 940, 26, 24, '#fff', 'right', 'd');
+    K.text(`${Math.round(s.dist / 10)} m`, s.tx, s.ty + 90, 12, '#fff', 'center', 'd');
+  },
+  ai(s) { if (s.arrow) return; s.aw = (s.aw || 0) + 1; const want = -0.12 - (s.dist - 520) / 4000 - s.wind * 0.02; K.vmouse(BX + Math.cos(want) * 200, BY + Math.sin(want) * 200, false, s.aw % 120 < 80); },
+});
+</script></body></html>

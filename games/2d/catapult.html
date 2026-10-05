@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Catapult</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"catapult","n":29,"title":"CATAPULT","genre":"fun","desc":"Pull back the catapult and fling rocks at the towers. Blocks tumble with real physics; knock every goblin off its perch. Fewer rocks used means more stars. Each castle is randomly built.","controls":"Drag back from the catapult and release (or aim with ← → ↑ ↓ and Space)","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in Catapult"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GY = 470, CX = 150, CY = 380, G = 900;
+function castle(s) {
+  s.blocks = []; s.gobs = []; s.rocks = 4; s.ball = null; s.settle = 0;
+  const base = K.irand(560, 640), towers = K.irand(2, 3);
+  for (let t = 0; t < towers; t++) {
+    const x = base + t * 110, floors = K.irand(2, 4);
+    let y = GY;
+    for (let f = 0; f < floors; f++) {
+      s.blocks.push({ x: x - 30, y: y - 50, w: 14, h: 50, vx: 0, vy: 0, a: 0, va: 0, hp: 2, mat: f % 2 ? 'wood' : 'stone' });
+      s.blocks.push({ x: x + 16, y: y - 50, w: 14, h: 50, vx: 0, vy: 0, a: 0, va: 0, hp: 2, mat: f % 2 ? 'wood' : 'stone' });
+      s.blocks.push({ x: x - 36, y: y - 64, w: 72, h: 14, vx: 0, vy: 0, a: 0, va: 0, hp: 2, mat: 'wood' });
+      if (f === floors - 1 || Math.random() < 0.4) s.gobs.push({ x: x, y: y - 82, r: 13, vx: 0, vy: 0, dead: false });
+      y -= 64;
+    }
+  }
+}
+function phys(s, dt) {
+  const bodies = [...s.blocks, ...s.gobs.filter((g) => !g.dead)];
+  for (const b of bodies) {
+    if (b.still && !b.kicked) continue;
+    b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; if (b.va) b.a += b.va * dt;
+    const bottom = b.r ? b.y + b.r : b.y + b.h;
+    if (bottom > GY) { if (b.r) b.y = GY - b.r; else b.y = GY - b.h; if (Math.abs(b.vy) > 200 && b.r) b.dead = true; b.vy *= -0.2; b.vx *= 0.7; b.va *= 0.6; }
+  }
+  // crude stacking: things rest on blocks below them
+  for (const b of bodies) for (const o of s.blocks) {
+    if (o === b) continue;
+    const bw = b.r ? b.r * 2 : b.w, bx = b.r ? b.x - b.r : b.x, by = b.r ? b.y + b.r : b.y + b.h;
+    if (bx + bw > o.x + 2 && bx < o.x + o.w - 2 && by > o.y && by < o.y + 12 && b.vy >= 0) { if (b.r) b.y = o.y - b.r; else b.y = o.y - b.h; b.vy = 0; b.vx *= 0.9; }
+  }
+}
+K.game({
+  bg: '#7ac8ff',
+  init(s) { s.score = 0; s.lvl = 0; castle(s); s.aim = null; s.trail = []; },
+  update(s, dt) {
+    const m = K.mouse;
+    if (!s.ball && s.rocks > 0) {
+      if (m.clicked && Math.hypot(m.x - CX, m.y - CY) < 80) s.aim = true;
+      if (s.aim && m.down) { s.pull = { x: K.clamp(m.x - CX, -120, 20), y: K.clamp(m.y - CY, -60, 110) }; }
+      const d = K.dir(); if (d.x || d.y) { s.pull = s.pull || { x: -60, y: 40 }; s.pull.x = K.clamp(s.pull.x + d.x * 80 * dt, -120, 20); s.pull.y = K.clamp(s.pull.y + d.y * 80 * dt, -60, 110); }
+      const fire = (s.aim && !m.down && s.pull) || (K.tap('Space') && s.pull);
+      if (fire) { s.ball = { x: CX + s.pull.x, y: CY + s.pull.y, vx: -s.pull.x * 7.2, vy: -s.pull.y * 7.2, r: 12, life: 6 }; s.rocks--; s.aim = false; s.pull = null; s.trail = []; K.sfx('whoosh'); }
+    }
+    phys(s, dt);
+    if (s.ball) {
+      const b = s.ball; b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; s.trail.push({ x: b.x, y: b.y });
+      if (b.y > GY - b.r) { b.y = GY - b.r; b.vy *= -0.3; b.vx *= 0.6; }
+      for (const o of s.blocks) if (b.x + b.r > o.x && b.x - b.r < o.x + o.w && b.y + b.r > o.y && b.y - b.r < o.y + o.h) { const sp = Math.hypot(b.vx, b.vy); o.vx += b.vx * 0.5; o.vy += b.vy * 0.2 - 100; o.va = K.rand(-3, 3); o.kicked = true; o.hp -= sp / 500; b.vx *= 0.5; b.vy *= 0.5; if (sp > 200) { K.sfx('hit'); K.shake(4); s.score += 10; } }
+      for (const g of s.gobs) if (!g.dead && Math.hypot(g.x - b.x, g.y - b.y) < g.r + b.r) { g.dead = true; s.score += 500; K.sfx('pop'); K.burst(g.x, g.y, '#3dbb4a', 16); }
+      if (b.life <= 0 || b.x > 1000 || (Math.abs(b.vx) < 20 && b.y >= GY - b.r - 1)) { s.ball = null; s.settle = 1.5; }
+    }
+    // goblins knocked off their perch (fell more than a bit) are out
+    s.gobs.forEach((g) => { g.sy ??= g.y; if (!g.dead && g.y - g.sy > 26) { g.dead = true; s.score += 500; K.sfx('pop'); K.burst(g.x, g.y, '#3dbb4a', 12); } });
+    s.blocks.forEach((o) => { if (o.kicked) for (const g of s.gobs) if (!g.dead && g.x > o.x - 8 && g.x < o.x + o.w + 8 && Math.abs(g.y - o.y) < 34 && (Math.abs(o.vx) > 80 || Math.abs(o.va) > 2)) { g.vx = o.vx * 0.6; g.x += g.vx * dt; } });
+    s.blocks = s.blocks.filter((o) => o.hp > 0 || (K.burst(o.x + o.w / 2, o.y + o.h / 2, '#8a6a3a', 6), false));
+    if (s.settle > 0) { s.settle -= dt; if (s.settle <= 0) {
+      if (s.gobs.every((g) => g.dead)) { s.score += s.rocks * 1000; s.lvl++; K.sfx('win'); K.floatText(`CASTLE ${s.lvl} DOWN!`, 480, 200, '#ffd93a', 26); if (s.lvl >= 6) return K.end(s, { score: s.score, won: true, title: 'ALL CASTLES FALLEN' }); castle(s); }
+      else if (s.rocks <= 0) return K.end(s, { score: s.score, won: null, title: 'OUT OF ROCKS', text: `${s.lvl} castles toppled.` });
+    } }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#7ac8ff', '#d8f0ff'])); K.rect(0, GY, 960, 70, '#5a9a3a');
+    s.trail.forEach((p, i) => i % 3 === 0 && K.circle(p.x, p.y, 2, '#ffffff99'));
+    K.rect(CX - 8, CY, 16, GY - CY, '#6a4220'); K.rect(CX - 30, GY - 14, 60, 14, '#5a3a1a', 4);
+    const c = K.ctx();
+    s.blocks.forEach((o) => { c.save(); c.translate(o.x + o.w / 2, o.y + o.h / 2); c.rotate(o.a); K.rect(-o.w / 2, -o.h / 2, o.w, o.h, o.mat === 'stone' ? '#8a8aa0' : '#b8743a', 2); K.stroke(-o.w / 2, -o.h / 2, o.w, o.h, '#00000033', 1, 2); c.restore(); });
+    s.gobs.forEach((g) => { if (g.dead) return; K.circle(g.x, g.y, g.r, '#3dbb4a'); K.circle(g.x - 4, g.y - 3, 3, '#fff'); K.circle(g.x + 4, g.y - 3, 3, '#fff'); K.circle(g.x - 4, g.y - 3, 1.5, '#111'); K.circle(g.x + 4, g.y - 3, 1.5, '#111'); K.poly([[g.x - 13, g.y - 6], [g.x - 20, g.y - 14], [g.x - 9, g.y - 10]], '#3dbb4a'); K.poly([[g.x + 13, g.y - 6], [g.x + 20, g.y - 14], [g.x + 9, g.y - 10]], '#3dbb4a'); });
+    if (s.pull) { K.line(CX - 10, CY, CX + s.pull.x, CY + s.pull.y, '#3a2414', 4); K.line(CX + 10, CY, CX + s.pull.x, CY + s.pull.y, '#3a2414', 4); K.circle(CX + s.pull.x, CY + s.pull.y, 12, '#666'); let px = CX + s.pull.x, py = CY + s.pull.y, vx = -s.pull.x * 7.2, vy = -s.pull.y * 7.2; for (let i = 0; i < 18; i++) { vx *= 1; vy += G * 0.05; px += vx * 0.05; py += vy * 0.05; K.circle(px, py, 2.5, '#ffffffaa'); } }
+    else if (!s.ball && s.rocks > 0) K.circle(CX, CY, 12, '#666');
+    if (s.ball) K.circle(s.ball.x, s.ball.y, s.ball.r, '#555');
+    K.text(String(s.score), 20, 26, 22, '#fff', 'left', 'd'); K.text('● '.repeat(s.rocks), 20, 56, 18, '#555', 'left'); K.text(`CASTLE ${s.lvl + 1}`, 940, 26, 16, '#fff', 'right', 'd');
+    if (!s.ball && !s.pull && s.rocks > 0) K.text('drag back from the catapult', CX + 30, CY - 60, 13, '#3a4a5a', 'center', 'u');
+  },
+  ai(s) { if (s.ball || s.settle > 0) return; s.aw = (s.aw || 0) + 1; if (s.aw % 60 === 0) { s.pull = { x: K.rand(-115, -80), y: K.rand(30, 90) }; K.vtap('Space'); } },
+});
+</script></body></html>

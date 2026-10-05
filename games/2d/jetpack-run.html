@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jetpack Run</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"jetpack-run","n":36,"title":"JETPACK RUN","genre":"fun","desc":"Hold to fire the jetpack, let go to drop. Zap fences, missiles with a warning sign, coin trails and a shield bubble that saves you once. The lab corridor just keeps going, faster and faster.","controls":"Hold Space / mouse / touch to fly","scoreLabel":"METRES","tasks":[{"stat":"score","target":1000,"text":"Fly 1000 m in Jetpack Run"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const TOPY = 40, BOTY = 480, PX = 200;
+function spawn(s) {
+  const r = Math.random();
+  if (r < 0.45) { const len = K.rand(100, 220), a = K.pick([0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]); s.zaps.push({ x: 1050, y: K.rand(TOPY + 60, BOTY - 60), len, a }); }
+  else if (r < 0.65 && s.dist > 80) s.miss.push({ y: K.rand(TOPY + 30, BOTY - 30), warn: 1.3, x: 1100 });
+  else { const y0 = K.rand(TOPY + 50, BOTY - 80), shape = K.irand(0, 2); for (let i = 0; i < 10; i++) s.coins.push({ x: 1000 + i * 26, y: y0 + (shape === 0 ? 0 : shape === 1 ? Math.sin(i / 2) * 40 : (i % 5) * 12) }); }
+  if (Math.random() < 0.06) s.pw.push({ x: 1050, y: K.rand(TOPY + 50, BOTY - 50) });
+}
+const segDist = (px, py, x1, y1, x2, y2) => { const dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy, t = K.clamp(((px - x1) * dx + (py - y1) * dy) / L, 0, 1); return Math.hypot(x1 + dx * t - px, y1 + dy * t - py); };
+K.game({
+  bg: '#14121e',
+  init(s) { s.y = BOTY - 20; s.vy = 0; s.dist = 0; s.coinsGot = 0; s.zaps = []; s.miss = []; s.coins = []; s.pw = []; s.next = 1; s.shield = false; s.t = 0; s.inv = 0; },
+  update(s, dt) {
+    s.t += dt; s.inv -= dt;
+    const fly = K.down('Space', 'ArrowUp', 'KeyW') || K.mouse.down;
+    s.vy += (fly ? -1500 : 1300) * dt; s.vy = K.clamp(s.vy, -420, 520); s.y += s.vy * dt;
+    if (s.y < TOPY + 20) { s.y = TOPY + 20; s.vy = 0; } if (s.y > BOTY - 20) { s.y = BOTY - 20; s.vy = 0; }
+    if (fly && Math.random() < 0.7) K.particle({ x: PX - 14, y: s.y + 18, vx: K.rand(-60, -20), vy: K.rand(80, 160), color: K.pick(['#ffd93a', '#ff8a3a']), life: 0.3, size: 4 });
+    const speed = 360 + Math.min(360, s.t * 6); s.dist += speed * dt / 12;
+    s.next -= dt; if (s.next <= 0) { spawn(s); s.next = K.rand(0.7, 1.3) * (420 / speed) + 0.2; }
+    [s.zaps, s.coins, s.pw].forEach((arr) => arr.forEach((o) => (o.x -= speed * dt)));
+    s.miss.forEach((m) => { if (m.warn > 0) { m.warn -= dt; m.y = K.lerp(m.y, s.y, dt * 2); } else m.x -= (speed + 500) * dt; });
+    s.coins = s.coins.filter((c) => { if (Math.hypot(c.x - PX, c.y - s.y) < 24) { s.coinsGot++; if (s.coinsGot % 2) K.tone(1200, 0.04, 'square', 0.02); return false; } return c.x > -20; });
+    s.pw = s.pw.filter((p) => { if (Math.hypot(p.x - PX, p.y - s.y) < 30) { s.shield = true; K.sfx('power'); return false; } return p.x > -40; });
+    const hurt = () => { if (s.inv > 0) return false; if (s.shield) { s.shield = false; s.inv = 1.2; K.sfx('hit'); K.shake(8); return false; } return true; };
+    for (const z of s.zaps) { const x2 = z.x + Math.cos(z.a) * z.len, y2 = z.y + Math.sin(z.a) * z.len; if (segDist(PX, s.y, z.x, z.y, x2, y2) < 22 && hurt()) return die(s, 'ZAPPED'); }
+    for (const m of s.miss) if (m.warn <= 0 && Math.abs(m.x - PX) < 26 && Math.abs(m.y - s.y) < 20 && hurt()) return die(s, 'MISSILE!');
+    s.zaps = s.zaps.filter((z) => z.x > -260); s.miss = s.miss.filter((m) => m.x > -60);
+    if (s.miss.some((m) => m.warn > 0) && Math.random() < dt * 6) K.tone(900, 0.05, 'square', 0.02);
+  },
+  draw(s) {
+    K.rect(0, TOPY, 960, BOTY - TOPY, '#1c1a2a');
+    for (let i = 0; i < 12; i++) { const x = K.wrap(i * 100 - s.dist * 6, 1200) - 100; K.rect(x, TOPY + 20, 60, 80, '#24223a', 4); K.rect(x + 10, TOPY + 30, 40, 24, '#2a6a8a', 3); }
+    K.rect(0, 0, 960, TOPY, '#0a0914'); K.rect(0, BOTY, 960, 60, '#0a0914'); K.rect(0, TOPY - 3, 960, 3, '#3dffa0'); K.rect(0, BOTY, 960, 3, '#3dffa0');
+    s.coins.forEach((c) => { K.glow('#ffd93a', 8); K.circle(c.x, c.y, 8, '#ffd93a'); K.noGlow(); });
+    s.pw.forEach((p) => { K.glow('#22e6ff', 14); K.ring(p.x, p.y, 16, '#22e6ff', 4); K.noGlow(); K.text('S', p.x, p.y + 1, 14, '#22e6ff', 'center', 'd'); });
+    s.zaps.forEach((z) => { const x2 = z.x + Math.cos(z.a) * z.len, y2 = z.y + Math.sin(z.a) * z.len; K.glow('#22e6ff', 18); K.line(z.x, z.y, x2, y2, Math.random() < 0.5 ? '#bff6ff' : '#22e6ff', 5); K.noGlow(); K.circle(z.x, z.y, 10, '#555'); K.circle(x2, y2, 10, '#555'); });
+    s.miss.forEach((m) => { if (m.warn > 0) { if (Math.sin(K.time() * 20) > 0) K.text('⚠', 930, m.y, 30, '#ff3355'); } else { K.glow('#ff3355', 12); K.rect(m.x - 20, m.y - 7, 40, 14, '#ff3355', 6); K.noGlow(); K.poly([[m.x + 20, m.y - 7], [m.x + 32, m.y], [m.x + 20, m.y + 7]], '#ddd'); } });
+    if (s.inv <= 0 || Math.sin(K.time() * 30) > 0) { K.rect(PX - 22, s.y - 6, 12, 24, '#888', 4); K.rect(PX - 10, s.y - 18, 22, 32, '#ff8a3a', 8); K.circle(PX + 2, s.y - 26, 11, '#f1c9a5'); K.rect(PX - 6, s.y - 36, 18, 8, '#3a2a1a', 3); if (s.shield) { K.alpha(0.4); K.circle(PX, s.y - 8, 34, '#22e6ff'); K.alpha(1); } }
+    K.text(`${Math.floor(s.dist)} m`, 20, 22, 18, '#fff', 'left', 'd'); K.text(`● ${s.coinsGot}`, 940, 22, 18, '#ffd93a', 'right', 'd');
+  },
+  ai(s) {
+    let target = 260;
+    const z = s.zaps.find((q) => q.x < PX + 240 && q.x + q.len > PX - 40); const c = s.coins.find((q) => q.x > PX && q.x < PX + 200); const m = s.miss.find((q) => q.warn < 0.5);
+    if (c) target = c.y; if (z) { const ymin = Math.min(z.y, z.y + Math.sin(z.a) * z.len), ymax = Math.max(z.y, z.y + Math.sin(z.a) * z.len); target = ymin - TOPY > BOTY - ymax ? ymin - 50 : ymax + 50; } if (m) target = m.y > 260 ? m.y - 80 : m.y + 80;
+    K.vhold('Space', s.y > target + s.vy * 0.15);
+  },
+});
+function die(s, why) { K.sfx('boom'); K.shake(14); K.burst(PX, s.y, ['#ff8a3a', '#ffd93a'], 30); K.end(s, { score: Math.floor(s.dist), won: null, title: why, text: `${Math.floor(s.dist)} m · ${s.coinsGot} coins` }); }
+</script></body></html>

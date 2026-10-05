@@ -749,7 +749,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/lights-out-house.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/lights-out-house.png"
 },
 {
 "id": "breakout",
@@ -1194,6 +1195,27 @@ export const GAME_LIST = [
 "cover": "games/covers/frogger.png"
 },
 {
+"id": "pac-chase",
+"n": 25,
+"title": "PAC-CHASE",
+"genre": "fun",
+"desc": "Gobble every dot in the neon maze while four ghosts hunt you, each with its own personality. Eat a power pellet and the hunters become the hunted for a few seconds. Clear the maze to move on.",
+"controls": "Arrow keys / WASD or swipe (you can turn early)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 2000,
+"text": "Score 2000 in Pac-Chase"
+}
+],
+"file": "games/2d/pac-chase.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "missile-defense",
 "n": 27,
 "title": "MISSILE DEFENSE",
@@ -1214,6 +1236,111 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/missile-defense.png"
+},
+{
+"id": "galaga-dive",
+"n": 28,
+"title": "GALAGA DIVE",
+"genre": "fun",
+"desc": "Alien bugs swoop in, form up, then peel off to dive-bomb you in curling attacks. Shoot them in formation or mid-dive (diving bugs are worth double). Every few waves, a challenge stage of bugs that don't shoot back.",
+"controls": "← → move · Space fire (two shots on screen)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in Galaga Dive"
+}
+],
+"file": "games/2d/galaga-dive.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "catapult",
+"n": 29,
+"title": "CATAPULT",
+"genre": "fun",
+"desc": "Pull back the catapult and fling rocks at the towers. Blocks tumble with real physics; knock every goblin off its perch. Fewer rocks used means more stars. Each castle is randomly built.",
+"controls": "Drag back from the catapult and release (or aim with ← → ↑ ↓ and Space)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in Catapult"
+}
+],
+"file": "games/2d/catapult.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "bowling",
+"n": 31,
+"title": "BOWLING",
+"genre": "fun",
+"desc": "Ten frames of neon bowling with real scoring: strikes, spares, the tenth-frame bonus. Set your position, aim the arrow, then time the power and the spin. Pins knock into each other.",
+"controls": "← → position · Space to lock aim, then power, then spin (or tap three times)",
+"scoreLabel": "PINS",
+"tasks": [
+{
+"stat": "score",
+"target": 120,
+"text": "Score 120 in Bowling"
+}
+],
+"file": "games/2d/bowling.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "archery",
+"n": 33,
+"title": "ARCHERY",
+"genre": "fun",
+"desc": "Draw the bow, hold your breath, release. Wind pushes the arrow sideways and gravity pulls it down, and the target moves further away each round. Ten arrows; the bullseye is worth 10.",
+"controls": "Hold the mouse / Space to draw, aim with the mouse (or ↑ ↓), release to shoot",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 70,
+"text": "Score 70 in Archery"
+}
+],
+"file": "games/2d/archery.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "jetpack-run",
+"n": 36,
+"title": "JETPACK RUN",
+"genre": "fun",
+"desc": "Hold to fire the jetpack, let go to drop. Zap fences, missiles with a warning sign, coin trails and a shield bubble that saves you once. The lab corridor just keeps going, faster and faster.",
+"controls": "Hold Space / mouse / touch to fly",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 1000,
+"text": "Fly 1000 m in Jetpack Run"
+}
+],
+"file": "games/2d/jetpack-run.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "lumberjack",
@@ -2365,7 +2492,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/pond-party.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/pond-party.png"
 },
 {
 "id": "gravity-flip",
