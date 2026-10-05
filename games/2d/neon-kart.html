@@ -1,0 +1,108 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Kart</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"neon-kart","n":22,"title":"NEON KART","genre":"fun","modes":["sp","online","local"],"minPlayers":2,"maxPlayers":6,"desc":"Top-down kart racing on glowing tracks. Drift through corners (hold Shift while turning) to charge a boost, hit the speed pads, bump the others off the line. Three laps, three tracks, up to six racers.","controls":"↑ accelerate · ↓ brake · ← → steer · Shift drift (release to boost) (same screen: P1 WASD + Space/Shift, P2 arrows + Enter/Right-Shift)","scoreLabel":"PLACE PTS","tasks":[{"stat":"won","target":1,"text":"Win a Neon Kart race"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff'], LAPS = 3, HALF = 46;
+const TRACKS = [
+  { name: 'NEON LOOP', pts: [[150, 270], [190, 120], [380, 80], [600, 90], [800, 110], [860, 270], [800, 430], [600, 460], [480, 360], [360, 460], [190, 430]] },
+  { name: 'FIGURE RUSH', pts: [[130, 140], [330, 80], [520, 200], [690, 90], [860, 160], [840, 380], [660, 460], [480, 330], [300, 460], [120, 400]] },
+  { name: 'HAIRPIN HEIGHTS', pts: [[140, 460], [140, 90], [330, 90], [330, 360], [480, 360], [480, 90], [820, 90], [860, 270], [700, 300], [860, 460]] },
+];
+// smooth closed track through the points (Catmull-Rom)
+function sample(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p0 = pts[(i - 1 + pts.length) % pts.length], p1 = pts[i], p2 = pts[(i + 1) % pts.length], p3 = pts[(i + 2) % pts.length];
+    for (let t = 0; t < 1; t += 0.05) { const t2 = t * t, t3 = t2 * t; out.push([0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3), 0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)]); }
+  }
+  return out;
+}
+function nearest(path, x, y) { let bi = 0, bd = 1e9; for (let i = 0; i < path.length; i++) { const d = (path[i][0] - x) ** 2 + (path[i][1] - y) ** 2; if (d < bd) { bd = d; bi = i; } } return { i: bi, d: Math.sqrt(bd) }; }
+function botIn(s, c) {
+  const n = nearest(s.path, c.x, c.y), look = s.path[(n.i + 9 + c.skill * 2) % s.path.length];
+  let da = Math.atan2(look[1] - c.y, look[0] - c.x) - c.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+  return { x: K.clamp(da * 2.5, -1, 1), y: Math.abs(da) > 0.9 && c.sp > 160 ? 0.4 : -1, a: false, b: false };
+}
+K.game({
+  bg: '#05040f',
+  init(s) {
+    s.track = TRACKS[Math.floor(K.rng() * TRACKS.length)]; s.path = sample(s.track.pts);
+    const p0 = s.path[0], p1 = s.path[2], ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+    s.cars = K.seats(4).slice(0, 6).map((p, i) => ({ ...p, col: COL[i], x: p0[0] - Math.cos(ang) * (30 + Math.floor(i / 2) * 44) + Math.cos(ang + Math.PI / 2) * (i % 2 ? 18 : -18), y: p0[1] - Math.sin(ang) * (30 + Math.floor(i / 2) * 44) + Math.sin(ang + Math.PI / 2) * (i % 2 ? 18 : -18), a: ang, sp: 0, lap: 0, prog: 0, last: 0, drift: 0, boost: 0, fin: null, skill: [0, 3, 1, 2, 4, 0][i] }));
+    s.pads = [0.18, 0.52, 0.8].map((f) => s.path[Math.floor(f * s.path.length)]);
+    s.time = -3; s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; s.myId = K.net ? K.net.me : 'p0';
+  },
+  onNet(s, d, from) {
+    if (d.t === 'in' && K.net.isHost) s.inputs[from] = d.k;
+    if (d.t === 'st' && !K.net.isHost) { d.c.forEach((o, i) => { const c = s.cars[i]; if (c) Object.assign(c, { x: o[0], y: o[1], a: o[2], lap: o[3], fin: o[4], drift: o[5], boost: o[6], prog: o[7] }); }); s.time = d.tm; d.fx.forEach((f) => K.sfx(f)); if (d.done) finish(s); }
+  },
+  onLeave(s, id) { const c = s.cars.find((x) => x.id === id); if (c) c.bot = true; },
+  update(s, dt) {
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'in', k: K.pad() }); s.sendT = 0.04; } return; }
+    s.time += dt;
+    if (s.time < 0) { if (Math.floor(s.time) !== Math.floor(s.time - dt)) s.fx.push('blip'); }
+    else for (const c of s.cars) {
+      if (c.fin != null) { c.sp *= Math.pow(0.3, dt); }
+      const inp = c.fin != null ? { x: 0, y: 0 } : c.bot ? botIn(s, c) : c.me ? K.pad(c.local || 0) : s.inputs[c.id] || { x: 0, y: 0, a: false, b: false };
+      const n = nearest(s.path, c.x, c.y), off = n.d > HALF;
+      const max = (off ? 150 : 290) + (c.boost > 0 ? 160 : 0);
+      if (inp.y < 0 || inp.a) c.sp += 300 * dt; else if (inp.y > 0) c.sp -= 420 * dt; else c.sp *= Math.pow(0.5, dt);
+      c.sp = K.clamp(c.sp, -80, max);
+      const drifting = inp.b && Math.abs(inp.x) > 0.2 && c.sp > 120;
+      if (drifting) c.drift = Math.min(1.5, c.drift + dt); else if (c.drift > 0) { if (c.drift > 0.6) { c.boost = c.drift * 0.9; s.fx.push('power'); } c.drift = 0; }
+      c.boost -= dt;
+      c.a += inp.x * (drifting ? 3.4 : 2.6) * dt * K.clamp(c.sp / 160, -1, 1);
+      const slip = drifting ? 0.35 : 0;
+      c.x += Math.cos(c.a - inp.x * slip) * c.sp * dt; c.y += Math.sin(c.a - inp.x * slip) * c.sp * dt;
+      c.x = K.clamp(c.x, 10, 950); c.y = K.clamp(c.y, 10, 530);
+      for (const p of s.pads) if (Math.hypot(p[0] - c.x, p[1] - c.y) < 26 && c.boost < 0.4) { c.boost = 1; s.fx.push('whoosh'); }
+      // progress along the track (laps count when crossing the start going forward)
+      const frac = n.i / s.path.length;
+      if (c.last > 0.85 && frac < 0.15) { c.lap++; if (c.lap >= LAPS && c.fin == null) { c.fin = s.time; s.fx.push(c.me ? 'win' : 'chime'); } else if (c.me) s.fx.push('coin'); }
+      if (c.last < 0.15 && frac > 0.85) c.lap--;
+      c.last = frac; c.prog = c.lap + frac;
+    }
+    for (let i = 0; i < s.cars.length; i++) for (let j = i + 1; j < s.cars.length; j++) { const a = s.cars[i], b = s.cars[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); if (d < 26 && d > 0) { const nx = dx / d, ny = dy / d, ov = (26 - d) / 2; a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov; a.sp *= 0.95; b.sp *= 0.95; } }
+    const fx = [...new Set(s.fx.splice(0))]; fx.forEach((f) => K.sfx(f));
+    const humansDone = s.cars.filter((c) => !c.bot).every((c) => c.fin != null), firstFin = Math.min(...s.cars.map((c) => (c.fin == null ? 1e9 : c.fin)));
+    s.done = humansDone || (firstFin < 1e9 && s.time - firstFin > 25) || s.time > 300;
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.done) { K.net.send({ t: 'st', c: s.cars.map((c) => [Math.round(c.x), Math.round(c.y), +c.a.toFixed(2), c.lap, c.fin, +c.drift.toFixed(1), +c.boost.toFixed(1), +c.prog.toFixed(3)]), tm: +s.time.toFixed(2), fx, done: s.done }); s.sendT = 0.04; } }
+    if (s.done) finish(s);
+  },
+  draw(s) {
+    const c = K.ctx();
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const line = (w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); s.path.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke(); };
+    K.glow('#ff2bd6', 18); line(HALF * 2 + 10, '#ff2bd6'); K.noGlow(); line(HALF * 2 + 4, '#140a26'); line(HALF * 2 - 4, '#1c1436');
+    c.setLineDash([16, 18]); line(2, '#ffffff22'); c.setLineDash([]);
+    const s0 = s.path[0], s1 = s.path[1], ang = Math.atan2(s1[1] - s0[1], s1[0] - s0[0]) + Math.PI / 2;
+    for (let k = -4; k < 4; k++) K.rect(s0[0] + Math.cos(ang) * k * 11 - 5, s0[1] + Math.sin(ang) * k * 11 - 5, 10, 10, (k % 2 ? '#fff' : '#111'));
+    s.pads.forEach((p) => { K.glow('#22e6ff', 14); K.circle(p[0], p[1], 14, '#22e6ff55'); K.text('»', p[0], p[1] + 1, 18, '#22e6ff'); K.noGlow(); });
+    s.cars.forEach((k) => {
+      c.save(); c.translate(k.x, k.y); c.rotate(k.a);
+      if (k.boost > 0) { K.glow('#ff8a3a', 14); K.poly([[-14, -5], [-26 - Math.random() * 10, 0], [-14, 5]], '#ffd93a'); }
+      K.glow(k.col, k.drift > 0.6 ? 20 : 8); K.rect(-13, -8, 26, 16, k.col, 5); K.noGlow(); K.rect(-2, -6, 8, 12, '#111', 3);
+      K.rect(-11, -11, 7, 4, '#222'); K.rect(5, -11, 7, 4, '#222'); K.rect(-11, 7, 7, 4, '#222'); K.rect(5, 7, 7, 4, '#222');
+      c.restore();
+      if (k.drift > 0.6) for (let i = 0; i < 2; i++) K.particle({ x: k.x, y: k.y, vx: K.rand(-30, 30), vy: K.rand(-30, 30), color: k.drift > 1.2 ? '#ff2bd6' : '#22e6ff', life: 0.25, size: 3 });
+      K.text(k.id === s.myId && !K.local ? 'YOU' : k.name, k.x, k.y - 18, 10, k.col, 'center', 'd');
+    });
+    const order = s.cars.slice().sort((a, b) => (a.fin ?? 1e9) - (b.fin ?? 1e9) || b.prog - a.prog);
+    order.forEach((k, i) => K.text(`${i + 1}. ${k.id === s.myId && !K.local ? 'YOU' : k.name}${k.fin != null ? ' ✓' : ''}`, 16, 20 + i * 18, 12, k.col, 'left', 'd'));
+    const me = s.cars.find((k) => k.id === s.myId) || s.cars[0];
+    K.text(`LAP ${Math.min(LAPS, Math.max(1, me.lap + 1))} / ${LAPS}`, 944, 20, 16, '#fff', 'right', 'd');
+    K.text(s.track.name, 944, 42, 11, '#8e88b8', 'right', 'm');
+    if (s.time < 0) K.text(String(Math.ceil(-s.time)), 480, 270, 90, '#ffd93a', 'center', 'd', 24);
+    else if (s.time < 0.8) K.text('GO!', 480, 270, 90, '#3dffa0', 'center', 'd', 24);
+  },
+  ai(s) { const c = s.cars[0], i = botIn(s, c); K.vhold('ArrowLeft', i.x < -0.2); K.vhold('ArrowRight', i.x > 0.2); K.vhold('ArrowUp', i.y < 0); },
+});
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const order = s.cars.slice().sort((a, b) => (a.fin ?? 1e9) - (b.fin ?? 1e9) || b.prog - a.prog);
+  const me = s.cars.find((k) => k.id === s.myId) || s.cars[0], place = order.indexOf(me) + 1;
+  K.end(s, { score: Math.max(1, (s.cars.length - place + 1) * 10), won: K.local ? null : place === 1, stats: { won: place === 1 && !K.local ? 1 : 0 }, title: K.local ? `${order[0].name} WINS` : place === 1 ? '1ST PLACE!' : `${place}${['', 'ST', 'ND', 'RD'][place] || 'TH'} PLACE`, text: order.map((k, i) => `${i + 1}. ${k.name}`).join('  ') });
+}
+</script></body></html>

@@ -945,6 +945,31 @@ export const GAME_LIST = [
 "cover": "games/covers/tank-battle.png"
 },
 {
+"id": "neon-kart",
+"n": 22,
+"title": "NEON KART",
+"genre": "fun",
+"modes": [
+"sp",
+"online",
+"local"
+],
+"minPlayers": 2,
+"maxPlayers": 6,
+"desc": "Top-down kart racing on glowing tracks. Drift through corners (hold Shift while turning) to charge a boost, hit the speed pads, bump the others off the line. Three laps, three tracks, up to six racers.",
+"controls": "↑ accelerate · ↓ brake · ← → steer · Shift drift (release to boost) (same screen: P1 WASD + Space/Shift, P2 arrows + Enter/Right-Shift)",
+"scoreLabel": "PLACE PTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Neon Kart race"
+}
+],
+"file": "games/2d/neon-kart.html",
+"dim": "2d"
+},
+{
 "id": "bomb-tag",
 "n": 47,
 "title": "BOMB TAG",
@@ -1962,6 +1987,7 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/together.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/together.png"
 }
 ];
