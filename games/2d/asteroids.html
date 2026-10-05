@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Asteroids</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"asteroids","n":7,"title":"ASTEROIDS","genre":"fun","desc":"Spin, thrust and blast the rocks into smaller rocks. The screen wraps around. A saucer drops in now and then: shoot it for a shield.","controls":"← → rotate · ↑ thrust · Space fire · Shift hyperspace","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in Asteroids"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 960, H = 540;
+function rock(x, y, size) {
+  const n = 9 + Math.floor(Math.random() * 4), pts = [];
+  for (let i = 0; i < n; i++) pts.push(K.rand(0.7, 1.15));
+  const a = K.rand(0, 6.28), sp = K.rand(30, 90) * (4 - size) * 0.6;
+  return { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: size * 18, size, pts, rot: K.rand(-1, 1), ang: 0 };
+}
+function wave(s) { s.rocks = []; for (let i = 0; i < 3 + s.wave; i++) { let x, y; do { x = K.rand(0, W); y = K.rand(0, H); } while (Math.hypot(x - s.sh.x, y - s.sh.y) < 180); s.rocks.push(rock(x, y, 3)); } }
+const wrap = (o) => { o.x = (o.x + W) % W; o.y = (o.y + H) % H; };
+K.game({
+  bg: '#02020a',
+  init(s) { s.sh = { x: 480, y: 270, vx: 0, vy: 0, a: -Math.PI / 2, inv: 2, shield: 0 }; s.bul = []; s.score = 0; s.lives = 3; s.wave = 1; s.cool = 0; s.ufo = null; s.ufoT = 15; s.ubul = []; s.stars = Array.from({ length: 70 }, () => [K.rand(0, W), K.rand(0, H), K.rand(0.3, 1.5)]); wave(s); },
+  update(s, dt) {
+    const sh = s.sh;
+    if (K.down('ArrowLeft', 'KeyA')) sh.a -= 4.2 * dt;
+    if (K.down('ArrowRight', 'KeyD')) sh.a += 4.2 * dt;
+    s.thrust = K.down('ArrowUp', 'KeyW');
+    if (s.thrust) { sh.vx += Math.cos(sh.a) * 340 * dt; sh.vy += Math.sin(sh.a) * 340 * dt; if (Math.random() < 0.5) K.particle({ x: sh.x - Math.cos(sh.a) * 14, y: sh.y - Math.sin(sh.a) * 14, vx: -Math.cos(sh.a) * 120 + K.rand(-30, 30), vy: -Math.sin(sh.a) * 120 + K.rand(-30, 30), color: '#ff8a3a', life: 0.3, size: 3 }); }
+    sh.vx *= Math.pow(0.55, dt); sh.vy *= Math.pow(0.55, dt);
+    sh.x += sh.vx * dt; sh.y += sh.vy * dt; wrap(sh);
+    sh.inv -= dt; sh.shield -= dt;
+    s.cool -= dt;
+    if (K.down('Space') && s.cool <= 0 && s.bul.length < 8) { s.bul.push({ x: sh.x + Math.cos(sh.a) * 16, y: sh.y + Math.sin(sh.a) * 16, vx: Math.cos(sh.a) * 620 + sh.vx, vy: Math.sin(sh.a) * 620 + sh.vy, life: 0.9 }); s.cool = 0.16; K.sfx('laser'); }
+    if (K.tap('ShiftLeft', 'ShiftRight')) { sh.x = K.rand(0, W); sh.y = K.rand(0, H); sh.vx = sh.vy = 0; sh.inv = 0.6; K.sfx('whoosh'); }
+    s.bul.forEach((b) => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); });
+    s.bul = s.bul.filter((b) => b.life > 0);
+    const add = [];
+    s.rocks.forEach((r) => { r.x += r.vx * dt; r.y += r.vy * dt; r.ang += r.rot * dt; wrap(r); });
+    for (const r of s.rocks) {
+      for (const b of s.bul) if (!r.dead && b.life > 0 && Math.hypot(b.x - r.x, b.y - r.y) < r.r) {
+        r.dead = true; b.life = 0; s.score += [0, 100, 50, 20][r.size];
+        K.burst(r.x, r.y, '#c9c3ff', 10 + r.size * 4, 200, 0.5); K.sfx(r.size > 1 ? 'hit' : 'pop'); K.shake(r.size * 2);
+        if (r.size > 1) { add.push(rock(r.x, r.y, r.size - 1)); add.push(rock(r.x, r.y, r.size - 1)); }
+      }
+      if (!r.dead && sh.inv <= 0 && Math.hypot(sh.x - r.x, sh.y - r.y) < r.r + 10) {
+        if (sh.shield > 0) { r.dead = true; K.sfx('boom'); K.burst(r.x, r.y, '#22e6ff', 16); if (r.size > 1) { add.push(rock(r.x, r.y, r.size - 1)); add.push(rock(r.x, r.y, r.size - 1)); } }
+        else { s.lives--; K.sfx('boom'); K.shake(16); K.burst(sh.x, sh.y, ['#ff8a3a', '#fff'], 30, 260, 0.8); sh.x = 480; sh.y = 270; sh.vx = sh.vy = 0; sh.inv = 2.5; if (s.lives <= 0) return K.end(s, { score: s.score, won: null, title: 'SHIP LOST', text: `Wave ${s.wave}` }); }
+      }
+    }
+    s.rocks = s.rocks.filter((r) => !r.dead).concat(add);
+    // saucer
+    s.ufoT -= dt;
+    if (!s.ufo && s.ufoT <= 0) { s.ufo = { x: -30, y: K.rand(60, 480), vx: 120, t: 0 }; K.sfx('power'); }
+    if (s.ufo) {
+      const u = s.ufo; u.x += u.vx * dt; u.y += Math.sin(u.t * 2) * 60 * dt; u.t += dt;
+      if (Math.random() < dt * 0.9) { const a = K.angle(u, sh) + K.rand(-0.3, 0.3); s.ubul.push({ x: u.x, y: u.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, life: 2 }); }
+      for (const b of s.bul) if (Math.hypot(b.x - u.x, b.y - u.y) < 22) { b.life = 0; s.score += 500; sh.shield = 8; K.sfx('power'); K.floatText('SHIELD!', u.x, u.y, '#22e6ff'); K.burst(u.x, u.y, '#3dffa0', 24); s.ufo = null; s.ufoT = K.rand(15, 25); break; }
+      if (s.ufo && u.x > W + 40) { s.ufo = null; s.ufoT = K.rand(15, 25); }
+    }
+    s.ubul.forEach((b) => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; if (sh.inv <= 0 && sh.shield <= 0 && Math.hypot(b.x - sh.x, b.y - sh.y) < 12) { b.life = 0; s.lives--; K.sfx('boom'); K.shake(12); sh.inv = 2.5; if (s.lives <= 0) K.end(s, { score: s.score, won: null, title: 'SHIP LOST', text: `Wave ${s.wave}` }); } });
+    s.ubul = s.ubul.filter((b) => b.life > 0);
+    if (!s.rocks.length) { s.wave++; s.score += 250; K.sfx('win'); wave(s); }
+  },
+  draw(s) {
+    s.stars.forEach(([x, y, r]) => K.circle(x, y, r, '#ffffff66'));
+    const c = K.ctx();
+    s.rocks.forEach((r) => {
+      c.save(); c.translate(r.x, r.y); c.rotate(r.ang);
+      K.glow('#a99be0', 8); c.strokeStyle = '#c9c3ff'; c.lineWidth = 2; c.beginPath();
+      r.pts.forEach((k, i) => { const a = (i / r.pts.length) * 6.283; (i ? c.lineTo : c.moveTo).call(c, Math.cos(a) * r.r * k, Math.sin(a) * r.r * k); });
+      c.closePath(); c.fillStyle = '#120f24'; c.fill(); c.stroke(); K.noGlow(); c.restore();
+    });
+    s.bul.forEach((b) => { K.glow('#ffd93a', 10); K.circle(b.x, b.y, 2.5, '#fff'); });
+    s.ubul.forEach((b) => { K.glow('#ff3355', 10); K.circle(b.x, b.y, 3, '#ff3355'); });
+    K.noGlow();
+    if (s.ufo) { const u = s.ufo; K.glow('#3dffa0', 14); c.fillStyle = '#3dffa0'; c.beginPath(); c.ellipse(u.x, u.y, 24, 8, 0, 0, 6.28); c.fill(); c.beginPath(); c.ellipse(u.x, u.y - 6, 10, 8, 0, Math.PI, 0); c.fill(); K.noGlow(); }
+    const sh = s.sh;
+    if (sh.inv <= 0 || Math.sin(K.time() * 30) > 0) {
+      c.save(); c.translate(sh.x, sh.y); c.rotate(sh.a);
+      K.glow('#22e6ff', 16); K.poly([[16, 0], [-11, -10], [-6, 0], [-11, 10]], '#22e6ff', false, 2.5);
+      if (s.thrust) K.poly([[-8, -5], [-18 - Math.random() * 8, 0], [-8, 5]], '#ff8a3a');
+      K.noGlow(); c.restore();
+      if (sh.shield > 0) { K.alpha(0.4 + Math.sin(K.time() * 10) * 0.2); K.ring(sh.x, sh.y, 24, '#22e6ff', 3); K.alpha(1); }
+    }
+    K.text(String(s.score), 20, 24, 22, '#fff', 'left', 'd');
+    for (let i = 0; i < s.lives; i++) K.poly([[940 - i * 22, 16], [930 - i * 22, 34], [950 - i * 22, 34]], '#22e6ff');
+    K.text(`WAVE ${s.wave}`, 480, 24, 14, '#8e88b8', 'center', 'd');
+  },
+  ai(s) {
+    const sh = s.sh, r = s.rocks.slice().sort((a, b) => Math.hypot(a.x - sh.x, a.y - sh.y) - Math.hypot(b.x - sh.x, b.y - sh.y))[0];
+    if (!r) return;
+    let da = K.angle(sh, r) - sh.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+    K.vhold('ArrowLeft', da < -0.1); K.vhold('ArrowRight', da > 0.1); K.vhold('Space', Math.abs(da) < 0.3);
+  },
+});
+</script></body></html>

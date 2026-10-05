@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fruit Slice</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"fruit-slice","n":11,"title":"FRUIT SLICE","genre":"fun","desc":"Fruit flies up, you swipe through it. Slice several in one swipe for combo points. Miss three fruits and it's over; slice a bomb and it's over right away.","controls":"Drag / swipe through the fruit","scoreLabel":"POINTS","tasks":[{"stat":"score","target":150,"text":"Score 150 in Fruit Slice"},{"stat":"combo","target":4,"text":"Slice 4 fruit in one swipe in Fruit Slice"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const FRUIT = [['#ff3355', '#ffd0d6', 32], ['#ff8a3a', '#ffe0c0', 30], ['#ffd93a', '#fff6c0', 28], ['#3dffa0', '#d8ffe8', 34], ['#c45cff', '#efd6ff', 26], ['#ff9bc8', '#fff', 24]];
+function toss(s) {
+  const n = Math.random() < 0.3 ? K.irand(2, 4) : 1;
+  for (let i = 0; i < n; i++) {
+    const bomb = s.score > 10 && Math.random() < Math.min(0.22, 0.08 + s.score / 1500);
+    const f = bomb ? null : K.pick(FRUIT);
+    s.items.push({ x: K.rand(160, 800), y: 580, vx: K.rand(-130, 130), vy: -K.rand(620, 820), r: bomb ? 26 : f[2], f, bomb, rot: K.rand(-4, 4), a: 0, cut: false });
+  }
+  K.sfx('whoosh');
+}
+const segHit = (ax, ay, bx, by, cx, cy, r) => { const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy || 1; const t = K.clamp(((cx - ax) * dx + (cy - ay) * dy) / l, 0, 1); return Math.hypot(ax + dx * t - cx, ay + dy * t - cy) < r; };
+K.game({
+  bg: '#1a0f08',
+  init(s) { s.items = []; s.halves = []; s.trail = []; s.score = 0; s.miss = 0; s.next = 0.8; s.swipe = 0; s.best = 0; s.splats = []; },
+  update(s, dt) {
+    s.next -= dt;
+    if (s.next <= 0) { toss(s); s.next = Math.max(0.5, 1.4 - s.score / 300); }
+    const m = K.mouse;
+    if (m.down) s.trail.push({ x: m.x, y: m.y, t: 0.18 }); else { if (s.swipe >= 3) { s.score += s.swipe; K.floatText(`${s.swipe} COMBO +${s.swipe}`, 480, 120, '#ffd93a', 26); K.sfx('power'); } s.swipe = 0; }
+    s.trail.forEach((p) => (p.t -= dt)); s.trail = s.trail.filter((p) => p.t > 0);
+    const a = s.trail[s.trail.length - 2], b = s.trail[s.trail.length - 1];
+    for (const it of s.items) {
+      it.vy += 900 * dt; it.x += it.vx * dt; it.y += it.vy * dt; it.a += it.rot * dt;
+      if (!it.cut && a && b && Math.hypot(b.x - a.x, b.y - a.y) > 4 && segHit(a.x, a.y, b.x, b.y, it.x, it.y, it.r)) {
+        it.cut = true;
+        if (it.bomb) { K.sfx('boom'); K.shake(24); K.flash('#fff', 0.5); return K.end(s, { score: s.score, won: null, stats: { combo: s.best }, title: 'BOOM!', text: 'You sliced a bomb.' }); }
+        s.score++; s.swipe++; s.best = Math.max(s.best, s.swipe); K.sfx('splash');
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        [-1, 1].forEach((side) => s.halves.push({ x: it.x, y: it.y, vx: it.vx + Math.cos(ang + Math.PI / 2) * side * 120, vy: it.vy * 0.4, r: it.r, f: it.f, a: ang, side, rot: side * 3 }));
+        s.splats.push({ x: it.x, y: it.y, c: it.f[0], r: it.r * 1.6, t: 3 });
+        K.burst(it.x, it.y, it.f[0], 14, 220, 0.5, 5);
+      }
+      if (!it.cut && !it.bomb && it.y > 600 && it.vy > 0) { it.cut = true; s.miss++; K.sfx('wrong'); if (s.miss >= 3) return K.end(s, { score: s.score, won: null, stats: { combo: s.best }, title: 'THREE MISSED', text: `Best combo ${s.best}` }); }
+    }
+    s.items = s.items.filter((it) => !it.cut && it.y < 640);
+    s.halves.forEach((h) => { h.vy += 900 * dt; h.x += h.vx * dt; h.y += h.vy * dt; h.a += h.rot * dt; }); s.halves = s.halves.filter((h) => h.y < 640);
+    s.splats.forEach((p) => (p.t -= dt)); s.splats = s.splats.filter((p) => p.t > 0);
+  },
+  draw(s) {
+    for (let i = 0; i < 6; i++) K.rect(i * 160, 0, 156, 540, i % 2 ? '#2a180c' : '#24140a');
+    s.splats.forEach((p) => { K.alpha(Math.min(0.5, p.t / 3)); K.circle(p.x, p.y, p.r, p.c); }); K.alpha(1);
+    const c = K.ctx();
+    s.items.forEach((it) => {
+      c.save(); c.translate(it.x, it.y); c.rotate(it.a);
+      if (it.bomb) { K.circle(0, 0, it.r, '#1a1a22'); K.ring(0, 0, it.r, '#ff3355', 3); K.rect(-4, -it.r - 10, 8, 10, '#555'); K.glow('#ffd93a', 14); K.circle(0, -it.r - 12, 4 + Math.random() * 2, '#ffd93a'); K.noGlow(); K.text('✖', 0, 2, 20, '#ff3355'); }
+      else { K.glow(it.f[0], 12); K.circle(0, 0, it.r, it.f[0]); K.noGlow(); K.alpha(0.35); K.circle(-it.r * 0.35, -it.r * 0.35, it.r * 0.3, '#fff'); K.alpha(1); K.rect(-2, -it.r - 8, 4, 10, '#3a2a12'); }
+      c.restore();
+    });
+    s.halves.forEach((h) => { c.save(); c.translate(h.x, h.y); c.rotate(h.a); c.beginPath(); c.arc(0, 0, h.r, h.side > 0 ? 0 : Math.PI, h.side > 0 ? Math.PI : Math.PI * 2); c.fillStyle = h.f[0]; c.fill(); c.beginPath(); c.arc(0, 0, h.r * 0.8, h.side > 0 ? 0 : Math.PI, h.side > 0 ? Math.PI : Math.PI * 2); c.fillStyle = h.f[1]; c.fill(); c.restore(); });
+    if (s.trail.length > 1) { K.glow('#fff', 14); c.strokeStyle = '#fff'; c.lineCap = 'round'; for (let i = 1; i < s.trail.length; i++) { c.lineWidth = 2 + (i / s.trail.length) * 8; c.beginPath(); c.moveTo(s.trail[i - 1].x, s.trail[i - 1].y); c.lineTo(s.trail[i].x, s.trail[i].y); c.stroke(); } K.noGlow(); }
+    K.text(String(s.score), 24, 34, 34, '#ffd93a', 'left', 'd', 10);
+    for (let i = 0; i < 3; i++) K.text('✖', 860 + i * 30, 34, 26, i < s.miss ? '#ff3355' : '#ffffff33');
+  },
+  ai(s) { const it = s.items.find((x) => !x.bomb && x.vy > -200); if (it) { s.ap = s.ap || 0; s.ap += 0.6; K.vmouse(it.x + Math.cos(s.ap) * 40, it.y + Math.sin(s.ap) * 40, false, true); } else K.vmouse(480, 270, false, false); },
+});
+</script></body></html>

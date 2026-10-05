@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hangman</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hangman","n":26,"title":"HANGMAN","genre":"mind","desc":"Guess the word one letter at a time before the little robot is fully built. Six wrong letters and it's game over. Solve words in a row for a streak; longer words are worth more.","controls":"Type or tap letters","scoreLabel":"POINTS","tasks":[{"stat":"score","target":40,"text":"Score 40 in Hangman"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+function word(s) { s.word = WORDS.pick(K.pick([5, 6, 6, 7, 7, 8])).toUpperCase(); s.got = new Set(); s.miss = new Set(); s.wait = 0; }
+K.game({
+  bg: '#0d1020', touch: { stick: false, buttons: [] },
+  init(s) { s.score = 0; s.streak = 0; word(s); },
+  update(s, dt) {
+    if (s.wait > 0) { s.wait -= dt; if (s.wait <= 0) { if (s.lost) return K.end(s, { score: s.score, won: null, title: 'BUILT!', text: `The word was ${s.word}. Streak ${s.streak}.` }); word(s); } return; }
+    const colors = {}; s.got.forEach((c) => (colors[c] = '#2f9e5a')); s.miss.forEach((c) => (colors[c] = '#3a3a4a'));
+    const k = K.keyboard(255, 400, 450, colors, { h: 40 });
+    if (!k || k.length !== 1 || s.got.has(k) || s.miss.has(k)) return;
+    if (s.word.includes(k)) { s.got.add(k); K.sfx('coin'); } else { s.miss.add(k); K.sfx('wrong'); K.shake(4); }
+    if ([...s.word].every((c) => s.got.has(c))) { s.streak++; s.score += s.word.length * 2 + Math.max(0, 6 - s.miss.size) + s.streak; K.sfx('win'); s.wait = 1.2; }
+    else if (s.miss.size >= 6) { s.lost = true; K.sfx('lose'); s.wait = 1.8; }
+  },
+  draw(s) {
+    const m = s.miss.size, bx = 160, by = 340;
+    K.line(bx - 70, by, bx + 70, by, '#8e88b8', 4); K.line(bx - 40, by, bx - 40, by - 220, '#8e88b8', 4); K.line(bx - 40, by - 220, bx + 30, by - 220, '#8e88b8', 4); K.line(bx + 30, by - 220, bx + 30, by - 190, '#8e88b8', 3);
+    const parts = [
+      () => { K.rect(bx + 10, by - 190, 40, 34, '#22e6ff', 8); K.circle(bx + 22, by - 174, 4, '#05040c'); K.circle(bx + 38, by - 174, 4, '#05040c'); },
+      () => K.rect(bx + 14, by - 152, 32, 44, '#c45cff', 6),
+      () => K.line(bx + 14, by - 145, bx - 6, by - 118, '#c45cff', 6),
+      () => K.line(bx + 46, by - 145, bx + 66, by - 118, '#c45cff', 6),
+      () => K.line(bx + 22, by - 108, bx + 14, by - 76, '#c45cff', 6),
+      () => { K.line(bx + 38, by - 108, bx + 46, by - 76, '#c45cff', 6); K.glow('#ff3355', 16); K.circle(bx + 22, by - 174, 4, '#ff3355'); K.circle(bx + 38, by - 174, 4, '#ff3355'); K.noGlow(); },
+    ];
+    for (let i = 0; i < m; i++) parts[i]();
+    const n = s.word.length, w = 56, x0 = 600 - (n * w) / 2;
+    [...s.word].forEach((c, i) => { K.line(x0 + i * w + 6, 250, x0 + i * w + w - 6, 250, '#8e88b8', 3); const show = s.got.has(c) || (s.wait > 0 && s.lost); if (show) K.text(c, x0 + i * w + w / 2, 225, 36, s.got.has(c) ? '#fff' : '#ff3355', 'center', 'd'); });
+    K.text(`SCORE ${s.score}`, 600, 80, 22, '#ffd93a', 'center', 'd');
+    K.text(`STREAK ${s.streak}  ·  ${6 - m} TRIES LEFT`, 600, 120, 16, '#8e88b8', 'center', 'd');
+    K.keyboard(255, 400, 450, Object.fromEntries([...s.got].map((c) => [c, '#2f9e5a']).concat([...s.miss].map((c) => [c, '#3a3a4a']))), { h: 40 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 18 || s.wait > 0) return; const order = 'ETAOINSRHLDCUMFPGWYBVKXJQZ'; const c = [...order].find((x) => !s.got.has(x) && !s.miss.has(x)); if (c) K.vtap('Key' + c); },
+});
+</script></body></html>

@@ -640,6 +640,148 @@ export const GAME_LIST = [
 "cover": "games/covers/neon-snake.png"
 },
 {
+"id": "asteroids",
+"n": 7,
+"title": "ASTEROIDS",
+"genre": "fun",
+"desc": "Spin, thrust and blast the rocks into smaller rocks. The screen wraps around. A saucer drops in now and then: shoot it for a shield.",
+"controls": "← → rotate · ↑ thrust · Space fire · Shift hyperspace",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in Asteroids"
+}
+],
+"file": "games/2d/asteroids.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/asteroids.png"
+},
+{
+"id": "space-invaders",
+"n": 8,
+"title": "SPACE INVADERS",
+"genre": "fun",
+"desc": "Rows of invaders march down, faster as their numbers drop. Hide behind the crumbling bunkers, shoot the mystery ship for bonus points, and don't let them land.",
+"controls": "← → move · Space fire",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 2000,
+"text": "Score 2000 in Space Invaders"
+},
+{
+"stat": "waves",
+"target": 2,
+"text": "Clear 2 waves in Space Invaders"
+}
+],
+"file": "games/2d/space-invaders.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/space-invaders.png"
+},
+{
+"id": "doodle-jump",
+"n": 9,
+"title": "DOODLE JUMP",
+"genre": "fun",
+"desc": "Bounce up an endless tower of platforms. Some break, some slide, springs launch you sky-high and jetpacks blast you even higher. Wrap around the sides. Don't fall.",
+"controls": "← → / A D or tilt with the mouse / touch",
+"scoreLabel": "HEIGHT",
+"tasks": [
+{
+"stat": "score",
+"target": 2500,
+"text": "Reach 2500 height in Doodle Jump"
+}
+],
+"file": "games/2d/doodle-jump.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/doodle-jump.png"
+},
+{
+"id": "fruit-slice",
+"n": 11,
+"title": "FRUIT SLICE",
+"genre": "fun",
+"desc": "Fruit flies up, you swipe through it. Slice several in one swipe for combo points. Miss three fruits and it's over; slice a bomb and it's over right away.",
+"controls": "Drag / swipe through the fruit",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 150,
+"text": "Score 150 in Fruit Slice"
+},
+{
+"stat": "combo",
+"target": 4,
+"text": "Slice 4 fruit in one swipe in Fruit Slice"
+}
+],
+"file": "games/2d/fruit-slice.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/fruit-slice.png"
+},
+{
+"id": "tower-stack",
+"n": 12,
+"title": "TOWER STACK",
+"genre": "fun",
+"desc": "A block slides back and forth. Drop it on the tower: whatever hangs over the edge gets sliced off. Land it perfectly to keep it full size, and five perfects in a row grow it back.",
+"controls": "Space / click / tap to drop",
+"scoreLabel": "FLOORS",
+"tasks": [
+{
+"stat": "score",
+"target": 25,
+"text": "Stack 25 floors in Tower Stack"
+}
+],
+"file": "games/2d/tower-stack.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/tower-stack.png"
+},
+{
+"id": "whack-a-mole",
+"n": 14,
+"title": "WHACK-A-MOLE",
+"genre": "fun",
+"desc": "45 seconds of bonking. Moles pop up faster and faster. Golden moles are worth 5, helmet moles need two hits, and never ever hit the bunny.",
+"controls": "Click / tap the moles (or keys 1-9 on the number pad layout)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 60,
+"text": "Score 60 in Whack-a-Mole"
+}
+],
+"file": "games/2d/whack-a-mole.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/whack-a-mole.png"
+},
+{
 "id": "air-hockey",
 "n": 75,
 "title": "AIR HOCKEY",
@@ -662,7 +804,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/air-hockey.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/air-hockey.png"
 },
 {
 "id": "snake-arena",
@@ -687,7 +830,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/snake-arena.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/snake-arena.png"
 },
 {
 "id": "reaction-duel",
@@ -712,7 +856,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/reaction-duel.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/reaction-duel.png"
 },
 {
 "id": "typing-race",
@@ -741,7 +886,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/typing-race.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/typing-race.png"
 },
 {
 "id": "2048",
@@ -975,6 +1121,50 @@ export const GAME_LIST = [
 "cover": "games/covers/typing-speed.png"
 },
 {
+"id": "sudoku",
+"n": 13,
+"title": "SUDOKU",
+"genre": "mind",
+"desc": "Fill the grid so every row, column and 3×3 box has 1 to 9 once. Every puzzle is freshly generated with a single solution. Pick EASY, MEDIUM or HARD. Pencil marks, 3 mistakes allowed, faster solves score more.",
+"controls": "Click a cell, then a number (keys 1-9) · N = pencil mode · Backspace = erase",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Solve a Sudoku"
+}
+],
+"file": "games/2d/sudoku.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/sudoku.png"
+},
+{
+"id": "minesweeper",
+"n": 14,
+"title": "MINESWEEPER",
+"genre": "mind",
+"desc": "Clear the field without touching a mine. Numbers tell you how many mines touch that square. The first click is always safe. Flag what you know, chord a number to clear around it.",
+"controls": "Click = dig · right-click (or F mode button) = flag · click a number with all flags placed = clear around it",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Clear a Minesweeper field"
+}
+],
+"file": "games/2d/minesweeper.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/minesweeper.png"
+},
+{
 "id": "connect-four",
 "n": 15,
 "title": "CONNECT FOUR",
@@ -997,7 +1187,96 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/connect-four.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/connect-four.png"
+},
+{
+"id": "sliding-puzzle",
+"n": 17,
+"title": "SLIDING PUZZLE",
+"genre": "mind",
+"desc": "The classic 15-puzzle, plus 3×3 and 5×5. Slide tiles into the gap until the numbers are in order. Fewer moves and less time score more.",
+"controls": "Click / tap a tile next to the gap, or arrow keys",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Solve a Sliding Puzzle"
+}
+],
+"file": "games/2d/sliding-puzzle.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/sliding-puzzle.png"
+},
+{
+"id": "mastermind",
+"n": 19,
+"title": "MASTERMIND",
+"genre": "mind",
+"desc": "Crack the hidden 4-colour code in 10 tries. After each guess: a white peg = right colour in the right spot, a grey peg = right colour, wrong spot. Colours can repeat.",
+"controls": "Click a colour to fill the next slot · click a slot to clear it · CHECK to guess",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Crack a Mastermind code"
+}
+],
+"file": "games/2d/mastermind.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mastermind.png"
+},
+{
+"id": "lights-out",
+"n": 23,
+"title": "LIGHTS OUT",
+"genre": "mind",
+"desc": "Pressing a light flips it and its four neighbours. Turn every light off. Ten boards that get harder, each one guaranteed solvable. Stuck? A hint costs points.",
+"controls": "Click / tap a light · H = hint",
+"scoreLabel": "BOARDS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Solve 5 Lights Out boards"
+}
+],
+"file": "games/2d/lights-out.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/lights-out.png"
+},
+{
+"id": "hangman",
+"n": 26,
+"title": "HANGMAN",
+"genre": "mind",
+"desc": "Guess the word one letter at a time before the little robot is fully built. Six wrong letters and it's game over. Solve words in a row for a streak; longer words are worth more.",
+"controls": "Type or tap letters",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Score 40 in Hangman"
+}
+],
+"file": "games/2d/hangman.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/hangman.png"
 },
 {
 "id": "match-3",
@@ -1108,6 +1387,7 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/draw-guess.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/draw-guess.png"
 }
 ];

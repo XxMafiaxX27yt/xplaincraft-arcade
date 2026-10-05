@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Space Invaders</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"space-invaders","n":8,"title":"SPACE INVADERS","genre":"fun","desc":"Rows of invaders march down, faster as their numbers drop. Hide behind the crumbling bunkers, shoot the mystery ship for bonus points, and don't let them land.","controls":"← → move · Space fire","scoreLabel":"POINTS","tasks":[{"stat":"score","target":2000,"text":"Score 2000 in Space Invaders"},{"stat":"waves","target":2,"text":"Clear 2 waves in Space Invaders"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SPR = [
+  ['00100000100', '00010001000', '00111111100', '01101110110', '11111111111', '10111111101', '10100000101', '00011011000'],
+  ['00011111000', '01111111110', '11111111111', '11100100111', '11111111111', '00111011100', '01100000110', '00110001100'],
+  ['00001110000', '00111111100', '01111111110', '11011111011', '11111111111', '00100100100', '01011011010', '10100000101'],
+];
+const COL = ['#ff2bd6', '#22e6ff', '#3dffa0'];
+function pix(sp, x, y, sz, col, frame) {
+  sp.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '1') K.rect(x + i * sz, y + j * sz + (frame && j > 5 ? (i % 2 ? sz : -sz) * 0.5 : 0), sz, sz, col); }));
+}
+function waveInit(s) {
+  s.inv = [];
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 11; c++) s.inv.push({ x: 160 + c * 52, y: 70 + r * 40 + Math.min(s.waves, 4) * 12, t: r === 0 ? 2 : r < 3 ? 1 : 0, alive: true });
+  s.dir = 1; s.stepT = 0; s.frame = 0;
+}
+K.game({
+  bg: '#030308',
+  init(s) {
+    s.px = 480; s.score = 0; s.lives = 3; s.waves = 0; s.bul = null; s.eb = []; s.ufo = null; s.ufoT = 12; waveInit(s);
+    s.bunk = []; for (let b = 0; b < 4; b++) for (let i = 0; i < 12; i++) for (let j = 0; j < 7; j++) if (!(j > 4 && i > 3 && i < 8)) s.bunk.push({ x: 150 + b * 200 + i * 6, y: 420 + j * 6 });
+  },
+  update(s, dt) {
+    const d = K.dir();
+    s.px = K.clamp(s.px + d.x * 360 * dt, 30, 930);
+    if (K.tap('Space') && !s.bul) { s.bul = { x: s.px, y: 480 }; K.sfx('laser'); }
+    if (s.bul) { s.bul.y -= 620 * dt; if (s.bul.y < 0) s.bul = null; }
+    const alive = s.inv.filter((i) => i.alive);
+    s.stepT -= dt;
+    if (s.stepT <= 0) {
+      s.stepT = Math.max(0.05, 0.6 * (alive.length / 55) - s.waves * 0.04);
+      const edge = alive.some((i) => (s.dir > 0 && i.x > 880) || (s.dir < 0 && i.x < 30));
+      if (edge) { s.dir *= -1; alive.forEach((i) => (i.y += 18)); } else alive.forEach((i) => (i.x += 10 * s.dir));
+      s.frame ^= 1; K.tone(s.frame ? 70 : 60, 0.08, 'square', 0.05);
+    }
+    if (Math.random() < dt * (0.8 + s.waves * 0.3) && alive.length) {
+      const cols = {}; alive.forEach((i) => { const k = Math.round(i.x / 52); if (!cols[k] || cols[k].y < i.y) cols[k] = i; });
+      const sh = K.pick(Object.values(cols)); s.eb.push({ x: sh.x + 18, y: sh.y + 24 });
+    }
+    s.eb.forEach((b) => (b.y += 260 * dt));
+    for (const b of s.eb) {
+      if (b.y > 480 && b.y < 500 && Math.abs(b.x - s.px) < 22) { b.y = 999; s.lives--; K.sfx('boom'); K.shake(12); K.burst(s.px, 490, ['#3dffa0', '#fff'], 24); if (s.lives <= 0) return K.end(s, { score: s.score, won: false, stats: { waves: s.waves }, title: 'EARTH FALLS' }); }
+      const hit = s.bunk.findIndex((p) => Math.abs(p.x + 3 - b.x) < 5 && Math.abs(p.y + 3 - b.y) < 6); if (hit >= 0) { b.y = 999; s.bunk = s.bunk.filter((p) => Math.hypot(p.x - s.bunk[hit].x, p.y - s.bunk[hit].y) > 9); }
+    }
+    s.eb = s.eb.filter((b) => b.y < 540);
+    if (s.bul) {
+      for (const i of alive) if (s.bul && s.bul.x > i.x && s.bul.x < i.x + 44 && s.bul.y > i.y && s.bul.y < i.y + 32) { i.alive = false; s.bul = null; s.score += [10, 20, 30][i.t] * (s.waves + 1); K.sfx('pop'); K.burst(i.x + 22, i.y + 16, COL[i.t], 14, 200, 0.4); }
+      if (s.bul) { const hit = s.bunk.findIndex((p) => Math.abs(p.x + 3 - s.bul.x) < 5 && Math.abs(p.y + 3 - s.bul.y) < 6); if (hit >= 0) { const h = s.bunk[hit]; s.bunk = s.bunk.filter((p) => Math.hypot(p.x - h.x, p.y - h.y) > 8); s.bul = null; } }
+      if (s.bul && s.ufo && Math.abs(s.bul.x - s.ufo.x) < 28 && Math.abs(s.bul.y - 40) < 14) { const pts = K.pick([50, 100, 150, 300]); s.score += pts; K.floatText(`+${pts}`, s.ufo.x, 40, '#ff3355'); K.sfx('power'); s.ufo = null; s.bul = null; }
+    }
+    s.ufoT -= dt;
+    if (!s.ufo && s.ufoT <= 0) { s.ufo = { x: -40, dir: 1 }; if (Math.random() < 0.5) { s.ufo.x = 1000; s.ufo.dir = -1; } }
+    if (s.ufo) { s.ufo.x += s.ufo.dir * 140 * dt; if (Math.random() < 0.2) K.tone(400 + Math.sin(K.time() * 20) * 100, 0.05, 'sine', 0.02); if (s.ufo.x < -60 || s.ufo.x > 1020) { s.ufo = null; s.ufoT = K.rand(15, 25); } }
+    if (alive.some((i) => i.y > 440)) return K.end(s, { score: s.score, won: false, stats: { waves: s.waves }, title: 'THEY LANDED' });
+    if (!alive.length) { s.waves++; s.score += 500; K.sfx('win'); waveInit(s); }
+  },
+  draw(s) {
+    for (let i = 0; i < 60; i++) K.rect((i * 157) % 960, (i * 89) % 540, 2, 2, '#ffffff33');
+    s.inv.forEach((i) => { if (i.alive) { K.glow(COL[i.t], 8); pix(SPR[i.t], i.x, i.y, 4, COL[i.t], s.frame); K.noGlow(); } });
+    s.bunk.forEach((p) => K.rect(p.x, p.y, 6, 6, '#3dffa0'));
+    if (s.ufo) { K.glow('#ff3355', 14); K.rect(s.ufo.x - 26, 34, 52, 12, '#ff3355', 6); K.rect(s.ufo.x - 12, 26, 24, 10, '#ff3355', 5); K.noGlow(); }
+    K.glow('#3dffa0', 14); K.rect(s.px - 22, 488, 44, 12, '#3dffa0', 3); K.rect(s.px - 4, 478, 8, 12, '#3dffa0'); K.noGlow();
+    if (s.bul) { K.glow('#fff', 10); K.rect(s.bul.x - 1.5, s.bul.y - 10, 3, 14, '#fff'); K.noGlow(); }
+    s.eb.forEach((b) => K.text('ϟ', b.x, b.y, 18, '#ffd93a'));
+    K.rect(0, 506, 960, 2, '#3dffa0');
+    K.text(`${s.score}`, 20, 20, 20, '#fff', 'left', 'd');
+    K.text('▲'.repeat(Math.max(0, s.lives)), 940, 20, 18, '#3dffa0', 'right');
+    K.text(`WAVE ${s.waves + 1}`, 480, 524, 12, '#8e88b8', 'center', 'd');
+  },
+  ai(s) {
+    const alive = s.inv.filter((i) => i.alive); if (!alive.length) return;
+    const danger = s.eb.find((b) => b.y > 380 && Math.abs(b.x - s.px) < 30);
+    const t = danger ? s.px + (danger.x < s.px ? 60 : -60) : alive.reduce((a, b) => (Math.abs(b.x + 22 - s.px) < Math.abs(a.x + 22 - s.px) ? b : a)).x + 22;
+    K.vhold('ArrowLeft', t < s.px - 6); K.vhold('ArrowRight', t > s.px + 6);
+    if (!s.bul && !danger) K.vtap('Space');
+  },
+});
+</script></body></html>

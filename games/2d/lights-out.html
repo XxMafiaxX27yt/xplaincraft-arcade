@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lights Out</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lights-out","n":23,"title":"LIGHTS OUT","genre":"mind","desc":"Pressing a light flips it and its four neighbours. Turn every light off. Ten boards that get harder, each one guaranteed solvable. Stuck? A hint costs points.","controls":"Click / tap a light · H = hint","scoreLabel":"BOARDS","tasks":[{"stat":"score","target":5,"text":"Solve 5 Lights Out boards"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 5, T = 84, BX = 480 - (N * T) / 2 + 60, BY = 270 - (N * T) / 2;
+const press = (b, i) => { const x = i % N, y = Math.floor(i / N); [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < N && ny < N) b[ny * N + nx] ^= 1; }); };
+function board(s) {
+  s.b = Array(N * N).fill(0); s.sol = new Set();
+  const k = 3 + s.level * 2;
+  while (s.sol.size < Math.min(k, 18)) s.sol.add(K.irand(0, N * N - 1));
+  s.sol.forEach((i) => press(s.b, i));
+  if (s.b.every((v) => !v)) return board(s);
+  s.moves = 0; s.hint = -1;
+}
+K.game({
+  bg: '#08060f', touch: { stick: false, buttons: [] },
+  init(s) { s.level = 0; s.pts = 0; board(s); s.time = 0; s.glow = Array(N * N).fill(0); },
+  update(s, dt) {
+    s.time += dt;
+    s.glow = s.glow.map((g, i) => K.lerp(g, s.b[i], dt * 12));
+    let i = -1;
+    if (K.mouse.clicked) { const x = Math.floor((K.mouse.x - BX) / T), y = Math.floor((K.mouse.y - BY) / T); if (x >= 0 && y >= 0 && x < N && y < N) i = y * N + x; }
+    if (K.tap('KeyH') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 50, y: 330, w: 140, h: 44 }))) { s.hint = [...s.sol][0]; s.pts = Math.max(0, s.pts - 1); K.sfx('chime'); }
+    if (i < 0) return;
+    press(s.b, i); s.moves++; s.sol.has(i) ? s.sol.delete(i) : s.sol.add(i); s.hint = -1;
+    K.tone(s.b[i] ? 660 : 440, 0.08, 'triangle', 0.05);
+    if (s.b.every((v) => !v)) {
+      s.level++; s.pts += 3; K.sfx('win'); K.flash('#ffd93a', 0.15);
+      if (s.level >= 10) return K.end(s, { score: s.level, won: true, title: 'ALL LIGHTS OUT', text: `10 boards in ${Math.round(s.time)}s` });
+      board(s);
+    }
+  },
+  draw(s) {
+    for (let i = 0; i < N * N; i++) {
+      const x = BX + (i % N) * T, y = BY + Math.floor(i / N) * T, g = s.glow[i];
+      K.glow('#ffd93a', g * 28);
+      K.rect(x + 6, y + 6, T - 12, T - 12, `rgba(${40 + g * 215},${36 + g * 181},${50 + g * 8},1)`, 14);
+      K.noGlow();
+      if (i === s.hint) K.stroke(x + 4, y + 4, T - 8, T - 8, '#22e6ff', 4, 14);
+    }
+    K.text(`BOARD ${s.level + 1} / 10`, 120, 140, 22, '#ffd93a', 'center', 'd');
+    K.text(`${s.moves} presses`, 120, 180, 16, '#8e88b8', 'center', 'm');
+    K.text(`${s.b.filter(Boolean).length} lights on`, 120, 210, 16, '#fff', 'center', 'm');
+    K.button(50, 330, 140, 44, 'HINT (H)', { color: '#22e6ff', size: 13 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 25 === 0 && s.sol.size) { const i = [...s.sol][0]; K.vmouse(BX + (i % N) * T + 40, BY + Math.floor(i / N) * T + 40, true); } },
+});
+</script></body></html>

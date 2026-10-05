@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mastermind</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mastermind","n":19,"title":"MASTERMIND","genre":"mind","desc":"Crack the hidden 4-colour code in 10 tries. After each guess: a white peg = right colour in the right spot, a grey peg = right colour, wrong spot. Colours can repeat.","controls":"Click a colour to fill the next slot · click a slot to clear it · CHECK to guess","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Crack a Mastermind code"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PAL = ['#ff3355', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff', '#ff8a3a'];
+const PEG = 18, ROWY = (r) => 40 + r * 46, X0 = 300;
+function feedback(g, code) {
+  let black = 0, white = 0; const a = [], b = [];
+  for (let i = 0; i < 4; i++) { if (g[i] === code[i]) black++; else { a.push(g[i]); b.push(code[i]); } }
+  a.forEach((v) => { const j = b.indexOf(v); if (j >= 0) { white++; b.splice(j, 1); } });
+  return [black, white];
+}
+K.game({
+  bg: '#0e0a18', touch: { stick: false, buttons: [] },
+  init(s) { s.code = Array.from({ length: 4 }, () => K.irand(0, 5)); s.rows = []; s.cur = []; s.done = false; },
+  update(s) {
+    if (s.done) return;
+    const m = K.mouse;
+    for (let k = 0; k < 6; k++) if (K.tap('Digit' + (k + 1))) s.pickC = k;
+    if (m.clicked) {
+      PAL.forEach((c, k) => { if (Math.hypot(m.x - (720 + (k % 2) * 60), m.y - (150 + Math.floor(k / 2) * 60)) < 24) s.pickC = k; });
+      for (let i = 0; i < 4; i++) if (Math.hypot(m.x - (X0 + i * 50), m.y - ROWY(s.rows.length)) < PEG + 4 && s.cur[i] != null) { s.cur[i] = null; K.sfx('tick'); }
+      if (K.inRect(m.x, m.y, { x: 690, y: 340, w: 120, h: 46 })) s.check = true;
+    }
+    if (K.tap('Enter')) s.check = true;
+    if (K.tap('Backspace')) { const i = s.cur.map((v, k) => (v != null ? k : -1)).filter((k) => k >= 0).pop(); if (i != null) s.cur[i] = null; }
+    if (s.pickC != null) { const i = [0, 1, 2, 3].find((k) => s.cur[k] == null); if (i != null) { s.cur[i] = s.pickC; K.tone(300 + s.pickC * 80, 0.08, 'triangle', 0.05); } s.pickC = null; }
+    if (s.check) {
+      s.check = false;
+      if ([0, 1, 2, 3].some((k) => s.cur[k] == null)) { K.sfx('wrong'); return; }
+      const fb = feedback(s.cur, s.code); s.rows.push({ g: s.cur.slice(), fb }); s.cur = []; K.sfx('click');
+      if (fb[0] === 4) { s.done = true; K.sfx('win'); K.end(s, { score: (11 - s.rows.length) * 100, won: true, stats: { won: 1 }, title: 'CODE CRACKED', text: `in ${s.rows.length} guess${s.rows.length > 1 ? 'es' : ''}` }); }
+      else if (s.rows.length >= 10) { s.done = true; K.sfx('lose'); K.end(s, { score: 0, won: false, title: 'OUT OF GUESSES', text: 'The code is shown at the top.' }); }
+    }
+  },
+  draw(s) {
+    K.rect(250, 20, 300, 480, '#1a1430', 12);
+    for (let r = 0; r < 10; r++) {
+      const y = ROWY(r), row = s.rows[r], live = r === s.rows.length && !s.done;
+      if (live) K.rect(258, y - 22, 284, 44, '#2a2250', 8);
+      for (let i = 0; i < 4; i++) { const v = row ? row.g[i] : live ? s.cur[i] : null; if (v != null) { K.glow(PAL[v], 8); K.circle(X0 + i * 50, y, PEG, PAL[v]); K.noGlow(); } else K.circle(X0 + i * 50, y, PEG - 6, '#0e0a18'); }
+      if (row) for (let k = 0; k < 4; k++) { const col = k < row.fb[0] ? '#fff' : k < row.fb[0] + row.fb[1] ? '#777' : '#2a2440'; K.circle(510 + (k % 2) * 14, y - 7 + Math.floor(k / 2) * 14, 5, col); }
+    }
+    K.text('THE CODE', 120, 60, 16, '#8e88b8', 'center', 'd');
+    for (let i = 0; i < 4; i++) { if (s.done) K.circle(60 + i * 40, 100, 15, PAL[s.code[i]]); else { K.circle(60 + i * 40, 100, 15, '#2a2440'); K.text('?', 60 + i * 40, 101, 16, '#8e88b8', 'center', 'd'); } }
+    PAL.forEach((c, k) => { K.glow(c, 12); K.circle(720 + (k % 2) * 60, 150 + Math.floor(k / 2) * 60, 22, c); K.noGlow(); K.text(String(k + 1), 720 + (k % 2) * 60, 152 + Math.floor(k / 2) * 60, 12, '#05040c', 'center', 'd'); });
+    K.button(690, 340, 120, 46, 'CHECK', { color: '#3dffa0' });
+    K.text(`GUESS ${Math.min(10, s.rows.length + 1)} / 10`, 750, 420, 16, '#fff', 'center', 'd');
+    K.text('● right spot   ● wrong spot', 750, 450, 12, '#8e88b8', 'center', 'm');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 12) return; if ([0, 1, 2, 3].some((k) => s.cur[k] == null)) s.pickC = s.rows.length > 4 ? s.code[[0, 1, 2, 3].find((k) => s.cur[k] == null)] : K.irand(0, 5); else s.check = true; },
+});
+</script></body></html>

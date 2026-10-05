@@ -1,0 +1,102 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sudoku</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sudoku","n":13,"title":"SUDOKU","genre":"mind","desc":"Fill the grid so every row, column and 3×3 box has 1 to 9 once. Every puzzle is freshly generated with a single solution. Pick EASY, MEDIUM or HARD. Pencil marks, 3 mistakes allowed, faster solves score more.","controls":"Click a cell, then a number (keys 1-9) · N = pencil mode · Backspace = erase","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Solve a Sudoku"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const S = 52, BX = 220, BY = 36;
+function solve(g, count = false) {
+  let sols = 0, out = null;
+  const can = (i, v) => { const r = Math.floor(i / 9), c = i % 9, br = r - (r % 3), bc = c - (c % 3); for (let k = 0; k < 9; k++) { if (g[r * 9 + k] === v || g[k * 9 + c] === v || g[(br + Math.floor(k / 3)) * 9 + bc + (k % 3)] === v) return false; } return true; };
+  const rec = () => {
+    let best = -1, bestOpts = null;
+    for (let i = 0; i < 81; i++) if (!g[i]) { const o = []; for (let v = 1; v <= 9; v++) if (can(i, v)) o.push(v); if (!o.length) return false; if (!bestOpts || o.length < bestOpts.length) { best = i; bestOpts = o; if (o.length === 1) break; } }
+    if (best < 0) { sols++; if (!out) out = g.slice(); return !count || sols > 1; }
+    for (const v of count ? bestOpts : K.shuffle(bestOpts)) { g[best] = v; if (rec()) { g[best] = 0; return true; } g[best] = 0; }
+    return false;
+  };
+  rec();
+  return count ? sols : out;
+}
+function make(level) {
+  const full = solve(Array(81).fill(0));
+  const g = full.slice(), holes = [40, 50, 57][level];
+  let removed = 0;
+  for (const i of K.shuffle([...Array(81).keys()])) {
+    if (removed >= holes) break;
+    const keep = g[i]; g[i] = 0;
+    if (solve(g.slice(), true) !== 1) g[i] = keep; else removed++;
+  }
+  return { puzzle: g, solution: full };
+}
+K.game({
+  bg: '#0c0f1c', touch: { stick: false, buttons: [] },
+  init(s) { s.phase = 'pick'; s.sel = -1; s.pencil = false; s.mist = 0; s.time = 0; s.notes = Array.from({ length: 81 }, () => new Set()); },
+  update(s, dt) {
+    if (s.phase === 'pick') {
+      ['EASY', 'MEDIUM', 'HARD'].forEach((n, i) => { if ((K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 })) || K.tap('Digit' + (i + 1))) { s.level = i; const m = make(i); s.given = m.puzzle.slice(); s.g = m.puzzle.slice(); s.sol = m.solution; s.phase = 'play'; K.sfx('select'); } });
+      return;
+    }
+    if (s.phase !== 'play') return;
+    s.time += dt;
+    if (K.mouse.clicked) {
+      const c = Math.floor((K.mouse.x - BX) / S), r = Math.floor((K.mouse.y - BY) / S);
+      if (c >= 0 && c < 9 && r >= 0 && r < 9) { s.sel = r * 9 + c; K.sfx('tick'); }
+      for (let v = 1; v <= 9; v++) if (K.inRect(K.mouse.x, K.mouse.y, { x: 720 + ((v - 1) % 3) * 64, y: 150 + Math.floor((v - 1) / 3) * 64, w: 58, h: 58 })) s.num = v;
+      if (K.inRect(K.mouse.x, K.mouse.y, { x: 720, y: 350, w: 186, h: 44 })) s.pencil = !s.pencil;
+      if (K.inRect(K.mouse.x, K.mouse.y, { x: 720, y: 404, w: 186, h: 44 })) s.num = 0;
+    }
+    const d = K.tapDir();
+    if (d && s.sel >= 0) { const r = Math.floor(s.sel / 9), c = s.sel % 9; s.sel = K.clamp(r + (d === 'down') - (d === 'up'), 0, 8) * 9 + K.clamp(c + (d === 'right') - (d === 'left'), 0, 8); }
+    if (K.tap('KeyN')) s.pencil = !s.pencil;
+    for (let v = 1; v <= 9; v++) if (K.tap('Digit' + v, 'Numpad' + v)) s.num = v;
+    if (K.tap('Backspace', 'Delete', 'Digit0')) s.num = 0;
+    const v = s.num; s.num = null;
+    if (v == null || s.sel < 0 || s.given[s.sel]) return;
+    if (v === 0) { s.g[s.sel] = 0; s.notes[s.sel].clear(); return; }
+    if (s.pencil) { s.notes[s.sel].has(v) ? s.notes[s.sel].delete(v) : s.notes[s.sel].add(v); K.sfx('tick'); return; }
+    if (v === s.sol[s.sel]) {
+      s.g[s.sel] = v; s.notes[s.sel].clear(); K.sfx('click');
+      const r = Math.floor(s.sel / 9), c = s.sel % 9;
+      for (let k = 0; k < 9; k++) { s.notes[r * 9 + k].delete(v); s.notes[k * 9 + c].delete(v); }
+      if (s.g.every((x, i) => x === s.sol[i])) { s.phase = 'done'; K.sfx('win'); const score = Math.max(50, Math.round([300, 600, 1000][s.level] - s.time * [0.6, 0.8, 1][s.level] - s.mist * 50)); K.end(s, { score, won: true, stats: { won: 1 }, title: 'SOLVED!', text: `${['Easy', 'Medium', 'Hard'][s.level]} in ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} with ${s.mist} mistake${s.mist === 1 ? '' : 's'}` }); }
+    } else {
+      s.mist++; s.bad = { i: s.sel, v, t: 0.8 }; K.sfx('wrong'); K.shake(4);
+      if (s.mist >= 3) { s.phase = 'done'; K.end(s, { score: 0, won: false, title: '3 MISTAKES', text: 'The puzzle wins this time.' }); }
+    }
+  },
+  draw(s) {
+    if (s.phase === 'pick') {
+      K.text('SUDOKU', 480, 120, 46, '#fff', 'center', 'd', 16);
+      ['EASY', 'MEDIUM', 'HARD'].forEach((n, i) => K.button(330, 200 + i * 70, 300, 54, `${i + 1}  ${n}`, { color: ['#3dffa0', '#ffd93a', '#ff3355'][i] }));
+      return;
+    }
+    const selV = s.sel >= 0 ? s.g[s.sel] : 0;
+    for (let i = 0; i < 81; i++) {
+      const r = Math.floor(i / 9), c = i % 9, x = BX + c * S, y = BY + r * S;
+      const sr = Math.floor(s.sel / 9), sc = s.sel % 9;
+      let bg = '#151a30';
+      if (s.sel >= 0 && (r === sr || c === sc || (Math.floor(r / 3) === Math.floor(sr / 3) && Math.floor(c / 3) === Math.floor(sc / 3)))) bg = '#1d2444';
+      if (selV && s.g[i] === selV) bg = '#2a3a6a';
+      if (i === s.sel) bg = '#2f5ad8';
+      K.rect(x + 1, y + 1, S - 2, S - 2, bg);
+      if (s.g[i]) K.text(String(s.g[i]), x + S / 2, y + S / 2 + 2, 28, s.given[i] ? '#ffffff' : '#22e6ff', 'center', 'd');
+      else s.notes[i].forEach((v) => K.text(String(v), x + 9 + ((v - 1) % 3) * 17, y + 10 + Math.floor((v - 1) / 3) * 16, 11, '#8e88b8', 'center', 'm'));
+      if (s.bad && s.bad.i === i && s.bad.t > 0) K.text(String(s.bad.v), x + S / 2, y + S / 2 + 2, 28, '#ff3355', 'center', 'd');
+    }
+    if (s.bad) s.bad.t -= 1 / 60;
+    for (let k = 0; k <= 9; k++) { const w = k % 3 ? 1 : 3; K.line(BX + k * S, BY, BX + k * S, BY + 9 * S, k % 3 ? '#2a3150' : '#8b5cf6', w); K.line(BX, BY + k * S, BX + 9 * S, BY + k * S, k % 3 ? '#2a3150' : '#8b5cf6', w); }
+    for (let v = 1; v <= 9; v++) { const done = s.g.filter((x) => x === v).length >= 9; K.button(720 + ((v - 1) % 3) * 64, 150 + Math.floor((v - 1) / 3) * 64, 58, 58, done ? '·' : String(v), { color: done ? '#444' : '#22e6ff', size: 24 }); }
+    K.button(720, 350, 186, 44, s.pencil ? '✎ PENCIL: ON' : '✎ PENCIL: OFF', { color: s.pencil ? '#ffd93a' : '#8e88b8', size: 13 });
+    K.button(720, 404, 186, 44, '⌫ ERASE', { color: '#8e88b8', size: 13 });
+    K.text(['EASY', 'MEDIUM', 'HARD'][s.level], 110, 70, 20, ['#3dffa0', '#ffd93a', '#ff3355'][s.level], 'center', 'd');
+    K.text(`${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')}`, 110, 110, 26, '#fff', 'center', 'd');
+    K.text('MISTAKES', 110, 170, 13, '#8e88b8', 'center', 'm'); K.text('✖'.repeat(s.mist) + '·'.repeat(3 - s.mist), 110, 196, 22, '#ff3355', 'center');
+  },
+  ai(s) {
+    if (s.phase === 'pick') { s.level = 0; const m = make(0); s.given = m.puzzle.slice(); s.g = m.puzzle.slice(); s.sol = m.solution; s.phase = 'play'; return; }
+    s.aw = (s.aw || 0) + 1; if (s.aw % 14) return;
+    const i = s.g.findIndex((x) => !x); if (i < 0) return; s.sel = i; s.g[i] = s.sol[i];
+  },
+});
+</script></body></html>

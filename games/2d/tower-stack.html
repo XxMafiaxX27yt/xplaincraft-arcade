@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tower Stack</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tower-stack","n":12,"title":"TOWER STACK","genre":"fun","desc":"A block slides back and forth. Drop it on the tower: whatever hangs over the edge gets sliced off. Land it perfectly to keep it full size, and five perfects in a row grow it back.","controls":"Space / click / tap to drop","scoreLabel":"FLOORS","tasks":[{"stat":"score","target":25,"text":"Stack 25 floors in Tower Stack"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const BH = 26;
+const hue = (i) => `hsl(${(i * 9 + 190) % 360},85%,${55 + Math.sin(i / 4) * 8}%)`;
+K.game({
+  bg: '#0b0920',
+  init(s) {
+    s.tower = [{ x: 380, w: 200 }]; s.cur = { x: 100, w: 200, dir: 1 }; s.speed = 260; s.cam = 0; s.perfect = 0; s.chips = []; s.flashT = 0;
+    if (K.attract) { let x = 380, w = 200; for (let i = 0; i < 14; i++) { const o = K.rand(-14, 14); x += o; w -= Math.abs(o) * 0.6; s.tower.push({ x, w }); } s.cur.w = w; }
+  },
+  update(s, dt) {
+    const cur = s.cur, top = s.tower[s.tower.length - 1];
+    cur.x += cur.dir * s.speed * dt;
+    if (cur.x + cur.w > 860) { cur.x = 860 - cur.w; cur.dir = -1; } if (cur.x < 100) { cur.x = 100; cur.dir = 1; }
+    const want = (s.tower.length - 8) * BH; s.cam = K.lerp(s.cam, Math.max(0, want), dt * 4);
+    s.chips.forEach((c) => { c.vy += 1200 * dt; c.y += c.vy * dt; c.a += c.va * dt; }); s.chips = s.chips.filter((c) => c.y < 900);
+    s.flashT -= dt;
+    if (!K.action()) return;
+    const l = Math.max(cur.x, top.x), r = Math.min(cur.x + cur.w, top.x + top.w), over = r - l;
+    if (over <= 0) { K.sfx('lose'); s.chips.push({ x: cur.x, w: cur.w, y: 470 - s.tower.length * BH + s.cam, vy: 0, a: 0, va: 2, i: s.tower.length }); return K.end(s, { score: s.tower.length - 1, won: null, title: 'MISSED', text: `${s.tower.length - 1} floors` }); }
+    let nx = l, nw = over;
+    if (Math.abs(cur.x - top.x) < 5) {
+      nx = top.x; nw = top.w; s.perfect++; s.flashT = 0.25;
+      K.tone(440 + s.perfect * 60, 0.15, 'triangle', 0.07);
+      if (s.perfect >= 5) { nw = Math.min(260, nw + 18); nx -= 9; s.perfect = 0; K.sfx('power'); K.floatText('GROW!', 480, 200, '#3dffa0'); }
+    } else {
+      s.perfect = 0; K.sfx('click');
+      const cx = cur.x < top.x ? cur.x : r, cw = cur.w - over;
+      s.chips.push({ x: cx, w: cw, y: 470 - s.tower.length * BH + s.cam, vy: 0, a: 0, va: (cur.x < top.x ? -1 : 1) * 2, i: s.tower.length });
+    }
+    s.tower.push({ x: nx, w: nw });
+    s.speed = Math.min(620, s.speed + 9);
+    s.cur = { x: s.tower.length % 2 ? 100 : 860 - nw, w: nw, dir: s.tower.length % 2 ? 1 : -1 };
+  },
+  draw(s) {
+    const n = s.tower.length;
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, [`hsl(${(n * 9 + 230) % 360},50%,14%)`, '#05040c']));
+    s.tower.forEach((b, i) => { const y = 470 - i * BH + s.cam; if (y > 560 || y < -40) return; K.rect(b.x, y, b.w, BH - 2, hue(i), 3); K.rect(b.x, y, b.w, 5, '#ffffff33', 3); });
+    const y = 470 - n * BH + s.cam;
+    K.glow(hue(n), s.flashT > 0 ? 30 : 10); K.rect(s.cur.x, y, s.cur.w, BH - 2, hue(n), 3); K.noGlow();
+    s.chips.forEach((c) => { const ctx = K.ctx(); ctx.save(); ctx.translate(c.x + c.w / 2, c.y + BH / 2); ctx.rotate(c.a); K.rect(-c.w / 2, -BH / 2, c.w, BH - 2, hue(c.i), 3); ctx.restore(); });
+    K.text(String(n - 1), 480, 70, 60, '#fff', 'center', 'd', 16);
+    if (s.perfect > 1) K.text(`PERFECT ×${s.perfect}`, 480, 120, 18, '#3dffa0', 'center', 'd');
+  },
+  ai(s) { const top = s.tower[s.tower.length - 1]; if (Math.abs(s.cur.x - top.x) < 4 + Math.random() * 10) K.vtap('Space'); },
+});
+</script></body></html>

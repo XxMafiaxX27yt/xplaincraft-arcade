@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Minesweeper</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"minesweeper","n":14,"title":"MINESWEEPER","genre":"mind","desc":"Clear the field without touching a mine. Numbers tell you how many mines touch that square. The first click is always safe. Flag what you know, chord a number to clear around it.","controls":"Click = dig · right-click (or F mode button) = flag · click a number with all flags placed = clear around it","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Clear a Minesweeper field"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const LV = [{ n: 'EASY', w: 9, h: 9, m: 10, t: 46 }, { n: 'MEDIUM', w: 16, h: 12, m: 30, t: 38 }, { n: 'HARD', w: 22, h: 13, m: 55, t: 34 }];
+const NUMC = ['', '#4f8bff', '#3dffa0', '#ff3355', '#c45cff', '#ff8a3a', '#22e6ff', '#fff', '#888'];
+function setup(s, lv) { const L = LV[lv]; s.lv = lv; s.W = L.w; s.H = L.h; s.M = L.m; s.T = L.t; s.cells = Array.from({ length: L.w * L.h }, () => ({ mine: false, open: false, flag: false, n: 0 })); s.first = true; s.phase = 'play'; s.time = 0; s.flagMode = false; s.ox = 480 - (L.w * L.t) / 2 + 60; s.oy = 270 - (L.h * L.t) / 2; }
+const nb = (s, i) => { const x = i % s.W, y = Math.floor(i / s.W), out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < s.W && ny < s.H) out.push(ny * s.W + nx); } return out; };
+function place(s, safe) {
+  const ban = new Set([safe, ...nb(s, safe)]);
+  const spots = K.shuffle([...Array(s.W * s.H).keys()].filter((i) => !ban.has(i))).slice(0, s.M);
+  spots.forEach((i) => (s.cells[i].mine = true));
+  s.cells.forEach((c, i) => (c.n = nb(s, i).filter((j) => s.cells[j].mine).length));
+}
+function open(s, i) {
+  const c = s.cells[i]; if (c.open || c.flag) return;
+  if (s.first) { place(s, i); s.first = false; }
+  c.open = true;
+  if (c.mine) { s.phase = 'lost'; s.boom = i; s.cells.forEach((x) => x.mine && (x.open = true)); K.sfx('boom'); K.shake(14); setTimeout(() => K.end(s, { score: s.cells.filter((x) => x.open && !x.mine).length, won: false, title: 'BOOM', text: `${LV[s.lv].n} field` }), 900); return; }
+  if (!c.n) { const q = [i]; while (q.length) { const j = q.pop(); for (const k of nb(s, j)) { const d = s.cells[k]; if (!d.open && !d.flag && !d.mine) { d.open = true; if (!d.n) q.push(k); } } } K.sfx('whoosh'); } else K.sfx('tick');
+  if (s.cells.every((x) => x.mine || x.open)) { s.phase = 'won'; K.sfx('win'); const score = Math.max(50, Math.round([300, 900, 2000][s.lv] - s.time * [2, 2, 2.5][s.lv])); K.end(s, { score, won: true, stats: { won: 1 }, title: 'FIELD CLEARED', text: `${LV[s.lv].n} in ${Math.round(s.time)}s` }); }
+}
+K.game({
+  bg: '#0b1018', touch: { stick: false, buttons: [] },
+  init(s) { s.phase = 'pick'; },
+  update(s, dt) {
+    if (s.phase === 'pick') { LV.forEach((l, i) => { if ((K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 })) || K.tap('Digit' + (i + 1))) { setup(s, i); K.sfx('select'); } }); return; }
+    if (s.phase !== 'play') return;
+    if (!s.first) s.time += dt;
+    if (K.tap('KeyF')) s.flagMode = !s.flagMode;
+    if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 30, y: 300, w: 150, h: 44 })) { s.flagMode = !s.flagMode; return; }
+    const x = Math.floor((K.mouse.x - s.ox) / s.T), y = Math.floor((K.mouse.y - s.oy) / s.T);
+    if (x < 0 || y < 0 || x >= s.W || y >= s.H) return;
+    const i = y * s.W + x, c = s.cells[i];
+    if (K.mouse.right || (K.mouse.clicked && s.flagMode && !c.open)) { if (!c.open) { c.flag = !c.flag; K.sfx('click'); } return; }
+    if (!K.mouse.clicked) return;
+    if (c.open && c.n) { const ns = nb(s, i); if (ns.filter((j) => s.cells[j].flag).length === c.n) ns.forEach((j) => open(s, j)); return; }
+    open(s, i);
+  },
+  draw(s) {
+    if (s.phase === 'pick') { K.text('MINESWEEPER', 480, 120, 44, '#fff', 'center', 'd', 16); LV.forEach((l, i) => K.button(330, 200 + i * 70, 300, 54, `${i + 1}  ${l.n} · ${l.m} MINES`, { color: ['#3dffa0', '#ffd93a', '#ff3355'][i], size: 15 })); return; }
+    s.cells.forEach((c, i) => {
+      const x = s.ox + (i % s.W) * s.T, y = s.oy + Math.floor(i / s.W) * s.T, T = s.T;
+      if (!c.open) { K.rect(x + 1, y + 1, T - 2, T - 2, '#2a3a5a', 4); K.rect(x + 1, y + 1, T - 2, 4, '#3a4e78', 3); if (c.flag) K.text('⚑', x + T / 2, y + T / 2 + 1, T * 0.6, '#ff3355'); }
+      else { K.rect(x + 1, y + 1, T - 2, T - 2, i === s.boom ? '#ff3355' : '#121a28', 3); if (c.mine) { K.circle(x + T / 2, y + T / 2, T * 0.25, '#111'); K.circle(x + T / 2, y + T / 2, T * 0.12, '#ff3355'); } else if (c.n) K.text(String(c.n), x + T / 2, y + T / 2 + 2, T * 0.6, NUMC[c.n], 'center', 'd'); }
+    });
+    K.text(`⚑ ${s.M - s.cells.filter((c) => c.flag).length}`, 105, 120, 26, '#ff3355', 'center', 'd');
+    K.text(`${Math.floor(s.time)}s`, 105, 170, 24, '#fff', 'center', 'd');
+    K.text(LV[s.lv].n, 105, 70, 18, '#8e88b8', 'center', 'd');
+    K.button(30, 300, 150, 44, s.flagMode ? '⚑ FLAG MODE' : '⛏ DIG MODE', { color: s.flagMode ? '#ff3355' : '#22e6ff', size: 13 });
+  },
+  ai(s) {
+    if (s.phase === 'pick') { setup(s, 1); return; }
+    s.aw = (s.aw || 0) + 1; if (s.aw % 18 || s.phase !== 'play') return;
+    const safe = s.first ? Math.floor(s.cells.length / 2) : s.cells.findIndex((c) => !c.open && !c.mine && !c.flag);
+    if (safe >= 0) open(s, safe);
+    const m = s.cells.findIndex((c) => c.mine && !c.flag && Math.random() < 0.1); if (m >= 0) s.cells[m].flag = true;
+  },
+});
+</script></body></html>

@@ -1,0 +1,81 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doodle Jump</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"doodle-jump","n":9,"title":"DOODLE JUMP","genre":"fun","desc":"Bounce up an endless tower of platforms. Some break, some slide, springs launch you sky-high and jetpacks blast you even higher. Wrap around the sides. Don't fall.","controls":"← → / A D or tilt with the mouse / touch","scoreLabel":"HEIGHT","tasks":[{"stat":"score","target":2500,"text":"Reach 2500 height in Doodle Jump"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PW = 70;
+function plat(s, y) {
+  const h = -y, r = Math.random();
+  const kind = h > 600 && r < 0.12 ? 'break' : h > 300 && r < 0.3 ? 'move' : 'norm';
+  const p = { x: K.rand(260, 700 - PW), y, kind, vx: kind === 'move' ? K.rand(60, 140) * (Math.random() < 0.5 ? -1 : 1) : 0, gone: false };
+  if (kind === 'norm' && Math.random() < 0.08) p.spring = true;
+  else if (kind === 'norm' && h > 500 && Math.random() < 0.025) p.jet = true;
+  s.plats.push(p);
+}
+K.game({
+  bg: '#f7f2e6',
+  init(s) {
+    s.p = { x: 480, y: 400, vy: -700, face: 1 }; s.plats = []; s.cam = 0; s.max = 0; s.jet = 0;
+    for (let y = 480; y > -600; y -= 60) plat(s, y);
+    s.plats[0].x = 445; s.plats[0].kind = 'norm';
+  },
+  update(s, dt) {
+    const p = s.p, d = K.dir();
+    let vx = d.x * 380;
+    if (!d.x && K.mouse.down) vx = K.clamp((K.mouse.x - p.x) * 4, -380, 380);
+    if (vx) p.face = Math.sign(vx);
+    p.x += vx * dt;
+    if (p.x < 250) p.x = 710; if (p.x > 710) p.x = 250;
+    if (s.jet > 0) { s.jet -= dt; p.vy = -900; if (Math.random() < 0.6) K.particle({ x: p.x, y: p.y + 20, vx: K.rand(-40, 40), vy: 200, color: K.pick(['#ff8a3a', '#ffd93a']), life: 0.4, size: 5 }); }
+    else p.vy += 1500 * dt;
+    const oy = p.y; p.y += p.vy * dt;
+    if (p.vy > 0) for (const pl of s.plats) {
+      if (pl.gone) continue;
+      if (oy + 24 <= pl.y && p.y + 24 >= pl.y && p.x > pl.x - 14 && p.x < pl.x + PW + 14) {
+        if (pl.kind === 'break') { pl.gone = true; K.sfx('wrong'); K.burst(pl.x + PW / 2, pl.y, '#8a5a2a', 10); continue; }
+        p.y = pl.y - 24;
+        if (pl.jet) { pl.jet = false; s.jet = 2.2; K.sfx('power'); }
+        else if (pl.spring) { p.vy = -1350; K.sfx('jump'); K.tone(300, 0.3, 'sine', 0.05, 900); }
+        else { p.vy = -720; K.sfx('jump'); }
+      }
+    }
+    s.plats.forEach((pl) => { if (pl.kind === 'move') { pl.x += pl.vx * dt; if (pl.x < 250 || pl.x > 710 - PW) pl.vx *= -1; } });
+    const target = p.y - 250;
+    if (target < s.cam) s.cam = target;
+    s.max = Math.max(s.max, Math.round(-s.cam));
+    s.plats = s.plats.filter((pl) => pl.y < s.cam + 600);
+    let top = Math.min(...s.plats.map((pl) => pl.y));
+    while (top > s.cam - 120) { top -= K.rand(50, Math.min(115, 60 + s.max / 60)); plat(s, top); }
+    if (p.y - s.cam > 600) { K.sfx('lose'); K.end(s, { score: s.max, won: null, title: 'FELL', text: `Height ${s.max}` }); }
+  },
+  draw(s) {
+    const c = s.cam;
+    K.rect(240, 0, 480, 540, '#fffdf6');
+    for (let y = (-c % 24) - 24; y < 540; y += 24) K.line(240, y, 720, y, '#d9e6f2', 1);
+    for (let x = 240; x <= 720; x += 24) K.line(x, 0, x, 540, '#eef3f8', 1);
+    s.plats.forEach((pl) => {
+      if (pl.gone) return;
+      const y = pl.y - c, col = pl.kind === 'break' ? '#8a5a2a' : pl.kind === 'move' ? '#4f8bff' : '#5cc94a';
+      K.rect(pl.x, y, PW, 14, col, 7); K.rect(pl.x + 4, y + 2, PW - 8, 4, '#ffffff66', 3);
+      if (pl.kind === 'break') { K.line(pl.x + 30, y, pl.x + 36, y + 14, '#5a3a1a', 2); }
+      if (pl.spring) { K.rect(pl.x + 26, y - 12, 18, 12, '#aaa', 2); K.line(pl.x + 26, y - 6, pl.x + 44, y - 6, '#666', 2); }
+      if (pl.jet) { K.rect(pl.x + 24, y - 24, 22, 24, '#ff8a3a', 5); K.rect(pl.x + 28, y - 20, 14, 6, '#ffd93a'); }
+    });
+    const p = s.p, y = p.y - c;
+    K.rect(p.x - 18, y - 22, 36, 40, '#c8d64a', 14);
+    K.rect(p.x - 18, y + 8, 36, 10, '#3a6fd8', 4);
+    K.circle(p.x + p.face * 6, y - 10, 5, '#fff'); K.circle(p.x + p.face * 8, y - 10, 2.5, '#111');
+    K.rect(p.x + p.face * 14 - (p.face < 0 ? 12 : 0), y - 6, 12, 8, '#c8d64a', 3);
+    if (s.jet > 0) K.rect(p.x - p.face * 22 - 6, y - 14, 12, 26, '#ff8a3a', 4);
+    K.rect(0, 0, 240, 540, '#2a2440'); K.rect(720, 0, 240, 540, '#2a2440');
+    K.text(String(s.max), 120, 60, 34, '#fff', 'center', 'd', 10);
+    K.text('HEIGHT', 120, 96, 14, '#8e88b8', 'center', 'm');
+  },
+  ai(s) {
+    const p = s.p, t = s.plats.filter((pl) => !pl.gone && pl.kind !== 'break' && pl.y > p.y - 10 && pl.y < p.y + 300).sort((a, b) => a.y - b.y)[0];
+    if (!t) return; const tx = t.x + PW / 2;
+    K.vhold('ArrowLeft', tx < p.x - 10); K.vhold('ArrowRight', tx > p.x + 10);
+  },
+});
+</script></body></html>

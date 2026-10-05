@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sliding Puzzle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sliding-puzzle","n":17,"title":"SLIDING PUZZLE","genre":"mind","desc":"The classic 15-puzzle, plus 3×3 and 5×5. Slide tiles into the gap until the numbers are in order. Fewer moves and less time score more.","controls":"Click / tap a tile next to the gap, or arrow keys","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Solve a Sliding Puzzle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function setup(s, n) {
+  s.n = n; s.t = Math.floor(420 / n); s.ox = 480 - (n * s.t) / 2 + 80; s.oy = 270 - (n * s.t) / 2;
+  s.b = [...Array(n * n).keys()].map((i) => (i + 1) % (n * n));
+  let e = n * n - 1, last = -1;
+  for (let k = 0; k < n * n * 30; k++) { const opts = nbs(s, e).filter((j) => j !== last); const j = K.pick(opts); [s.b[e], s.b[j]] = [s.b[j], s.b[e]]; last = e; e = j; }
+  s.moves = 0; s.time = 0; s.phase = 'play'; s.anim = {};
+}
+const nbs = (s, i) => { const x = i % s.n, y = Math.floor(i / s.n), o = []; if (x > 0) o.push(i - 1); if (x < s.n - 1) o.push(i + 1); if (y > 0) o.push(i - s.n); if (y < s.n - 1) o.push(i + s.n); return o; };
+function slide(s, i) {
+  const e = s.b.indexOf(0);
+  const ex = e % s.n, ey = Math.floor(e / s.n), x = i % s.n, y = Math.floor(i / s.n);
+  if (ex !== x && ey !== y) return;
+  // slide a whole row / column toward the gap
+  const step = ex === x ? (y > ey ? s.n : -s.n) : x > ex ? 1 : -1;
+  let g = e;
+  while (g !== i) { const nx = g + step; s.anim[s.b[nx]] = { from: nx, t: 0 }; s.b[g] = s.b[nx]; s.b[nx] = 0; g = nx; s.moves++; }
+  K.sfx('click');
+  if (s.b.every((v, k) => v === (k + 1) % (s.n * s.n))) { s.phase = 'done'; K.sfx('win'); const score = Math.max(20, Math.round([200, 500, 1200][s.n - 3] - s.moves * [1, 1, 1.2][s.n - 3] - s.time)); K.end(s, { score, won: true, stats: { won: 1 }, title: 'SOLVED!', text: `${s.n}×${s.n} in ${s.moves} moves, ${Math.round(s.time)}s` }); }
+}
+K.game({
+  bg: '#120c1e', touch: { stick: false, buttons: [] },
+  init(s) { s.phase = 'pick'; },
+  update(s, dt) {
+    if (s.phase === 'pick') { [3, 4, 5].forEach((n, i) => { if ((K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 330, y: 200 + i * 70, w: 300, h: 54 })) || K.tap('Digit' + (i + 1))) setup(s, n); }); return; }
+    if (s.phase !== 'play') return;
+    s.time += dt;
+    Object.values(s.anim).forEach((a) => (a.t = Math.min(1, a.t + dt * 12)));
+    const e = s.b.indexOf(0), d = K.tapDir();
+    if (d) { const t = { up: e + s.n, down: e - s.n, left: e + 1, right: e - 1 }[d]; if (t >= 0 && t < s.n * s.n && nbs(s, e).includes(t)) slide(s, t); }
+    if (K.mouse.clicked) { const x = Math.floor((K.mouse.x - s.ox) / s.t), y = Math.floor((K.mouse.y - s.oy) / s.t); if (x >= 0 && y >= 0 && x < s.n && y < s.n) slide(s, y * s.n + x); }
+  },
+  draw(s) {
+    if (s.phase === 'pick') { K.text('SLIDING PUZZLE', 480, 120, 42, '#fff', 'center', 'd', 16); ['3×3', '4×4  (CLASSIC 15)', '5×5'].forEach((n, i) => K.button(330, 200 + i * 70, 300, 54, `${i + 1}  ${n}`, { color: ['#3dffa0', '#ffd93a', '#ff3355'][i], size: 15 })); return; }
+    const T = s.t;
+    K.rect(s.ox - 8, s.oy - 8, s.n * T + 16, s.n * T + 16, '#1d1530', 12);
+    s.b.forEach((v, i) => {
+      if (!v) return;
+      let x = s.ox + (i % s.n) * T, y = s.oy + Math.floor(i / s.n) * T;
+      const a = s.anim[v]; if (a && a.t < 1) { const fx = s.ox + (a.from % s.n) * T, fy = s.oy + Math.floor(a.from / s.n) * T; x = K.lerp(fx, x, a.t); y = K.lerp(fy, y, a.t); }
+      const home = v - 1 === i, hueV = ((v - 1) / (s.n * s.n)) * 300 + 180;
+      K.rect(x + 3, y + 3, T - 6, T - 6, `hsl(${hueV},70%,${home ? 55 : 32}%)`, 10);
+      K.text(String(v), x + T / 2, y + T / 2 + 2, T * 0.38, '#fff', 'center', 'd');
+    });
+    K.text(`${s.n}×${s.n}`, 130, 120, 26, '#ffd93a', 'center', 'd');
+    K.text(`${s.moves} MOVES`, 130, 170, 20, '#fff', 'center', 'd');
+    K.text(`${Math.floor(s.time)}s`, 130, 210, 20, '#8e88b8', 'center', 'd');
+  },
+  ai(s) { if (s.phase === 'pick') { setup(s, 4); return; } s.aw = (s.aw || 0) + 1; if (s.aw % 10 === 0) { const e = s.b.indexOf(0); slide(s, K.pick(nbs(s, e))); } },
+});
+</script></body></html>
