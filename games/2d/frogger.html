@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Frogger</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"frogger","n":24,"title":"FROGGER","genre":"fun","desc":"Hop the frog across five lanes of traffic and a river of logs and turtles into the five lily pads at the top. Fill all five to clear the level. Turtles sometimes dive. Don't fall in.","controls":"Arrow keys / WASD or swipe, one hop at a time","scoreLabel":"POINTS","tasks":[{"stat":"score","target":500,"text":"Score 500 in Frogger"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 40, COLS = 15, OX = (960 - COLS * T) / 2, ROWS = 13, OY = 10;
+function lanes(s) {
+  const k = 1 + s.level * 0.15;
+  s.lanes = [
+    null,
+    { type: 'river', dir: -1, sp: 50 * k, items: 'turtle', len: 3, gap: 4 }, { type: 'river', dir: 1, sp: 70 * k, items: 'log', len: 4, gap: 4 }, { type: 'river', dir: 1, sp: 100 * k, items: 'log', len: 6, gap: 5 },
+    { type: 'river', dir: -1, sp: 60 * k, items: 'turtle', len: 2, gap: 3 }, { type: 'river', dir: 1, sp: 80 * k, items: 'log', len: 3, gap: 4 },
+    null,
+    { type: 'road', dir: -1, sp: 90 * k, car: '#ff3355', len: 2, gap: 5 }, { type: 'road', dir: 1, sp: 60 * k, car: '#ffd93a', len: 1, gap: 4 }, { type: 'road', dir: -1, sp: 120 * k, car: '#22e6ff', len: 1, gap: 5 }, { type: 'road', dir: 1, sp: 70 * k, car: '#c45cff', len: 3, gap: 6 }, { type: 'road', dir: -1, sp: 100 * k, car: '#ff8a3a', len: 1, gap: 3 },
+    null,
+  ];
+  s.objs = [];
+  s.lanes.forEach((l, r) => { if (!l) return; let x = K.rand(0, 3) * T; while (x < COLS * T + 300) { s.objs.push({ r, x, w: l.len * T, l, dive: l.items === 'turtle' && Math.random() < 0.3 }); x += (l.len + l.gap) * T; } });
+}
+function reset(s) { s.fx = 7; s.fy = 12; s.px = OX + 7 * T; s.best = 12; }
+K.game({
+  bg: '#0a0a14',
+  init(s) { s.level = 0; s.score = 0; s.lives = 3; s.pads = [false, false, false, false, false]; s.time = 45; lanes(s); reset(s); s.hop = 0; },
+  update(s, dt) {
+    s.time -= dt; s.hop -= dt;
+    const span = COLS * T + 300;
+    s.objs.forEach((o) => { o.x += o.l.dir * o.l.sp * dt; if (o.x > COLS * T + 150) o.x -= span; if (o.x < -150 - o.w) o.x += span; });
+    const d = K.tapDir();
+    if (d && s.hop <= 0) {
+      const nx = s.fx + (d === 'right') - (d === 'left'), ny = s.fy + (d === 'down') - (d === 'up');
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) { s.fy = ny; s.px = OX + nx * T; s.fx = nx; s.hop = 0.08; K.sfx('step'); if (ny < s.best) { s.best = ny; s.score += 10; } }
+    }
+    s.fx = Math.round((s.px - OX) / T);
+    const lane = s.lanes[s.fy], die = (why) => { s.lives--; K.sfx('hit'); K.shake(8); K.floatText(why, s.px + 20, OY + s.fy * T, '#ff3355'); if (s.lives <= 0) return K.end(s, { score: s.score, won: null, title: 'SQUISHED', text: `Level ${s.level + 1}` }); reset(s); s.time = 45; };
+    if (s.time <= 0) return die('TOO SLOW');
+    const fx = s.px - OX + T / 2;
+    if (lane?.type === 'road' && s.objs.some((o) => o.r === s.fy && fx > o.x + 6 && fx < o.x + o.w - 6)) return die('SPLAT');
+    if (lane?.type === 'river') {
+      const on = s.objs.find((o) => o.r === s.fy && fx > o.x && fx < o.x + o.w && !(o.dive && Math.sin(K.time() * 1.4 + o.x) > 0.6));
+      if (!on) return die('SPLASH');
+      s.px += on.l.dir * on.l.sp * dt;
+      if (s.px < OX - 10 || s.px > OX + (COLS - 1) * T + 10) return die('SWEPT AWAY');
+    }
+    if (s.fy === 0) {
+      const pad = [1, 4, 7, 10, 13].indexOf(Math.round((s.px - OX) / T));
+      if (pad < 0 || s.pads[pad]) return die('MISSED THE PAD');
+      s.pads[pad] = true; s.score += 50 + Math.floor(s.time) * 2; K.sfx('chime');
+      if (s.pads.every(Boolean)) { s.level++; s.score += 200; s.pads = s.pads.map(() => false); K.sfx('win'); lanes(s); }
+      reset(s); s.time = 45;
+    }
+  },
+  draw(s) {
+    for (let r = 0; r < ROWS; r++) { const l = s.lanes[r], y = OY + r * T; K.rect(OX, y, COLS * T, T, r === 0 ? '#0f3a1a' : !l ? '#3a2a4a' : l.type === 'river' ? '#0a2a5a' : '#202028'); if (l?.type === 'road') for (let x = 0; x < COLS * T; x += 40) K.rect(OX + x + 8, y + T - 2, 20, 2, '#ffffff22'); }
+    [1, 4, 7, 10, 13].forEach((c, i) => { K.circle(OX + c * T + T / 2, OY + T / 2, 16, '#2a8a3a'); if (s.pads[i]) K.text('🐸', OX + c * T + T / 2, OY + T / 2 + 2, 22, '#fff'); });
+    const ctx = K.ctx(); ctx.save(); ctx.beginPath(); ctx.rect(OX, 0, COLS * T, 540); ctx.clip();
+    s.objs.forEach((o) => {
+      const y = OY + o.r * T;
+      if (o.l.type === 'road') { K.rect(OX + o.x + 4, y + 6, o.w - 8, T - 12, o.l.car, 6); K.rect(OX + o.x + (o.l.dir > 0 ? o.w - 16 : 8), y + 10, 8, T - 20, '#bff6ff', 2); }
+      else if (o.l.items === 'log') { K.rect(OX + o.x, y + 6, o.w, T - 12, '#8a5a2a', 12); K.rect(OX + o.x + 6, y + 10, o.w - 12, 3, '#6a4220'); }
+      else { const under = o.dive && Math.sin(K.time() * 1.4 + o.x) > 0.6; K.alpha(under ? 0.25 : 1); for (let k = 0; k < o.l.len; k++) { K.circle(OX + o.x + k * T + T / 2, y + T / 2, 15, '#3a9a5a'); K.circle(OX + o.x + k * T + T / 2, y + T / 2, 9, '#2a6a3a'); } K.alpha(1); }
+    });
+    ctx.restore();
+    const fx = s.px, fy = OY + s.fy * T;
+    K.glow('#3dffa0', 12); K.circle(fx + T / 2, fy + T / 2, 14, '#3dffa0'); K.noGlow(); K.circle(fx + T / 2 - 6, fy + T / 2 - 8, 4, '#fff'); K.circle(fx + T / 2 + 6, fy + T / 2 - 8, 4, '#fff');
+    K.text(String(s.score), 20, 30, 20, '#fff', 'left', 'd'); K.text('🐸'.repeat(Math.max(0, s.lives)), 20, 60, 16, '#fff', 'left');
+    K.rect(OX + COLS * T + 20, 60, 10, 400, '#222', 5); K.rect(OX + COLS * T + 20, 60 + 400 * (1 - s.time / 45), 10, 400 * (s.time / 45), s.time < 10 ? '#ff3355' : '#3dffa0', 5);
+    K.text(`LEVEL ${s.level + 1}`, 940, 30, 14, '#8e88b8', 'right', 'd');
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 12) return;
+    const next = s.lanes[s.fy - 1], fx = s.px - OX + T / 2;
+    const safeUp = !next || (next.type === 'road' ? !s.objs.some((o) => o.r === s.fy - 1 && fx > o.x - 30 && fx < o.x + o.w + 30) : s.objs.some((o) => o.r === s.fy - 1 && fx > o.x + 10 && fx < o.x + o.w - 10));
+    if (s.fy === 1) { const pad = [1, 4, 7, 10, 13].find((c, i) => !s.pads[i]); const c = Math.round((s.px - OX) / T); if (c < pad) K.vtap('ArrowRight'); else if (c > pad) K.vtap('ArrowLeft'); else K.vtap('ArrowUp'); return; }
+    if (safeUp) K.vtap('ArrowUp');
+  },
+});
+</script></body></html>

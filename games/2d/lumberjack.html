@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lumberjack</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lumberjack","n":44,"title":"LUMBERJACK","genre":"fun","desc":"Chop the endless tree from the left or the right. Every chop drops the trunk one log; if a branch lands on your side, you're done. The timer drains fast, and every chop refills it a little.","controls":"← / A = chop left · → / D = chop right (or tap the left / right half of the screen)","scoreLabel":"LOGS","tasks":[{"stat":"score","target":100,"text":"Chop 100 logs in Lumberjack"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const LH = 64, TX = 480, BASE = 430;
+const nextBranch = (s) => { const last = s.br[s.br.length - 1]; if (last && Math.random() < 0.5) return 0; return Math.random() < 0.5 ? -1 : 1; };
+K.game({
+  bg: '#7ac8ff',
+  init(s) { s.br = [0, 0, 0]; while (s.br.length < 9) s.br.push(nextBranch(s)); s.side = -1; s.score = 0; s.time = 1; s.chop = 0; s.fly = []; s.started = false; },
+  update(s, dt) {
+    let side = 0;
+    if (K.tap('ArrowLeft', 'KeyA')) side = -1; if (K.tap('ArrowRight', 'KeyD')) side = 1;
+    if (K.mouse.clicked) side = K.mouse.x < 480 ? -1 : 1;
+    if (s.started) s.time -= dt * (0.18 + s.score * 0.0015);
+    if (s.time <= 0) { K.sfx('lose'); return K.end(s, { score: s.score, won: null, title: 'TOO SLOW', text: `${s.score} logs` }); }
+    s.chop -= dt; s.fly.forEach((f) => { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 1400 * dt; f.a += f.va * dt; }); s.fly = s.fly.filter((f) => f.y < 700);
+    if (!side) return;
+    s.started = true;
+    s.side = side;
+    if (s.br[0] === side) { K.sfx('hit'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'BONK', text: `A branch got you. ${s.score} logs.` }); }
+    s.fly.push({ x: TX, y: BASE - LH / 2, vx: -side * 600, vy: -200, a: 0, va: -side * 8, b: s.br[0] });
+    s.br.shift(); s.br.push(nextBranch(s)); s.score++; s.chop = 0.1; s.time = Math.min(1, s.time + 0.06); K.sfx('knock');
+    if (s.br[0] === side) { K.sfx('hit'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'BONK', text: `A branch fell on you. ${s.score} logs.` }); }
+  },
+  draw(s) {
+    K.rect(0, 0, 960, 540, K.grad(0, 0, 0, 540, ['#7ac8ff', '#d8f0ff']));
+    [[120, 120], [760, 90], [600, 180]].forEach(([x, y]) => { K.circle(x, y, 30, '#fff'); K.circle(x + 30, y + 6, 24, '#fff'); K.circle(x - 28, y + 8, 22, '#fff'); });
+    K.rect(0, BASE, 960, 110, '#5a9a3a');
+    const log = (y, b) => { K.rect(TX - 50, y, 100, LH, '#8a5a2a'); K.rect(TX - 50, y, 12, LH, '#6a4220'); K.line(TX - 30, y + 10, TX - 30, y + LH - 10, '#6a4220', 2); if (b) { K.rect(b < 0 ? TX - 190 : TX + 50, y + 20, 140, 18, '#6a4220', 6); K.circle(b < 0 ? TX - 180 : TX + 180, y + 20, 22, '#3a8a2a'); } };
+    s.br.forEach((b, i) => log(BASE - (i + 1) * LH, b));
+    s.fly.forEach((f) => { const c = K.ctx(); c.save(); c.translate(f.x, f.y); c.rotate(f.a); K.rect(-50, -LH / 2, 100, LH, '#8a5a2a'); c.restore(); });
+    K.rect(TX - 60, BASE - 6, 120, 12, '#5a3a1a', 4);
+    const px = TX + s.side * 120, swing = s.chop > 0 ? -0.9 : 0.4;
+    K.rect(px - 18, BASE - 70, 36, 50, '#ff3355', 6); K.rect(px - 18, BASE - 40, 36, 8, '#1a1a1a'); K.circle(px, BASE - 86, 16, '#f1c9a5'); K.rect(px - 16, BASE - 104, 32, 10, '#3a2a1a', 4);
+    K.rect(px - 16, BASE - 20, 12, 20, '#2a4a8a'); K.rect(px + 4, BASE - 20, 12, 20, '#2a4a8a');
+    const c = K.ctx(); c.save(); c.translate(px - s.side * 16, BASE - 60); c.rotate(-s.side * swing); K.rect(-3, -40, 6, 46, '#8a5a2a'); K.rect(-s.side * 4 - 8, -44, 18, 12, '#ccc', 2); c.restore();
+    K.rect(330, 20, 300, 18, '#00000033', 9); K.rect(330, 20, 300 * s.time, 18, s.time < 0.3 ? '#ff3355' : '#ffd93a', 9);
+    K.text(String(s.score), 480, 80, 48, '#fff', 'center', 'd', 10);
+    if (!s.started) K.text('← CHOP  ·  CHOP →', 480, 500, 22, '#fff', 'center', 'd');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 10) return; const safe = s.br[1] === -1 ? 1 : s.br[1] === 1 ? -1 : s.side; K.vtap(safe < 0 ? 'ArrowLeft' : 'ArrowRight'); },
+});
+</script></body></html>

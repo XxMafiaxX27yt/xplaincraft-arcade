@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Helicopter Cave</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"helicopter-cave","n":13,"title":"HELICOPTER CAVE","genre":"fun","desc":"Hold to rise, let go to fall. The cave twists and narrows, pillars pop up in the middle, and fuel cans give bonus points. How far can you fly?","controls":"Hold Space / mouse / touch to go up","scoreLabel":"METRES","tasks":[{"stat":"score","target":700,"text":"Fly 700 m in Helicopter Cave"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SEG = 16, HX = 200;
+function col(s) {
+  s.mid += K.rand(-14, 14) + (270 - s.mid) * 0.02; s.mid = K.clamp(s.mid, 120, 420);
+  const gap = Math.max(170, 330 - s.dist * 0.08);
+  s.cols.push({ top: s.mid - gap / 2, bot: s.mid + gap / 2 });
+  s.n++;
+  if (s.n % 22 === 0 && s.dist > 60) s.pillars.push({ x: 960 + SEG, y: K.rand(s.mid - gap / 2 + 30, s.mid + gap / 2 - 110), h: 80 });
+  if (s.n % 37 === 0) s.cans.push({ x: 960 + SEG, y: s.mid + K.rand(-40, 40) });
+}
+K.game({
+  bg: '#07100c',
+  init(s) { s.y = 270; s.vy = 0; s.dist = 0; s.mid = 270; s.cols = []; s.pillars = []; s.cans = []; s.n = 0; s.off = 0; s.bonus = 0; s.smoke = []; for (let i = 0; i < 960 / SEG + 2; i++) col(s); },
+  update(s, dt) {
+    const up = K.down('Space', 'ArrowUp', 'KeyW') || K.mouse.down;
+    s.vy += (up ? -900 : 820) * dt; s.vy = K.clamp(s.vy, -360, 420); s.y += s.vy * dt;
+    const speed = 260 + Math.min(220, s.dist * 0.12);
+    s.off += speed * dt; s.dist += speed * dt / 12;
+    while (s.off >= SEG) { s.off -= SEG; s.cols.shift(); col(s); }
+    s.pillars.forEach((p) => (p.x -= speed * dt)); s.pillars = s.pillars.filter((p) => p.x > -40);
+    s.cans.forEach((c) => (c.x -= speed * dt)); s.cans = s.cans.filter((c) => c.x > -20 && !c.got);
+    if (Math.random() < 0.5) s.smoke.push({ x: HX - 30, y: s.y, r: 4, a: 0.5 });
+    s.smoke.forEach((m) => { m.x -= speed * dt; m.r += dt * 14; m.a -= dt * 0.8; }); s.smoke = s.smoke.filter((m) => m.a > 0);
+    const c = s.cols[Math.floor((HX + s.off) / SEG)];
+    let dead = s.y - 12 < c.top || s.y + 12 > c.bot;
+    for (const p of s.pillars) if (HX + 26 > p.x && HX - 30 < p.x + 26 && s.y + 12 > p.y && s.y - 12 < p.y + p.h) dead = true;
+    for (const cn of s.cans) if (Math.abs(cn.x - HX) < 24 && Math.abs(cn.y - s.y) < 24) { cn.got = true; s.bonus += 50; K.sfx('coin'); K.floatText('+50', cn.x, cn.y - 20, '#ffd93a'); }
+    if (dead) { K.sfx('boom'); K.shake(16); K.burst(HX, s.y, ['#ff8a3a', '#ffd93a', '#fff'], 30); K.end(s, { score: Math.floor(s.dist) + s.bonus, won: null, title: 'CRASHED', text: `${Math.floor(s.dist)} m + ${s.bonus} bonus` }); }
+  },
+  draw(s) {
+    s.cols.forEach((c, i) => { const x = i * SEG - s.off; K.rect(x, 0, SEG + 1, c.top, '#1d4a32'); K.rect(x, c.bot, SEG + 1, 540 - c.bot, '#1d4a32'); K.rect(x, c.top - 4, SEG + 1, 4, '#3dffa0'); K.rect(x, c.bot, SEG + 1, 4, '#3dffa0'); });
+    s.pillars.forEach((p) => { K.rect(p.x, p.y, 26, p.h, '#2a6a48', 4); K.stroke(p.x, p.y, 26, p.h, '#3dffa0', 2, 4); });
+    s.cans.forEach((c) => { K.glow('#ffd93a', 12); K.rect(c.x - 9, c.y - 12, 18, 24, '#ff3355', 3); K.noGlow(); K.text('F', c.x, c.y + 1, 12, '#fff', 'center', 'd'); });
+    s.smoke.forEach((m) => { K.alpha(m.a); K.circle(m.x, m.y, m.r, '#9ab'); }); K.alpha(1);
+    const c = K.ctx(); c.save(); c.translate(HX, s.y); c.rotate(s.vy / 1600);
+    K.glow('#22e6ff', 12); K.rect(-24, -10, 40, 20, '#22e6ff', 10); K.noGlow(); K.rect(4, -7, 12, 10, '#bff6ff', 4); K.rect(-44, -4, 24, 5, '#22e6ff', 2);
+    K.rect(-6, -18, 4, 8, '#888'); K.rect(-30 + Math.sin(K.time() * 60) * 4, -20, 52, 3, '#ddd', 2); c.restore();
+    K.text(`${Math.floor(s.dist) + s.bonus} m`, 20, 26, 20, '#fff', 'left', 'd');
+  },
+  ai(s) { const c = s.cols[Math.floor((HX + 60 + s.off) / SEG)] || s.cols[0], p = s.pillars.find((q) => q.x > HX - 20 && q.x < HX + 160); let t = (c.top + c.bot) / 2; if (p) t = p.y + p.h / 2 > t ? p.y - 30 : p.y + p.h + 30; K.vhold('Space', s.y > t + s.vy * 0.12); },
+});
+</script></body></html>

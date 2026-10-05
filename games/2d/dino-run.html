@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dino Run</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"dino-run","n":19,"title":"DINO RUN","genre":"fun","desc":"The little offline dino, on neon. Jump the cacti, duck the pterodactyls, and survive the night when the colours flip. The speed never stops climbing.","controls":"Space / ↑ / tap = jump · ↓ = duck","scoreLabel":"POINTS","tasks":[{"stat":"score","target":800,"text":"Score 800 in Dino Run"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GY = 400, DX = 120;
+K.game({
+  bg: '#f2f0ea',
+  init(s) { s.y = 0; s.vy = 0; s.duck = false; s.obs = []; s.next = 1; s.speed = 420; s.score = 0; s.t = 0; s.clouds = Array.from({ length: 5 }, () => ({ x: K.rand(0, 960), y: K.rand(60, 200) })); s.night = 0; },
+  update(s, dt) {
+    s.t += dt; s.speed = Math.min(1100, 420 + s.t * 9); s.score += s.speed * dt / 40;
+    if ((K.tap('Space', 'ArrowUp', 'KeyW') || K.mouse.clicked) && s.y === 0) { s.vy = 760; K.sfx('jump'); }
+    s.duck = K.down('ArrowDown', 'KeyS') && s.y === 0;
+    if (K.down('ArrowDown', 'KeyS') && s.y > 0) s.vy -= 3000 * dt;
+    s.vy -= 2400 * dt; s.y = Math.max(0, s.y + s.vy * dt); if (s.y === 0) s.vy = 0;
+    s.next -= dt;
+    if (s.next <= 0) {
+      const r = Math.random();
+      if (s.t > 12 && r < 0.3) s.obs.push({ k: 'bird', x: 1000, y: K.pick([22, 60, 100]), w: 46, h: 30 });
+      else { const n = K.irand(1, 3); s.obs.push({ k: 'cactus', x: 1000, y: 0, w: 22 * n + 6, h: K.pick([46, 60, 70]), n }); }
+      s.next = K.rand(0.7, 1.5) * (520 / s.speed) + 0.35;
+    }
+    s.obs.forEach((o) => (o.x -= s.speed * dt * (o.k === 'bird' ? 1.1 : 1))); s.obs = s.obs.filter((o) => o.x > -100);
+    s.clouds.forEach((c) => { c.x -= s.speed * 0.1 * dt; if (c.x < -100) c.x = 1000; });
+    if (Math.floor(s.score / 700) % 2 === 1) s.night = Math.min(1, s.night + dt); else s.night = Math.max(0, s.night - dt);
+    if (Math.floor(s.score / 100) !== Math.floor((s.score - s.speed * dt / 40) / 100)) K.sfx('tick');
+    const h = s.duck ? 30 : 56, box = { x: DX - 18 + 6, y: GY - s.y - h, w: (s.duck ? 56 : 40) - 12, h: h - 6 };
+    for (const o of s.obs) if (K.rectHit(box, { x: o.x + 4, y: GY - o.y - o.h + 4, w: o.w - 8, h: o.h - 8 })) { K.sfx('hit'); K.shake(10); return K.end(s, { score: Math.floor(s.score), won: null, title: 'GAME OVER', text: `${Math.floor(s.score)} points` }); }
+  },
+  draw(s) {
+    const n = s.night, ink = n > 0.5 ? '#e8e6f0' : '#3a3846';
+    K.rect(0, 0, 960, 540, `rgb(${242 - n * 220},${240 - n * 222},${234 - n * 210})`);
+    if (n > 0.2) { K.alpha(n); for (let i = 0; i < 30; i++) K.circle((i * 137) % 960, (i * 71) % 300, 1.2, '#fff'); K.circle(800, 90, 26, '#f0f0d8'); K.alpha(1); }
+    s.clouds.forEach((c) => { K.rect(c.x, c.y, 70, 16, n > 0.5 ? '#3a3a50' : '#d8d6e0', 8); K.rect(c.x + 16, c.y - 10, 36, 16, n > 0.5 ? '#3a3a50' : '#d8d6e0', 8); });
+    K.rect(0, GY, 960, 2, ink);
+    for (let i = 0; i < 30; i++) K.rect(K.wrap(i * 97 - s.t * s.speed * 0.5, 960), GY + 8 + (i % 3) * 8, 6 + (i % 4) * 3, 2, ink);
+    s.obs.forEach((o) => {
+      if (o.k === 'cactus') for (let k = 0; k < o.n; k++) { const x = o.x + k * 22; K.rect(x + 6, GY - o.h, 12, o.h, '#3a8a3a', 4); K.rect(x, GY - o.h * 0.65, 6, 4, '#3a8a3a'); K.rect(x, GY - o.h * 0.8, 6, o.h * 0.2, '#3a8a3a', 3); K.rect(x + 18, GY - o.h * 0.5, 6, 4, '#3a8a3a'); K.rect(x + 18, GY - o.h * 0.7, 6, o.h * 0.2, '#3a8a3a', 3); }
+      else { const y = GY - o.y - o.h, f = Math.sin(K.time() * 16) > 0; K.rect(o.x + 10, y + 12, 30, 10, ink, 4); K.poly([[o.x + 40, y + 14], [o.x + 50, y + 18], [o.x + 40, y + 20]], ink); K.poly([[o.x + 16, y + 14], [o.x + 26, y + (f ? -6 : 34)], [o.x + 32, y + 14]], ink); }
+    });
+    const y = GY - s.y, run = Math.sin(K.time() * 24) > 0;
+    if (s.duck) { K.rect(DX - 20, y - 30, 56, 26, '#ff2bd6', 6); K.circle(DX + 26, y - 22, 3, '#fff'); }
+    else { K.rect(DX - 18, y - 46, 30, 36, '#ff2bd6', 6); K.rect(DX - 2, y - 58, 26, 20, '#ff2bd6', 6); K.circle(DX + 14, y - 51, 3, '#fff'); K.rect(DX - 26, y - 40, 10, 8, '#ff2bd6', 3); }
+    if (s.y === 0) { K.rect(DX - 12, y - 10, 6, run ? 10 : 6, '#ff2bd6'); K.rect(DX + 2, y - 10, 6, run ? 6 : 10, '#ff2bd6'); }
+    K.text(String(Math.floor(s.score)).padStart(5, '0'), 940, 30, 20, ink, 'right', 'm');
+  },
+  ai(s) { const o = s.obs.find((q) => q.x > DX - 10 && q.x < DX + 160 + s.speed * 0.1); if (!o) { K.vhold('ArrowDown', false); return; } if (o.k === 'bird' && o.y > 40) { K.vhold('ArrowDown', true); return; } K.vhold('ArrowDown', false); if (o.x - DX < 70 + s.speed * 0.08 && s.y === 0) K.vtap('Space'); },
+});
+</script></body></html>

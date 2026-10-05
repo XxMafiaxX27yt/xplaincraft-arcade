@@ -892,6 +892,27 @@ export const GAME_LIST = [
 "cover": "games/covers/tower-stack.png"
 },
 {
+"id": "helicopter-cave",
+"n": 13,
+"title": "HELICOPTER CAVE",
+"genre": "fun",
+"desc": "Hold to rise, let go to fall. The cave twists and narrows, pillars pop up in the middle, and fuel cans give bonus points. How far can you fly?",
+"controls": "Hold Space / mouse / touch to go up",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 700,
+"text": "Fly 700 m in Helicopter Cave"
+}
+],
+"file": "games/2d/helicopter-cave.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "whack-a-mole",
 "n": 14,
 "title": "WHACK-A-MOLE",
@@ -912,6 +933,27 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/whack-a-mole.png"
+},
+{
+"id": "dino-run",
+"n": 19,
+"title": "DINO RUN",
+"genre": "fun",
+"desc": "The little offline dino, on neon. Jump the cacti, duck the pterodactyls, and survive the night when the colours flip. The speed never stops climbing.",
+"controls": "Space / ↑ / tap = jump · ↓ = duck",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 800,
+"text": "Score 800 in Dino Run"
+}
+],
+"file": "games/2d/dino-run.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "tank-battle",
@@ -967,7 +1009,71 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/neon-kart.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/neon-kart.png"
+},
+{
+"id": "frogger",
+"n": 24,
+"title": "FROGGER",
+"genre": "fun",
+"desc": "Hop the frog across five lanes of traffic and a river of logs and turtles into the five lily pads at the top. Fill all five to clear the level. Turtles sometimes dive. Don't fall in.",
+"controls": "Arrow keys / WASD or swipe, one hop at a time",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 500,
+"text": "Score 500 in Frogger"
+}
+],
+"file": "games/2d/frogger.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "missile-defense",
+"n": 27,
+"title": "MISSILE DEFENSE",
+"genre": "fun",
+"desc": "Missiles rain on your six cities. Click where they will be, not where they are: your interceptor bursts at that point and the blast catches anything flying through. Three bases, limited ammo per wave. Splitting warheads arrive later.",
+"controls": "Click / tap to fire at that spot (the nearest base with ammo shoots)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3000,
+"text": "Score 3000 in Missile Defense"
+}
+],
+"file": "games/2d/missile-defense.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "lumberjack",
+"n": 44,
+"title": "LUMBERJACK",
+"genre": "fun",
+"desc": "Chop the endless tree from the left or the right. Every chop drops the trunk one log; if a branch lands on your side, you're done. The timer drains fast, and every chop refills it a little.",
+"controls": "← / A = chop left · → / D = chop right (or tap the left / right half of the screen)",
+"scoreLabel": "LOGS",
+"tasks": [
+{
+"stat": "score",
+"target": 100,
+"text": "Chop 100 logs in Lumberjack"
+}
+],
+"file": "games/2d/lumberjack.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "bomb-tag",
@@ -1098,6 +1204,27 @@ export const GAME_LIST = [
 "file": "games/2d/reaction-duel.html",
 "dim": "2d",
 "cover": "games/covers/reaction-duel.png"
+},
+{
+"id": "knife-throw",
+"n": 95,
+"title": "KNIFE THROW",
+"genre": "fun",
+"desc": "Throw every knife into the spinning log without hitting a knife that's already there. Apples on the log are bonus points. Every fifth log is a boss that spins backwards and speeds up without warning.",
+"controls": "Space / click / tap to throw",
+"scoreLabel": "KNIVES",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Stick 40 knives in Knife Throw"
+}
+],
+"file": "games/2d/knife-throw.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 },
 {
 "id": "typing-race",

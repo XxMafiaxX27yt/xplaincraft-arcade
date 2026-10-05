@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Missile Defense</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"missile-defense","n":27,"title":"MISSILE DEFENSE","genre":"fun","desc":"Missiles rain on your six cities. Click where they will be, not where they are: your interceptor bursts at that point and the blast catches anything flying through. Three bases, limited ammo per wave. Splitting warheads arrive later.","controls":"Click / tap to fire at that spot (the nearest base with ammo shoots)","scoreLabel":"POINTS","tasks":[{"stat":"score","target":3000,"text":"Score 3000 in Missile Defense"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GY = 490, BASES = [80, 480, 880], CITIES = [190, 270, 350, 610, 690, 770];
+function wave(s) {
+  s.wave++; s.toSpawn = 8 + s.wave * 3; s.spawnT = 0; s.ammo = BASES.map(() => 10); s.speed = 40 + s.wave * 9;
+}
+function spawn(s, x, y, split = true) {
+  const targets = CITIES.filter((c, i) => s.cities[i]).concat(BASES);
+  const tx = K.pick(targets) + K.rand(-10, 10), L = Math.hypot(tx - x, GY - y);
+  s.ms.push({ sx: x, sy: y, x, y, vx: ((tx - x) / L) * s.speed, vy: ((GY - y) / L) * s.speed, split: split && s.wave >= 3 && Math.random() < 0.25, splitY: K.rand(150, 300) });
+}
+K.game({
+  bg: '#05040f',
+  init(s) { s.wave = 0; s.cities = CITIES.map(() => true); s.ms = []; s.shots = []; s.blasts = []; s.score = 0; s.pause = 1.5; wave(s); },
+  update(s, dt) {
+    if (s.pause > 0) { s.pause -= dt; return; }
+    s.spawnT -= dt;
+    if (s.toSpawn > 0 && s.spawnT <= 0) { spawn(s, K.rand(40, 920), -10); s.toSpawn--; s.spawnT = Math.max(0.35, 1.6 - s.wave * 0.12); }
+    if (K.mouse.clicked && K.mouse.y < GY - 30) {
+      const order = BASES.map((b, i) => i).filter((i) => s.ammo[i] > 0).sort((a, b) => Math.abs(BASES[a] - K.mouse.x) - Math.abs(BASES[b] - K.mouse.x));
+      if (order.length) { const i = order[0]; s.ammo[i]--; const L = Math.hypot(K.mouse.x - BASES[i], K.mouse.y - GY); s.shots.push({ x: BASES[i], y: GY - 10, tx: K.mouse.x, ty: K.mouse.y, vx: ((K.mouse.x - BASES[i]) / L) * 620, vy: ((K.mouse.y - GY) / L) * 620 }); K.sfx('laser'); }
+      else K.sfx('wrong');
+    }
+    s.shots.forEach((o) => { o.x += o.vx * dt; o.y += o.vy * dt; if (Math.hypot(o.tx - o.x, o.ty - o.y) < 12 || o.y < o.ty) { o.done = true; s.blasts.push({ x: o.tx, y: o.ty, r: 2, t: 0 }); K.sfx('boom'); } });
+    s.shots = s.shots.filter((o) => !o.done);
+    s.blasts.forEach((b) => { b.t += dt; b.r = b.t < 0.6 ? b.t * 90 : Math.max(0, 54 - (b.t - 0.6) * 90); }); s.blasts = s.blasts.filter((b) => b.t < 1.2);
+    const add = [];
+    for (const m of s.ms) {
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      if (m.split && m.y > m.splitY) { m.dead = true; for (let k = 0; k < 3; k++) add.push([m.x, m.y]); continue; }
+      if (s.blasts.some((b) => Math.hypot(b.x - m.x, b.y - m.y) < b.r)) { m.dead = true; s.score += 25 * s.wave; K.burst(m.x, m.y, '#ffd93a', 8); continue; }
+      if (m.y >= GY) {
+        m.dead = true; s.blasts.push({ x: m.x, y: GY, r: 2, t: 0.2, hostile: true }); K.shake(8); K.sfx('boom');
+        CITIES.forEach((c, i) => { if (s.cities[i] && Math.abs(c - m.x) < 30) { s.cities[i] = false; K.burst(c, GY - 10, ['#ff8a3a', '#ff3355'], 24); } });
+        BASES.forEach((b, i) => { if (Math.abs(b - m.x) < 30) s.ammo[i] = 0; });
+      }
+    }
+    s.ms = s.ms.filter((m) => !m.dead); add.forEach(([x, y]) => spawn(s, x, y, false));
+    if (!s.cities.some(Boolean)) return K.end(s, { score: s.score, won: false, title: 'THE CITIES FELL', text: `Wave ${s.wave}` });
+    if (s.toSpawn <= 0 && !s.ms.length && !s.shots.length) { const bonus = s.cities.filter(Boolean).length * 100 + s.ammo.reduce((a, b) => a + b, 0) * 5; s.score += bonus; K.floatText(`WAVE CLEAR +${bonus}`, 480, 240, '#3dffa0', 26); K.sfx('win'); s.pause = 2; wave(s); }
+  },
+  draw(s) {
+    for (let i = 0; i < 60; i++) K.circle((i * 167) % 960, (i * 59) % 400, 1, '#ffffff55');
+    K.rect(0, GY, 960, 50, '#3a2a14'); K.rect(0, GY, 960, 4, '#ffd93a');
+    CITIES.forEach((c, i) => { if (s.cities[i]) { [[-22, 18], [-10, 30], [2, 22], [12, 34]].forEach(([dx, h]) => K.rect(c + dx, GY - h, 10, h, '#22e6ff')); } else K.rect(c - 22, GY - 6, 44, 6, '#552'); });
+    BASES.forEach((b, i) => { K.poly([[b - 30, GY], [b, GY - 30], [b + 30, GY]], s.ammo[i] ? '#3dffa0' : '#554'); for (let k = 0; k < s.ammo[i]; k++) K.rect(b - 25 + (k % 5) * 10, GY + 12 + Math.floor(k / 5) * 10, 6, 6, '#fff'); });
+    s.ms.forEach((m) => { K.line(m.sx, m.sy, m.x, m.y, '#ff335588', 2); K.glow('#ff3355', 10); K.circle(m.x, m.y, 3, '#fff'); K.noGlow(); });
+    s.shots.forEach((o) => { K.line(o.x - o.vx * 0.03, o.y - o.vy * 0.03, o.x, o.y, '#22e6ff', 2); K.text('✕', o.tx, o.ty, 12, '#22e6ff88'); });
+    s.blasts.forEach((b) => { K.glow(b.hostile ? '#ff8a3a' : '#ffd93a', 20); K.circle(b.x, b.y, b.r, b.hostile ? '#ff8a3a' : `hsl(${(b.t * 600) % 360},100%,70%)`); K.noGlow(); });
+    K.text(String(s.score), 20, 24, 20, '#fff', 'left', 'd'); K.text(`WAVE ${s.wave}`, 940, 24, 16, '#ffd93a', 'right', 'd');
+    if (s.pause > 0) K.text(`WAVE ${s.wave}`, 480, 220, 40, '#fff', 'center', 'd', 16);
+    if (!K.attract) K.ring(K.mouse.x, K.mouse.y, 10, '#22e6ff', 2);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 18) return; const m = s.ms.filter((q) => !s.shots.some((o) => Math.hypot(o.tx - q.x, o.ty - q.y) < 60)).sort((a, b) => b.y - a.y)[0]; if (m) K.vmouse(m.x + m.vx * 0.6, m.y + m.vy * 0.6, true); },
+});
+</script></body></html>
