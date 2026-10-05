@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tiny Planet</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tiny-planet","n":5,"title":"TINY PLANET","genre":"mystery","desc":"Run laps around a planet the size of a house. Jump the rocks that grow out of the ground, grab gems, and watch out: the planet spins faster and shrinks a little with every lap.","controls":"Space / ↑ / tap = jump (hold for higher) · ← → change direction","scoreLabel":"GEMS","tasks":[{"stat":"score","target":15,"text":"Collect 15 gems on Tiny Planet"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CX = 480, CY = 300;
+K.game({
+  bg: '#05030f',
+  init(s) {
+    s.R = 150; s.a = -Math.PI / 2; s.dir = 1; s.h = 0; s.vh = 0; s.speed = 1.1; s.gems = 0; s.laps = 0; s.dist = 0;
+    s.rocks = []; s.items = []; for (let i = 0; i < 3; i++) s.rocks.push({ a: -Math.PI / 2 + 1.6 + i * 1.6, hgt: 22 + i * 4 });
+    for (let i = 0; i < 4; i++) s.items.push({ a: K.rand(0, 6.28), h: K.rand(30, 90) });
+    s.stars = Array.from({ length: 80 }, () => [K.rand(0, 960), K.rand(0, 540), K.rand(0.4, 1.6)]);
+  },
+  update(s, dt) {
+    if (K.tap('ArrowLeft', 'KeyA')) s.dir = -1; if (K.tap('ArrowRight', 'KeyD')) s.dir = 1;
+    const onGround = s.h <= 0;
+    if ((K.tap('Space', 'ArrowUp', 'KeyW') || K.mouse.clicked) && onGround) { s.vh = 420; K.sfx('jump'); }
+    if (!K.down('Space', 'ArrowUp', 'KeyW') && !K.mouse.down && s.vh > 150) s.vh = 150;
+    s.vh -= 1100 * dt; s.h = Math.max(0, s.h + s.vh * dt); if (s.h <= 0) s.vh = 0;
+    const da = (s.speed * s.dir * dt * 150) / s.R; s.a += da; s.dist += Math.abs(da);
+    if (s.dist >= Math.PI * 2) { s.dist -= Math.PI * 2; s.laps++; s.speed += 0.12; s.R = Math.max(95, s.R - 6); s.rocks.push({ a: s.a + Math.PI, hgt: 20 + Math.random() * 16 }); K.sfx('power'); K.floatText(`LAP ${s.laps}`, CX, CY, '#22e6ff'); }
+    const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    for (const r of s.rocks) if (Math.abs(angDiff(r.a, s.a)) * s.R < 16 && s.h < r.hgt - 4) { K.sfx('hit'); K.shake(12); return K.end(s, { score: s.gems, won: null, title: 'TRIPPED', text: `${s.gems} gems, ${s.laps} laps` }); }
+    for (const it of s.items) if (Math.abs(angDiff(it.a, s.a)) * s.R < 18 && Math.abs(it.h - s.h - 16) < 24) { s.gems++; K.sfx('coin'); it.a = s.a + K.rand(1.5, 4.5); it.h = K.rand(20, 100); }
+  },
+  draw(s) {
+    s.stars.forEach(([x, y, r]) => K.circle(x, y, r, '#ffffff77'));
+    const c = K.ctx();
+    K.glow('#3dffa0', 30); K.circle(CX, CY, s.R, '#1c5a3a'); K.noGlow();
+    K.circle(CX - s.R * 0.3, CY - s.R * 0.25, s.R * 0.3, '#2a7a4e'); K.circle(CX + s.R * 0.4, CY + s.R * 0.3, s.R * 0.2, '#2a7a4e');
+    const at = (a, h) => [CX + Math.cos(a) * (s.R + h), CY + Math.sin(a) * (s.R + h)];
+    s.rocks.forEach((r) => { c.save(); const [x, y] = at(r.a, 0); c.translate(x, y); c.rotate(r.a + Math.PI / 2); K.poly([[-12, 0], [0, -r.hgt], [12, 0]], '#8a8aa8'); c.restore(); });
+    s.items.forEach((it) => { const [x, y] = at(it.a, it.h); K.glow('#ff2bd6', 12); K.poly([[x, y - 9], [x + 7, y], [x, y + 9], [x - 7, y]], '#ff2bd6'); K.noGlow(); });
+    const [px, py] = at(s.a, s.h + 14);
+    c.save(); c.translate(px, py); c.rotate(s.a + Math.PI / 2);
+    K.glow('#ffd93a', 14); K.rect(-9, -14, 18, 24, '#ffd93a', 6); K.noGlow(); K.circle(s.dir * 4, -6, 3, '#111');
+    const leg = Math.sin(K.time() * 20) * 5; K.line(-4, 10, -4 - leg, 16, '#ffd93a', 3); K.line(4, 10, 4 + leg, 16, '#ffd93a', 3);
+    c.restore();
+    K.text(`◆ ${s.gems}`, 20, 30, 24, '#ff2bd6', 'left', 'd');
+    K.text(`LAP ${s.laps + 1}`, 940, 30, 18, '#22e6ff', 'right', 'd');
+  },
+  ai(s) {
+    const near = s.rocks.some((r) => { const d = Math.atan2(Math.sin(r.a - s.a), Math.cos(r.a - s.a)) * s.dir; return d > 0 && d * s.R < 60; });
+    K.vhold('Space', near); if (near && s.h <= 0) K.vtap('Space');
+  },
+});
+</script></body></html>

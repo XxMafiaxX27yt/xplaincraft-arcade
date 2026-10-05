@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wrong Controls</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"wrong-controls","n":4,"title":"WRONG CONTROLS","genre":"mystery","desc":"Grab coins and dodge the chasers. Easy, except every few seconds your controls get scrambled: up might be left, left might be down. The panel shows the new mapping. Keep up.","controls":"Arrow keys / WASD (or swipe-drag) - but they won't stay that way","scoreLabel":"COINS","tasks":[{"stat":"score","target":20,"text":"Grab 20 coins in Wrong Controls"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const NAMES = ['up', 'down', 'left', 'right'], ARROW = { up: '↑', down: '↓', left: '←', right: '→' }, VEC = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+function scramble(s) {
+  let m; do { m = K.shuffle(NAMES.slice()); } while (m.every((v, i) => v === NAMES[i]));
+  s.map = Object.fromEntries(NAMES.map((k, i) => [k, m[i]])); s.mapT = Math.max(4, 8 - s.score * 0.15); s.glitch = 0.5; K.sfx('scare');
+}
+const coin = (s) => ({ x: K.rand(80, 880), y: K.rand(90, 480) });
+K.game({
+  bg: '#0e0b14',
+  init(s) { s.p = { x: 480, y: 300 }; s.score = 0; s.map = { up: 'up', down: 'down', left: 'left', right: 'right' }; s.mapT = 6; s.glitch = 0; s.c = coin(s); s.en = [{ x: 80, y: 80 }]; s.time = 0; },
+  update(s, dt) {
+    s.time += dt; s.mapT -= dt; s.glitch -= dt;
+    if (s.mapT <= 0) scramble(s);
+    let vx = 0, vy = 0;
+    const press = { up: K.down('ArrowUp', 'KeyW'), down: K.down('ArrowDown', 'KeyS'), left: K.down('ArrowLeft', 'KeyA'), right: K.down('ArrowRight', 'KeyD') };
+    if (K.mouse.down && !Object.values(press).some(Boolean)) { const dx = K.mouse.x - s.p.x, dy = K.mouse.y - s.p.y; if (Math.abs(dx) > Math.abs(dy)) press[dx > 0 ? 'right' : 'left'] = Math.abs(dx) > 10; else press[dy > 0 ? 'down' : 'up'] = Math.abs(dy) > 10; }
+    NAMES.forEach((k) => { if (press[k]) { const v = VEC[s.map[k]]; vx += v[0]; vy += v[1]; } });
+    s.p.x = K.clamp(s.p.x + vx * 300 * dt, 40, 920); s.p.y = K.clamp(s.p.y + vy * 300 * dt, 80, 500);
+    if (K.dist(s.p, s.c) < 26) { s.score++; K.sfx('coin'); K.burst(s.c.x, s.c.y, '#ffd93a', 10); s.c = coin(s); if (s.score % 5 === 0) s.en.push({ x: K.pick([60, 900]), y: K.pick([90, 490]) }); }
+    for (const e of s.en) {
+      const a = K.angle(e, s.p), sp = 120 + s.time * 1.5; e.x += Math.cos(a) * sp * dt; e.y += Math.sin(a) * sp * dt;
+      if (K.dist(e, s.p) < 24) { K.sfx('hit'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'CAUGHT', text: `${s.score} coins, ${Math.floor(s.time)} s` }); }
+    }
+  },
+  draw(s) {
+    K.grid(40, '#c45cff', 0.06);
+    K.glow('#ffd93a', 16); K.circle(s.c.x, s.c.y, 12, '#ffd93a'); K.noGlow();
+    s.en.forEach((e) => { K.glow('#ff3355', 14); K.circle(e.x, e.y, 16, '#ff3355'); K.noGlow(); K.circle(e.x - 5, e.y - 3, 3, '#fff'); K.circle(e.x + 5, e.y - 3, 3, '#fff'); });
+    K.glow('#22e6ff', 16); K.rect(s.p.x - 15, s.p.y - 15, 30, 30, '#22e6ff', 8); K.noGlow();
+    K.rect(300, 10, 360, 56, 'rgba(10,8,20,.85)', 10); K.stroke(300, 10, 360, 56, s.glitch > 0 ? '#ff3355' : '#c45cff', 2, 10);
+    NAMES.forEach((k, i) => { K.text(`${ARROW[k]}=${ARROW[s.map[k]]}`, 345 + i * 90, 38, 22, s.map[k] === k ? '#8e88b8' : '#fff', 'center', 'd'); });
+    K.rect(300, 68, 360 * Math.max(0, s.mapT / 8), 3, '#c45cff');
+    K.text(`${s.score}`, 20, 30, 26, '#ffd93a', 'left', 'd');
+    if (s.glitch > 0) { K.alpha(s.glitch); for (let i = 0; i < 8; i++) K.rect(0, K.rand(0, 540), 960, K.rand(2, 10), K.pick(['#ff2bd6', '#22e6ff'])); K.alpha(1); K.text('CONTROLS SCRAMBLED', 480, 270, 34, '#fff', 'center', 'd', 18); }
+  },
+  ai(s) {
+    const inv = Object.fromEntries(Object.entries(s.map).map(([k, v]) => [v, k]));
+    const t = s.c, dx = t.x - s.p.x, dy = t.y - s.p.y;
+    const want = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+    const key = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+    NAMES.forEach((k) => K.vhold(key[k], k === inv[want]));
+  },
+});
+</script></body></html>

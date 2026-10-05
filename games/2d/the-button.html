@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Button</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-button","n":3,"title":"THE BUTTON","genre":"mystery","desc":"There is a button. Do not press it. The game will beg, bribe, trick and threaten you. Every second you hold out is a point. Last two minutes and the game gives up. There are several endings.","controls":"Don't click the button. (Everything else you can click.)","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":120,"text":"Never press The Button"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// the script of the game talking to you: [time, text, effect]
+const BEATS = [
+  [0, 'This is a button. Please do not press it.'], [5, 'Seriously. Do not.'], [10, 'It looks very pressable though, doesn\'t it?'],
+  [15, 'Okay, it\'s a little bigger now. That\'s not a hint.', 'grow'], [21, 'Pressing it gives you 100 points. Probably.', 'bribe'],
+  [28, 'I moved it next to your mouse. For no reason.', 'chase'], [35, 'The button is lonely.'], [40, 'Fine. The button is now GREEN. Green means go.', 'green'],
+  [47, 'That other button says "DON\'T PRESS". This one is safe. Trust me.', 'swap'], [55, 'Everyone else pressed it by now. Just saying.'],
+  [62, 'I\'ll count down. 5…', 'count'], [63, '4…'], [64, '3…'], [65, '2…'], [66, '1… press it NOW!'], [68, 'Okay that was a trick. You\'re good at this.'],
+  [74, 'Here, have lots of buttons.', 'many'], [84, 'One of them is the button. Can you remember which?'], [92, 'I\'m getting tired.'],
+  [100, 'The button is crying.', 'cry'], [108, 'Please. Just once. For me.'], [115, 'I give up in 5 seconds unless you press it…'], [120, 'END'],
+];
+const ENDINGS = [
+  [10, 'INSTANT PRESSER', 'You lasted less than ten seconds. The button thanks you.'],
+  [30, 'TEMPTED', 'The bribe got you. The points were not real.'],
+  [62, 'CURIOUS', 'You held out for a while. Curiosity won.'],
+  [70, 'COUNTDOWN VICTIM', 'You pressed on the countdown. Rookie mistake.'],
+  [119, 'ALMOST', 'So close. The button was really trying.'],
+];
+K.game({
+  bg: '#101014', touch: { stick: false, buttons: [] }, noTitleSim: true,
+  init(s) { s.t = 0; s.bi = 0; s.text = BEATS[0][1]; s.b = { x: 480, y: 300, r: 60 }; s.green = false; s.decoys = []; s.cry = false; s.shake = 0; s.over = false; },
+  update(s, dt) {
+    if (s.over) return;
+    s.t += dt;
+    while (s.bi < BEATS.length && s.t >= BEATS[s.bi][0]) {
+      const [, txt, fx] = BEATS[s.bi]; s.bi++;
+      if (txt === 'END') { s.over = true; K.sfx('win'); return K.end(s, { score: 120, won: true, title: 'YOU NEVER PRESSED IT', text: 'The button gives up. You are the true ending.' }); }
+      s.text = txt; K.sfx('blip');
+      if (fx === 'grow') s.b.r = 90; if (fx === 'green') s.green = true; if (fx === 'cry') s.cry = true;
+      if (fx === 'swap') s.decoys = [{ x: 220, y: 320, r: 50, label: "DON'T PRESS", real: false }];
+      if (fx === 'many') { s.decoys = Array.from({ length: 7 }, (_, i) => ({ x: 140 + i * 115, y: 400, r: 34, label: '', real: false })); s.b.r = 34; s.b.x = K.pick(s.decoys).x; s.b.y = 300; }
+      if (fx === 'chase') s.chase = true;
+    }
+    if (s.chase) { s.b.x = K.lerp(s.b.x, K.clamp(K.mouse.x + 90, 100, 860), dt * 1.4); s.b.y = K.lerp(s.b.y, K.clamp(K.mouse.y + 60, 160, 470), dt * 1.4); if (s.t > 40) s.chase = false; }
+    s.shake = Math.max(0, s.shake - dt);
+    if (!K.mouse.clicked) return;
+    const m = K.mouse;
+    const d = s.decoys.find((x) => Math.hypot(m.x - x.x, m.y - x.y) < x.r);
+    if (d) { s.text = 'That one does nothing. Phew? Or…?'; K.sfx('tick'); return; }
+    if (Math.hypot(m.x - s.b.x, m.y - s.b.y) < s.b.r) {
+      s.over = true; K.sfx('boom'); K.shake(20); K.flash('#ff3355', 0.5);
+      const t = Math.floor(s.t), e = ENDINGS.find((x) => t < x[0]) || ENDINGS[ENDINGS.length - 1];
+      return K.end(s, { score: t, won: false, title: e[1], text: e[2] + ` (${t} s)` });
+    }
+    s.shake = 0.3; K.sfx('tick');
+  },
+  draw(s) {
+    K.wrapText(s.text, 480, 90, 760, 28, '#f0ecff', 1.3, 'center', 'u');
+    s.decoys.forEach((d) => { K.circle(d.x, d.y + 8, d.r, '#5a0f18'); K.circle(d.x, d.y, d.r, '#c8243a'); if (d.label) K.text(d.label, d.x, d.y - d.r - 16, 12, '#fff', 'center', 'd'); });
+    const b = s.b, col = s.green ? '#2fd16a' : '#e82a44', dark = s.green ? '#0f5a28' : '#6a0f1a';
+    K.rect(b.x - b.r - 20, b.y + b.r * 0.4, (b.r + 20) * 2, 30, '#2a2a33', 8);
+    K.circle(b.x, b.y + 10, b.r, dark); K.glow(col, 20); K.circle(b.x, b.y, b.r, col); K.noGlow();
+    K.alpha(0.35); K.circle(b.x - b.r * 0.3, b.y - b.r * 0.35, b.r * 0.3, '#fff'); K.alpha(1);
+    if (s.cry) { K.circle(b.x - b.r * 0.3, b.y - 8, 6, '#111'); K.circle(b.x + b.r * 0.3, b.y - 8, 6, '#111'); K.circle(b.x - b.r * 0.3, b.y + 6 + ((s.t * 40) % 30), 4, '#6ad1ff'); }
+    K.text(`${Math.floor(s.t)} s`, 480, 515, 18, '#8e88b8', 'center', 'm');
+    K.rect(330, 528, 300, 6, '#222', 3); K.rect(330, 528, 300 * Math.min(1, s.t / 120), 6, '#3dffa0', 3);
+  },
+});
+</script></body></html>

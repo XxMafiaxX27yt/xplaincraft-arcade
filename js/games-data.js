@@ -1504,6 +1504,139 @@ export const GAME_LIST = [
 "cover": "games/covers/ball-sort.png"
 },
 {
+"id": "gravity-flip",
+"n": 1,
+"title": "GRAVITY FLIP",
+"genre": "mystery",
+"desc": "You can't jump. You can only flip gravity: floor to ceiling and back. Spikes on both sides, gaps in the track, and every so often the level fights back by flipping YOUR gravity for you.",
+"controls": "Space / click / tap = flip gravity",
+"scoreLabel": "METRES",
+"tasks": [
+{
+"stat": "score",
+"target": 500,
+"text": "Run 500 m in Gravity Flip"
+}
+],
+"file": "games/2d/gravity-flip.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/gravity-flip.png"
+},
+{
+"id": "mirror-mode",
+"n": 2,
+"title": "MIRROR MODE",
+"genre": "mystery",
+"desc": "You control two runners at once with the same keys, but the bottom one is mirrored: when the top goes left, the bottom goes right. Blocks rain on both worlds. Keep BOTH alive and grab the stars.",
+"controls": "← → / A D (or drag) moves both, mirrored",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Score 40 in Mirror Mode"
+}
+],
+"file": "games/2d/mirror-mode.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mirror-mode.png"
+},
+{
+"id": "the-button",
+"n": 3,
+"title": "THE BUTTON",
+"genre": "mystery",
+"desc": "There is a button. Do not press it. The game will beg, bribe, trick and threaten you. Every second you hold out is a point. Last two minutes and the game gives up. There are several endings.",
+"controls": "Don't click the button. (Everything else you can click.)",
+"scoreLabel": "SECONDS",
+"tasks": [
+{
+"stat": "score",
+"target": 120,
+"text": "Never press The Button"
+}
+],
+"file": "games/2d/the-button.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-button.png"
+},
+{
+"id": "wrong-controls",
+"n": 4,
+"title": "WRONG CONTROLS",
+"genre": "mystery",
+"desc": "Grab coins and dodge the chasers. Easy, except every few seconds your controls get scrambled: up might be left, left might be down. The panel shows the new mapping. Keep up.",
+"controls": "Arrow keys / WASD (or swipe-drag) - but they won't stay that way",
+"scoreLabel": "COINS",
+"tasks": [
+{
+"stat": "score",
+"target": 20,
+"text": "Grab 20 coins in Wrong Controls"
+}
+],
+"file": "games/2d/wrong-controls.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/wrong-controls.png"
+},
+{
+"id": "tiny-planet",
+"n": 5,
+"title": "TINY PLANET",
+"genre": "mystery",
+"desc": "Run laps around a planet the size of a house. Jump the rocks that grow out of the ground, grab gems, and watch out: the planet spins faster and shrinks a little with every lap.",
+"controls": "Space / ↑ / tap = jump (hold for higher) · ← → change direction",
+"scoreLabel": "GEMS",
+"tasks": [
+{
+"stat": "score",
+"target": 15,
+"text": "Collect 15 gems on Tiny Planet"
+}
+],
+"file": "games/2d/tiny-planet.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/tiny-planet.png"
+},
+{
+"id": "cursor-chaos",
+"n": 11,
+"title": "CURSOR CHAOS",
+"genre": "mystery",
+"desc": "Your mouse pointer IS the hero. Sweep up the data bits while antivirus blobs hunt your cursor. Move too fast and you glitch out of control. The screen keeps adding hostile UI.",
+"controls": "Move the mouse / drag your finger. That's it.",
+"scoreLabel": "BITS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Collect 40 bits in Cursor Chaos"
+}
+],
+"cursor": "off",
+"file": "games/2d/cursor-chaos.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/cursor-chaos.png"
+},
+{
 "id": "draw-guess",
 "n": 89,
 "title": "DRAW & GUESS",

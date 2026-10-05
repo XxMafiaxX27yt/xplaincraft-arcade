@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gravity Flip</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"gravity-flip","n":1,"title":"GRAVITY FLIP","genre":"mystery","desc":"You can't jump. You can only flip gravity: floor to ceiling and back. Spikes on both sides, gaps in the track, and every so often the level fights back by flipping YOUR gravity for you.","controls":"Space / click / tap = flip gravity","scoreLabel":"METRES","tasks":[{"stat":"score","target":500,"text":"Run 500 m in Gravity Flip"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const TOP = 80, BOT = 460, PX = 220;
+// segments: each has floor/ceil present + spikes
+function seg(s, x) {
+  const w = K.rand(160, 320), r = Math.random(), hard = Math.min(1, s.dist / 1500);
+  const g = { x, w, floor: true, ceil: true, spikes: [] };
+  if (r < 0.25 + hard * 0.15) g.floor = false; else if (r < 0.5 + hard * 0.2) g.ceil = false;
+  const n = K.irand(0, 1 + Math.floor(hard * 2));
+  for (let i = 0; i < n; i++) g.spikes.push({ at: K.rand(30, w - 50), top: Math.random() < 0.5 });
+  s.segs.push(g);
+}
+K.game({
+  bg: '#0c0618',
+  init(s) {
+    s.y = BOT - 20; s.vy = 0; s.g = 1; s.dist = 0; s.speed = 300; s.segs = [{ x: 0, w: 900, floor: true, ceil: true, spikes: [] }]; s.next = 900; s.troll = 8; s.warn = 0; s.trail = [];
+    while (s.next < 1400) { seg(s, s.next); s.next += s.segs[s.segs.length - 1].w; }
+  },
+  update(s, dt) {
+    s.speed = Math.min(620, 300 + s.dist * 0.15);
+    const dx = s.speed * dt; s.dist += dx / 10;
+    s.segs.forEach((g) => (g.x -= dx)); s.next -= dx;
+    s.segs = s.segs.filter((g) => g.x + g.w > -20);
+    while (s.next < 1300) { seg(s, s.next); s.next += s.segs[s.segs.length - 1].w; }
+    const here = s.segs.find((g) => PX >= g.x && PX < g.x + g.w);
+    const onSurface = (s.g > 0 && s.y >= BOT - 20 && here?.floor) || (s.g < 0 && s.y <= TOP + 20 && here?.ceil);
+    if (K.action() && onSurface) { s.g *= -1; K.tone(s.g > 0 ? 300 : 600, 0.12, 'triangle', 0.06, s.g > 0 ? -150 : 300); }
+    // the level fights back
+    s.troll -= dt;
+    if (s.troll < 1.2 && s.troll > 0) s.warn = s.troll;
+    if (s.troll <= 0) { s.g *= -1; s.troll = K.rand(6, 12); s.warn = 0; K.sfx('scare'); K.shake(6); K.flash('#c45cff', 0.15); }
+    s.vy += s.g * 2600 * dt; s.vy = K.clamp(s.vy, -900, 900); s.y += s.vy * dt;
+    if (s.g > 0 && s.y > BOT - 20 && here?.floor && s.y < BOT + 10) { s.y = BOT - 20; s.vy = 0; }
+    if (s.g < 0 && s.y < TOP + 20 && here?.ceil && s.y > TOP - 10) { s.y = TOP + 20; s.vy = 0; }
+    s.trail.push(s.y); if (s.trail.length > 14) s.trail.shift();
+    let dead = s.y > 600 || s.y < -60;
+    if (here) for (const sp of here.spikes) { const sx = here.x + sp.at; if (Math.abs(sx + 15 - PX) < 22 && ((sp.top && s.y < TOP + 50) || (!sp.top && s.y > BOT - 50))) dead = true; }
+    if (dead) { K.sfx('hit'); K.shake(14); K.burst(PX, K.clamp(s.y, 0, 540), ['#c45cff', '#22e6ff'], 26); K.end(s, { score: Math.floor(s.dist), won: null, title: 'SPLAT', text: `${Math.floor(s.dist)} m` }); }
+  },
+  draw(s) {
+    for (let i = 0; i < 30; i++) K.rect((((i * 211 - s.dist * 3) % 1000) + 1000) % 1000 - 20, (i * 73) % 540, 2, 2, '#ffffff22');
+    s.segs.forEach((g) => {
+      if (g.floor) { K.rect(g.x, BOT, g.w + 1, 80, '#1d1240'); K.glow('#22e6ff', 10); K.rect(g.x, BOT, g.w + 1, 4, '#22e6ff'); K.noGlow(); }
+      if (g.ceil) { K.rect(g.x, 0, g.w + 1, TOP, '#1d1240'); K.glow('#ff2bd6', 10); K.rect(g.x, TOP - 4, g.w + 1, 4, '#ff2bd6'); K.noGlow(); }
+      g.spikes.forEach((sp) => { const x = g.x + sp.at; if (sp.top && g.ceil) K.poly([[x, TOP], [x + 30, TOP], [x + 15, TOP + 34]], '#ff3355'); if (!sp.top && g.floor) K.poly([[x, BOT], [x + 30, BOT], [x + 15, BOT - 34]], '#ff3355'); });
+    });
+    s.trail.forEach((y, i) => { K.alpha(i / s.trail.length * 0.4); K.rect(PX - 16 - (s.trail.length - i) * 6, y - 14, 28, 28, '#c45cff', 6); }); K.alpha(1);
+    K.glow('#c45cff', 18); K.rect(PX - 16, s.y - 16, 32, 32, '#c45cff', 7); K.noGlow();
+    K.circle(PX + 6, s.y + (s.g > 0 ? -4 : 4), 5, '#fff'); K.circle(PX + 7, s.y + (s.g > 0 ? -4 : 4), 2.5, '#111');
+    K.text(`${Math.floor(s.dist)} m`, 480, 40, 22, '#fff', 'center', 'd');
+    if (s.warn > 0) K.text('THE LEVEL IS ABOUT TO FLIP YOU', 480, 270, 22, '#c45cff', 'center', 'd', 14);
+  },
+  ai(s) {
+    const ahead = s.segs.find((g) => g.x + g.w > PX + 40 && g.x < PX + 160);
+    const here = s.segs.find((g) => PX >= g.x && PX < g.x + g.w);
+    const onFloor = s.g > 0, need = (ahead && ((onFloor && (!ahead.floor || ahead.spikes.some((p) => !p.top && ahead.x + p.at - PX < 140 && ahead.x + p.at > PX))) || (!onFloor && (!ahead.ceil || ahead.spikes.some((p) => p.top && ahead.x + p.at - PX < 140 && ahead.x + p.at > PX)))));
+    if (need && (onFloor ? ahead.ceil : ahead.floor)) K.vtap('Space');
+  },
+});
+</script></body></html>

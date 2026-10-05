@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mirror Mode</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mirror-mode","n":2,"title":"MIRROR MODE","genre":"mystery","desc":"You control two runners at once with the same keys, but the bottom one is mirrored: when the top goes left, the bottom goes right. Blocks rain on both worlds. Keep BOTH alive and grab the stars.","controls":"← → / A D (or drag) moves both, mirrored","scoreLabel":"POINTS","tasks":[{"stat":"score","target":40,"text":"Score 40 in Mirror Mode"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const H = 270, PW = 34;
+function drop(s, world) {
+  const star = Math.random() < 0.22;
+  s.items.push({ w: world, x: K.rand(40, 920), y: -30, vy: K.rand(150, 230) + s.time * 4, star, size: star ? 14 : K.rand(26, 50) });
+}
+K.game({
+  bg: '#0a0a14',
+  init(s) { s.x = 480; s.items = []; s.score = 0; s.time = 0; s.next = 0; s.hp = 3; },
+  update(s, dt) {
+    s.time += dt;
+    const d = K.dir();
+    if (d.x) s.x += d.x * 420 * dt; else if (K.mouse.down) s.x += K.clamp(K.mouse.x - s.x, -420 * dt, 420 * dt);
+    s.x = K.clamp(s.x, 30, 930);
+    s.next -= dt;
+    if (s.next <= 0) { drop(s, Math.random() < 0.5 ? 0 : 1); s.next = Math.max(0.18, 0.6 - s.time * 0.008); }
+    const px = [s.x, 960 - s.x];
+    for (const it of s.items) {
+      it.y += it.vy * dt;
+      const pyTop = H - 30, x = px[it.w];
+      if (!it.done && it.y + it.size / 2 > pyTop && it.y - it.size / 2 < H - 4 && Math.abs(it.x - x) < it.size / 2 + PW / 2) {
+        it.done = true;
+        const by = it.w * H + it.y;
+        if (it.star) { s.score += 5; K.sfx('coin'); K.floatText('+5', it.x, by - 20, '#ffd93a'); }
+        else { s.hp--; K.sfx('hit'); K.shake(8); K.flash(it.w ? '#22e6ff' : '#ff2bd6', 0.12); if (s.hp <= 0) return K.end(s, { score: s.score + Math.floor(s.time), won: null, title: it.w ? 'THE MIRROR BROKE' : 'SQUASHED', text: `${Math.floor(s.time)} s alive` }); }
+      }
+    }
+    s.items = s.items.filter((it) => !it.done && it.y < H + 60);
+  },
+  draw(s) {
+    const worlds = [['#1a0a24', '#ff2bd6'], ['#06182a', '#22e6ff']];
+    worlds.forEach(([bg, c], w) => {
+      const c2 = K.ctx(); c2.save();
+      if (w === 1) { c2.translate(0, H); }
+      K.rect(0, 0, 960, H, bg);
+      for (let i = 0; i < 12; i++) K.rect(i * 80 + ((s.time * (w ? -20 : 20)) % 80 + 80) % 80, 0, 1, H, c + '18');
+      K.rect(0, H - 6, 960, 6, c);
+      s.items.filter((it) => it.w === w).forEach((it) => {
+        if (it.star) { K.glow('#ffd93a', 14); K.text('★', it.x, it.y, 28, '#ffd93a'); K.noGlow(); }
+        else { K.rect(it.x - it.size / 2, it.y - it.size / 2, it.size, it.size, c + '55', 6); K.stroke(it.x - it.size / 2, it.y - it.size / 2, it.size, it.size, c, 2, 6); }
+      });
+      const x = w ? 960 - s.x : s.x;
+      K.glow(c, 16); K.rect(x - PW / 2, H - 36, PW, 30, c, 8); K.noGlow();
+      K.circle(x + (w ? -6 : 6), H - 26, 4, '#fff');
+      c2.restore();
+    });
+    K.rect(0, H - 2, 960, 4, '#fff');
+    K.text('MIRROR', 480, H + 18, 12, '#ffffff66', 'center', 'd');
+    K.text(String(s.score + Math.floor(s.time)), 20, 24, 22, '#fff', 'left', 'd');
+    K.text('♥'.repeat(Math.max(0, s.hp)), 940, 24, 22, '#ff3355', 'right');
+  },
+  ai(s) {
+    const px = [s.x, 960 - s.x];
+    const threat = s.items.filter((it) => !it.star && it.y > 120).find((it) => Math.abs(it.x - px[it.w]) < it.size / 2 + 30);
+    if (threat) { const away = threat.w === 0 ? (threat.x < s.x ? 1 : -1) : (threat.x < px[1] ? -1 : 1); K.vhold('ArrowRight', away > 0); K.vhold('ArrowLeft', away < 0); }
+    else { K.vhold('ArrowRight', false); K.vhold('ArrowLeft', false); }
+  },
+});
+</script></body></html>

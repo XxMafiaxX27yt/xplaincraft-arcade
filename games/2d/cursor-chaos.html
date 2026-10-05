@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cursor Chaos</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"cursor-chaos","n":11,"title":"CURSOR CHAOS","genre":"mystery","desc":"Your mouse pointer IS the hero. Sweep up the data bits while antivirus blobs hunt your cursor. Move too fast and you glitch out of control. The screen keeps adding hostile UI.","controls":"Move the mouse / drag your finger. That's it.","scoreLabel":"BITS","tasks":[{"stat":"score","target":40,"text":"Collect 40 bits in Cursor Chaos"}],"cursor":"off"}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+document.documentElement.setAttribute('data-xc-cursor', 'off'); document.documentElement.style.cursor = 'none';
+const bit = () => ({ x: K.rand(60, 900), y: K.rand(70, 500), t: 0 });
+K.game({
+  bg: '#04060c', touch: { stick: false, buttons: [] },
+  init(s) { s.c = { x: 480, y: 270 }; s.bits = [bit(), bit(), bit()]; s.en = [{ x: 60, y: 60, r: 18 }]; s.score = 0; s.time = 0; s.glitch = 0; s.walls = []; s.trail = []; s.lastM = { x: 480, y: 270 }; },
+  update(s, dt) {
+    s.time += dt;
+    const m = K.mouse, sp = Math.hypot(m.x - s.lastM.x, m.y - s.lastM.y) / dt; s.lastM = { x: m.x, y: m.y };
+    if (sp > 2600 && s.glitch <= 0 && s.time > 1) { s.glitch = 0.7; K.sfx('wrong'); }
+    if (s.glitch > 0) { s.glitch -= dt; s.c.x += K.rand(-12, 12); s.c.y += K.rand(-12, 12); } else { s.c.x = K.lerp(s.c.x, m.x, Math.min(1, dt * 22)); s.c.y = K.lerp(s.c.y, m.y, Math.min(1, dt * 22)); }
+    s.c.x = K.clamp(s.c.x, 0, 960); s.c.y = K.clamp(s.c.y, 0, 540);
+    s.trail.push({ ...s.c }); if (s.trail.length > 16) s.trail.shift();
+    s.bits.forEach((b, i) => { b.t += dt; if (K.dist(b, s.c) < 18) { s.score++; K.sfx('coin'); K.burst(b.x, b.y, '#3dffa0', 8); s.bits[i] = bit(); if (s.score % 6 === 0) s.en.push({ x: K.pick([20, 940]), y: K.rand(40, 500), r: 16 }); if (s.score % 10 === 0) s.walls.push({ x: K.rand(100, 760), y: K.rand(100, 420), w: K.rand(90, 200), h: 36, label: K.pick(['OK', 'CANCEL', 'ARE YOU SURE?', 'UPDATE NOW', 'ERROR 404', 'ACCEPT COOKIES']), vx: K.rand(-60, 60) }); } });
+    for (const e of s.en) { const a = K.angle(e, s.c), v = 90 + s.time * 2.2; e.x += Math.cos(a) * v * dt; e.y += Math.sin(a) * v * dt; if (K.dist(e, s.c) < e.r + 4) return die(s, 'DELETED BY ANTIVIRUS'); }
+    for (const w of s.walls) { w.x += w.vx * dt; if (w.x < 20 || w.x + w.w > 940) w.vx *= -1; if (K.inRect(s.c.x, s.c.y, w)) return die(s, `CLICKED "${w.label}"`); }
+  },
+  draw(s) {
+    K.grid(30, '#22e6ff', 0.05);
+    s.bits.forEach((b) => { K.glow('#3dffa0', 10); K.text(b.t % 1 > 0.5 ? '1' : '0', b.x, b.y, 22, '#3dffa0', 'center', 'm'); K.noGlow(); });
+    s.walls.forEach((w) => { K.rect(w.x, w.y, w.w, w.h, '#d8d8e0', 4); K.rect(w.x, w.y, w.w, 8, '#3a6fd8', 3); K.text(w.label, w.x + w.w / 2, w.y + 22, 13, '#111', 'center', 'u'); });
+    s.en.forEach((e) => { K.glow('#ff3355', 16); K.circle(e.x, e.y, e.r, '#ff3355'); K.noGlow(); K.text('✚', e.x, e.y + 1, 16, '#fff'); });
+    s.trail.forEach((p, i) => { K.alpha(i / s.trail.length * 0.3); K.poly([[p.x, p.y], [p.x, p.y + 20], [p.x + 6, p.y + 15], [p.x + 13, p.y + 15]], '#22e6ff'); });
+    K.alpha(1);
+    const c = s.c, col = s.glitch > 0 ? K.pick(['#ff2bd6', '#22e6ff', '#fff']) : '#ffffff';
+    K.glow('#22e6ff', 14); K.poly([[c.x, c.y], [c.x, c.y + 22], [c.x + 6, c.y + 16], [c.x + 10, c.y + 25], [c.x + 13, c.y + 24], [c.x + 9, c.y + 15], [c.x + 16, c.y + 15]], col); K.noGlow();
+    K.text(`BITS ${s.score}`, 20, 24, 20, '#3dffa0', 'left', 'd');
+    if (s.glitch > 0) K.text('TOO FAST - GLITCHING', 480, 30, 18, '#ff2bd6', 'center', 'd');
+  },
+  ai(s) { const b = s.bits[0], e = s.en[0]; let tx = b.x, ty = b.y; if (K.dist(e, s.c) < 90) { tx = s.c.x + (s.c.x - e.x); ty = s.c.y + (s.c.y - e.y); } K.vmouse(K.lerp(K.mouse.x, tx, 0.08), K.lerp(K.mouse.y, ty, 0.08)); },
+});
+function die(s, why) { K.sfx('boom'); K.shake(14); K.end(s, { score: s.score, won: null, title: why, text: `${s.score} bits in ${Math.floor(s.time)} s` }); }
+</script></body></html>
