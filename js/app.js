@@ -414,9 +414,11 @@ export async function logoutFlow() {
 
 // ---------- gifts from operators ----------
 let giftOpen = false;
+// never in the middle of a game: wait until the player leaves it
+window.addEventListener('xc-game', () => setTimeout(() => !isPlaying() && showGifts(), 600));
 function showGifts() {
   const g = store.me?.inbox?.[0];
-  if (!g || giftOpen) return;
+  if (!g || giftOpen || isPlaying()) return;
   giftOpen = true;
   const items = (g.items || []).map((k) => ITEM[k]).filter(Boolean);
   const m = modal(`<div class="gift-pop"><div class="gift-ico">🎁</div><h3 class="m-title">A GIFT FROM ${esc(g.from)}</h3>

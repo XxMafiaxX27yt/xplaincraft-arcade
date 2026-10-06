@@ -12,6 +12,7 @@ function inCone(s, x, y) {
   return Math.abs(a) < CONE;
 }
 K.game({
+  touch: { buttons: [['KeyF', 'TORCH']] },
   bg: '#05080a',
   init(s) {
     s.p = { x: 480, y: 270 }; s.aim = 0; s.on = true; s.bat = 100; s.t = 0; s.shadows = []; s.spawn = 2; s.batts = [];

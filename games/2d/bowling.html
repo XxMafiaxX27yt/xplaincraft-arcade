@@ -21,6 +21,7 @@ function total(fr) {
   return t;
 }
 K.game({
+  touch: { buttons: [['Space', 'GO']] },
   bg: '#0a0614',
   init(s) { s.frames = [[]]; rack(s); newBall(s); s.msg = ''; s.msgT = 0; s.score = 0; },
   update(s, dt) {

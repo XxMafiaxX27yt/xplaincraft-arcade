@@ -26,6 +26,7 @@ function botIn(s, c) {
   return { x: K.clamp(da * 2.5, -1, 1), y: Math.abs(da) > 0.9 && c.sp > 160 ? 0.4 : -1, a: false, b: false };
 }
 K.game({
+  touch: { stick: true, buttons: [['ShiftLeft', 'DRIFT'], ['Space', 'GAS']], buttons2: [['ShiftRight', 'DRIFT'], ['Enter', 'GAS']] },
   bg: '#05040f',
   init(s) {
     s.track = TRACKS[Math.floor(K.rng() * TRACKS.length)]; s.path = sample(s.track.pts);
@@ -57,6 +58,14 @@ K.game({
       const slip = drifting ? 0.35 : 0;
       c.x += Math.cos(c.a - inp.x * slip) * c.sp * dt; c.y += Math.sin(c.a - inp.x * slip) * c.sp * dt;
       c.x = K.clamp(c.x, 10, 950); c.y = K.clamp(c.y, 10, 530);
+      // barriers on both edges: you scrape along the wall and lose speed (no cutting corners)
+      const w = nearest(s.path, c.x, c.y), lim = HALF - 9;
+      if (w.d > lim) {
+        const q = s.path[w.i], nx = (c.x - q[0]) / w.d, ny = (c.y - q[1]) / w.d;
+        c.x = q[0] + nx * lim; c.y = q[1] + ny * lim;
+        if (c.sp > 150 && !c.scrape) s.fx.push('hit');
+        c.scrape = true; c.sp *= Math.pow(0.25, dt) * 0.97;
+      } else c.scrape = false;
       for (const p of s.pads) if (Math.hypot(p[0] - c.x, p[1] - c.y) < 26 && c.boost < 0.4) { c.boost = 1; s.fx.push('whoosh'); }
       // progress along the track (laps count when crossing the start going forward)
       const frac = n.i / s.path.length;
@@ -75,7 +84,10 @@ K.game({
     const c = K.ctx();
     c.lineCap = 'round'; c.lineJoin = 'round';
     const line = (w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); s.path.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke(); };
-    K.glow('#ff2bd6', 18); line(HALF * 2 + 10, '#ff2bd6'); K.noGlow(); line(HALF * 2 + 4, '#140a26'); line(HALF * 2 - 4, '#1c1436');
+    // barrier walls: glowing rail + red / white kerb, then the road
+    K.glow('#ff2bd6', 18); line(HALF * 2 + 16, '#ff2bd6'); K.noGlow();
+    line(HALF * 2 + 12, '#ff3355'); c.setLineDash([12, 12]); line(HALF * 2 + 12, '#ffffff'); c.setLineDash([]);
+    line(HALF * 2 - 4, '#140a26'); line(HALF * 2 - 10, '#1c1436');
     c.setLineDash([16, 18]); line(2, '#ffffff22'); c.setLineDash([]);
     const s0 = s.path[0], s1 = s.path[1], ang = Math.atan2(s1[1] - s0[1], s1[0] - s0[0]) + Math.PI / 2;
     for (let k = -4; k < 4; k++) K.rect(s0[0] + Math.cos(ang) * k * 11 - 5, s0[1] + Math.sin(ang) * k * 11 - 5, 10, 10, (k % 2 ? '#fff' : '#111'));

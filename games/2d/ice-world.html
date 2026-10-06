@@ -30,6 +30,7 @@ function room(s) {
   }
 }
 K.game({
+  touch: { buttons: [['KeyR', 'RESET']] },
   bg: '#0c1a2a',
   init(s) { s.lv = 0; room(s); s.fx = [s.p[0] * T, s.p[1] * T]; },
   update(s, dt) {

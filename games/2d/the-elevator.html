@@ -14,6 +14,7 @@ function round(s) {
   s.cur = -1; s.open = 0; s.moving = 0; s.dest = -1;
 }
 K.game({
+  touch: { stick: false, buttons: [['Space', 'CLOSE']] },
   bg: '#0d0c0a',
   init(s) { s.score = 0; s.rides = 0; round(s); },
   update(s, dt) {

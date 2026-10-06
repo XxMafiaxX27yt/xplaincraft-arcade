@@ -73,6 +73,7 @@ function sim(s, dt) {
 }
 function finish(s) { if (s.over) return; s.over = true; K.end(s, { score: s.lv, won: s.lv >= LEVELS.length, title: s.lv >= LEVELS.length ? 'TOGETHER, YOU MADE IT' : 'NICE TEAMWORK', text: `${s.lv} of ${LEVELS.length} levels` }); }
 K.game({
+  get touch() { return K.local ? { buttons: [['Space', 'JUMP']], buttons2: [['Enter', 'JUMP']] } : { buttons: [['KeyQ', 'SWAP'], ['Space', 'JUMP']] }; },
   bg: '#0b0a1a',
   init(s) {
     const seats = K.seats(2).slice(0, 4);
@@ -93,7 +94,13 @@ K.game({
   update(s, dt) {
     if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { K.net.send({ t: 'in', k: K.pad() }); s.sendT = 0.04; } return; }
     if (s.solo && K.tap('Tab', 'KeyQ')) { s.ctrl = (s.ctrl + 1) % s.pl.length; K.sfx('select'); }
-    s.pl.forEach((p, i) => { p.input = s.solo ? (i === s.ctrl ? K.pad(0) : { x: 0, y: 0, a: false }) : p.me ? K.pad(p.local || 0) : s.inputs[p.id] || { x: 0, y: 0, a: false }; });
+    // solo: click / tap a blob to take it over (that tap does not also make it jump)
+    if (s.solo && K.mouse.clicked) {
+      const m = K.mouse, hit = s.pl.findIndex((p) => m.x > p.x * T - 10 && m.x < (p.x + PW) * T + 10 && m.y > OY + p.y * T - 14 && m.y < OY + (p.y + PH) * T + 10);
+      if (hit >= 0) { if (hit !== s.ctrl) K.sfx('select'); s.ctrl = hit; s.selHold = true; }
+    }
+    if (!K.mouse.down) s.selHold = false;
+    s.pl.forEach((p, i) => { p.input = s.solo ? (i === s.ctrl ? { ...K.pad(0), a: K.pad(0).a && !s.selHold } : { x: 0, y: 0, a: false }) : p.me ? K.pad(p.local || 0) : s.inputs[p.id] || { x: 0, y: 0, a: false }; });
     sim(s, dt);
     const fx = [...new Set(s.fx.splice(0))]; fx.forEach((f) => K.sfx(f));
     if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.done || fx.length) { K.net.send({ t: 'st', lv: s.lv, p: s.pl.map((p) => [+p.x.toFixed(2), +p.y.toFixed(2), p.done ? 1 : 0, +p.vx.toFixed(1)]), b: s.buttons.map((b) => (b.on ? 1 : 0)), kh: s.key?.holder || null, u: s.unlocked, c: s.clear, dt: s.deathT, fx, done: !!s.done }); s.sendT = 0.045; } }
@@ -118,9 +125,9 @@ K.game({
       K.circle(x + w * 0.33 + look, y + h * 0.38, 3.5, '#111'); K.circle(x + w * 0.67 + look, y + h * 0.38, 3.5, '#111');
       if (s.key && s.key.holder === p.id) K.text('🗝', x + w / 2, y - 12, 16, '#ffd93a');
       if (p.done) K.text('✓', x + w / 2, y - 12, 16, '#3dffa0', 'center', 'd');
-      K.text(s.solo ? (i === s.ctrl ? '▼' : '') : p.me && !K.local ? 'YOU' : p.name, x + w / 2, y - (s.key?.holder === p.id || p.done ? 28 : 10), 10, p.col, 'center', 'd');
+      K.text(s.solo ? (i === s.ctrl ? '▼' : 'zz') : p.me && !K.local ? 'YOU' : p.name, x + w / 2, y - (s.key?.holder === p.id || p.done ? 28 : 10), 10, p.col, 'center', 'd');
     });
-    if (s.solo) K.text('TAB / Q = SWAP BLOB', 940, 22, 12, '#8e88b8', 'right', 'm');
+    if (s.solo) K.text(K.isTouch ? 'SWAP or tap a blob = control the other one' : 'Q / TAB or click a blob = control the other one', 940, 22, 12, '#8e88b8', 'right', 'm');
     if (s.clear > 0) K.text('LEVEL CLEAR!', 480, 300, 40, '#3dffa0', 'center', 'd', 18);
     if (s.deathT > 0) K.text('OUCH - EVERYONE BACK TO THE START', 480, 300, 24, '#ff3355', 'center', 'd', 12);
   },

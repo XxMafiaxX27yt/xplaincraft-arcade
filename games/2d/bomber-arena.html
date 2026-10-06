@@ -64,6 +64,7 @@ function finish(s) {
   K.end(s, { score: me.kills, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'BOMBER CHAMPION' : `${champ.name} WINS`, text: s.p.map((p) => `${p.name} ${p.wins}`).join(' · ') });
 }
 K.game({
+  touch: { buttons: [['Space', 'BOMB']], buttons2: [['Enter', 'BOMB']] },
   bg: '#0b0f0b',
   init(s) { s.p = K.seats(4).slice(0, 4).map((p, i) => ({ ...p, col: COL[i], wins: 0, kills: 0 })); s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s); },
   onNet(s, d, from) {

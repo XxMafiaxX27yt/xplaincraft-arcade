@@ -27,6 +27,7 @@ function move(s, dx, dy, dr = 0) {
   return false;
 }
 K.game({
+  touch: { buttons: [['Space', 'DROP'], ['ArrowUp', '⟳'], ['KeyZ', '⟲'], ['KeyC', 'HOLD']] },
   bg: '#0a0a18',
   init(s) { s.g = Array.from({ length: H }, () => Array(W).fill(null)); s.queue = []; s.score = 0; s.lines = 0; s.level = 0; s.fall = 0; s.hold = null; s.das = 0; s.done = false; s.clearing = null; s.chill = null; spawn(s); },
   update(s, dt) {

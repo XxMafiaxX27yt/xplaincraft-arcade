@@ -32,6 +32,7 @@ function submit(s, w) {
   else { s.msg = 'NOT A WORD HERE'; s.msgT = 0.8; K.sfx('wrong'); }
 }
 K.game({
+  typing: true,
   bg: '#101826', touch: { stick: false, buttons: [] },
   init(s) { s.lv = 0; s.score = 0; level(s); },
   update(s, dt) {

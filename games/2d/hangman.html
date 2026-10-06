@@ -6,6 +6,7 @@
 <script>
 function word(s) { s.word = WORDS.pick(K.pick([5, 6, 6, 7, 7, 8])).toUpperCase(); s.got = new Set(); s.miss = new Set(); s.wait = 0; }
 K.game({
+  typing: true,
   bg: '#0d1020', touch: { stick: false, buttons: [] },
   init(s) { s.score = 0; s.streak = 0; word(s); },
   update(s, dt) {

@@ -24,6 +24,7 @@ function furniture() {
 }
 const solid = (s, x, y, r) => s.walls.concat(s.furn).some((b) => x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h);
 K.game({
+  touch: { buttons: [['KeyE', 'HIDE']] },
   bg: '#07060a',
   init(s) {
     s.walls = walls(); s.furn = furniture();

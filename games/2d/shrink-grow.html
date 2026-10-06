@@ -13,6 +13,7 @@ function obstacle(s) {
   if (k === 'pit') s.obs.push({ k, x: 1000, w: 90 });                         // jump (normal or giant)
 }
 K.game({
+  touch: { buttons: [['Space', 'JUMP']] },
   bg: '#101620',
   init(s) { s.size = 1; s.r = 30; s.y = 0; s.vy = 0; s.dist = 0; s.obs = []; s.next = 1; s.push = 0; },
   update(s, dt) {

@@ -21,6 +21,7 @@ function decide(s, open) {
   s.msgT = 2.5; s.v = null; s.wait = 1.2;
 }
 K.game({
+  touch: { stick: false, buttons: [['KeyK', 'KEEP SHUT'], ['KeyO', 'OPEN']] },
   bg: '#0c0a10',
   init(s) {
     s.book = Array.from({ length: 4 }, F.make); s.score = 0; s.strikes = 0; s.v = null; s.wait = 1; s.msg = ''; s.msgT = 0; s.dead = 0;

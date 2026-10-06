@@ -7,6 +7,8 @@
 const ITEMS = ['MILK', 'BREAD', 'CHIPS', 'SODA', 'ICE', 'BATTERY', 'CANDY', 'NOODLES', 'COFFEE', 'MATCHES'];
 const newItem = () => ({ name: K.pick(ITEMS), code: String(K.irand(100, 999)) });
 K.game({
+  typing: 'numeric',
+  touch: { stick: false, buttons: [['KeyS', 'SHUTTER'], ['Enter', 'SCAN']] },
   bg: '#0b0d0c',
   init(s) { s.sales = 0; s.item = newItem(); s.typed = ''; s.thing = { aisle: 0, d: 0 }; s.shut = 0; s.t = 0; s.patience = 10; s.cust = 1; },
   update(s, dt) {

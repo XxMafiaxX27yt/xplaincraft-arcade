@@ -14,6 +14,7 @@ function spawn(s) {
 }
 const segDist = (px, py, x1, y1, x2, y2) => { const dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy, t = K.clamp(((px - x1) * dx + (py - y1) * dy) / L, 0, 1); return Math.hypot(x1 + dx * t - px, y1 + dy * t - py); };
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#14121e',
   init(s) { s.y = BOTY - 20; s.vy = 0; s.dist = 0; s.coinsGot = 0; s.zaps = []; s.miss = []; s.coins = []; s.pw = []; s.next = 1; s.shield = false; s.t = 0; s.inv = 0; },
   update(s, dt) {

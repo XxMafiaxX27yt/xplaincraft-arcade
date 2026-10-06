@@ -34,6 +34,7 @@ function place(s, i, send) {
   else { s.turn = s.turn === 'X' ? 'O' : 'X'; s.wait = K.rand(0.35, 0.7); }
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#08061a',
   init(s) { s.round = 0; s.wins = { X: 0, O: 0 }; s.draws = 0; s.anim = Array(9).fill(0); newRound(s); },
   onNet(s, d) { if (d.t === 'mv' && s.turn !== mine()) place(s, d.i, false); },

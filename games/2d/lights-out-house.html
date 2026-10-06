@@ -47,6 +47,7 @@ function finish(s) {
   K.end(s, { score: s.got, won: !!s.won, stats: { won: s.won ? 1 : 0 }, title: s.won ? 'THE LIGHTS ARE BACK' : 'IT GOT EVERYONE', text: s.won ? 'The house hums back to life. Whatever it was is gone.' : `${s.got} of 5 fuses found.` });
 }
 K.game({
+  touch: { stick: true, buttons: [], buttons2: [] },
   bg: '#000',
   init(s) {
     s.pl = K.seats(1).slice(0, 4).filter((p) => !p.bot).map((p, i) => ({ ...p, col: COL[i], x: (2 + i) * T, y: 11.5 * T, ang: 0, down: false, rev: 0 }));

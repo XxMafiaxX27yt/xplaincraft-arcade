@@ -15,6 +15,7 @@ const TAPES = [
 ];
 function load(s) { s.tape = TAPES[s.i]; s.pos = 0; s.dir = 0; s.typed = ''; s.seen = false; s.msgT = 0; }
 K.game({
+  typing: true,
   bg: '#14100c', touch: { stick: false, buttons: [] },
   init(s) { s.i = 0; s.solved = 0; load(s); },
   update(s, dt) {

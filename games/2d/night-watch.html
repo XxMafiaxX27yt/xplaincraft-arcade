@@ -9,6 +9,7 @@ const NODES = [{ n: 'STAGE', x: 480, y: 120 }, { n: 'PARTY ROOM', x: 480, y: 220
 const NEXT = { 0: [1], 1: [2, 3], 2: [4, 1], 3: [5, 1], 4: [], 5: [] };
 const BOTS = [{ name: 'BEAR', col: '#a0662a' }, { name: 'BUNNY', col: '#9a7ad8' }, { name: 'CHICK', col: '#e8c83a' }];
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#08070a',
   init(s) {
     s.t = 0; s.power = 100; s.doors = [false, false]; s.lights = [false, false]; s.cam = false; s.camSel = 1;
@@ -21,7 +22,9 @@ K.game({
     if (s.power > 0) {
       if (K.tap('KeyA')) { s.doors[0] = !s.doors[0]; K.sfx('hit'); }
       if (K.tap('KeyD')) { s.doors[1] = !s.doors[1]; K.sfx('hit'); }
-      s.lights[0] = K.down('KeyQ'); s.lights[1] = K.down('KeyE');
+      // lights: hold Q / E, or hold the LIGHT box on the screen
+      const held = (x) => !s.cam && K.mouse.down && K.inRect(K.mouse.x, K.mouse.y, { x, y: 440, w: 110, h: 34 });
+      s.lights[0] = K.down('KeyQ') || held(20); s.lights[1] = K.down('KeyE') || held(830);
       if (K.tap('Space')) { s.cam = !s.cam; K.sfx('blip'); }
       if (K.mouse.clicked) {
         const m = K.mouse;

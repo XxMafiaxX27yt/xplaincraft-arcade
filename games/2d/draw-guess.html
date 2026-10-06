@@ -9,6 +9,7 @@ const PAL = ['#111111', '#ffffff', '#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '
 const CX = 20, CY = 70, CW = 640, CH = 400, TURN = 75;
 const inCanvas = (x, y) => x >= CX && x <= CX + CW && y >= CY && y <= CY + CH;
 K.game({
+  typing: true,
   bg: '#0d0b1c', touch: { stick: false, buttons: [] },
   init(s) {
     s.players = (K.net ? K.net.players : [{ id: 'me', username: 'YOU' }]).map((p) => ({ id: p.id, name: p.username, pts: 0, got: false }));

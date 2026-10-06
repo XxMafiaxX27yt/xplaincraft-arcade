@@ -9,6 +9,7 @@ const CS = 120, GP = 14, BX = 480 - (CS * 3 + GP * 2) / 2, BY = 70;
 const cellAt = (x, y) => { for (let i = 0; i < 9; i++) if (K.inRect(x, y, { x: BX + (i % 3) * (CS + GP), y: BY + Math.floor(i / 3) * (CS + GP), w: CS, h: CS })) return i; return -1; };
 function play(s) { s.phase = 'show'; s.si = 0; s.st = 0.6; s.input = 0; }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#0a0a1e',
   init(s) { s.seq = [K.irand(0, 8)]; s.lit = Array(9).fill(0); play(s); s.score = 0; },
   update(s, dt) {

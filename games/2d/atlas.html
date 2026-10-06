@@ -17,6 +17,7 @@ function cpuPick(s) {
   return Math.random() < 0.5 ? opts[0] : K.pick(opts);
 }
 K.game({
+  typing: true,
   bg: '#07121a', touch: { stick: false, buttons: [] },
   init(s) { s.used = new Set(); s.chain = []; s.cur = ''; s.score = 0; s.turns = 0; s.who = 'cpu'; s.t = 15; s.wait = 1; s.msg = ''; s.msgT = 0; s.need = K.pick('ABCGIKMNPST'.split('')); },
   update(s, dt) {

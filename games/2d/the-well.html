@@ -13,6 +13,7 @@ const LOOT = [
 ];
 const MAXD = 100;
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#0a0806',
   init(s) { s.depth = 0; s.state = 'idle'; s.finds = []; s.msg = 'Lower the bucket.'; s.tug = 0; s.tugT = 0; s.held = 0; s.sanity = 1; s.mash = 0; s.last = null; s.drip = 0; s.amb = null; },
   update(s, dt) {

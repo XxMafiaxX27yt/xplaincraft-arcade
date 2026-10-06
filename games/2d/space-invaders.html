@@ -19,6 +19,7 @@ function waveInit(s) {
   s.dir = 1; s.stepT = 0; s.frame = 0;
 }
 K.game({
+  touch: { buttons: [['Space', 'FIRE']] },
   bg: '#030308',
   init(s) {
     s.px = 480; s.score = 0; s.lives = 3; s.waves = 0; s.bul = null; s.eb = []; s.ufo = null; s.ufoT = 12; waveInit(s);

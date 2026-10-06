@@ -12,6 +12,7 @@ function log(s) {
   s.knife = { y: 470, fly: false };
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#140e1e',
   init(s) { s.n = 0; s.score = 0; s.chunks = []; log(s); },
   update(s, dt) {

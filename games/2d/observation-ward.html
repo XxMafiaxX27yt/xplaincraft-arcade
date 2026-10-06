@@ -51,6 +51,7 @@ function drawObj(o, a = 1) {
   K.alpha(1);
 }
 K.game({
+  touch: { stick: false, buttons: [['ArrowRight', 'CAM ▶'], ['ArrowLeft', '◀ CAM']] },
   bg: '#05070a',
   init(s) { s.rooms = [0, 1, 2, 3].map(makeRoom); s.cam = 0; s.t = 0; s.next = 6; s.score = 0; s.cool = 0; s.msg = ''; s.msgT = 0; s.static = 0; },
   update(s, dt) {

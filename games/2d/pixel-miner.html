@@ -28,6 +28,7 @@ function gen(s) {
 }
 const solid = (s, x, y) => x < 0 || x >= W || y >= H || (y >= 0 && s.g[y][x] > 0);
 K.game({
+  touch: { buttons: [['Digit3', 'CARGO+'], ['Digit2', 'TANK+'], ['Digit1', 'DRILL+']] },
   bg: '#0b0710',
   init(s) {
     gen(s); s.p = { x: 6, y: SURF - 1, fx: 6, fy: SURF - 1 }; s.cash = 0; s.earned = 0; s.cargo = []; s.lv = { drill: 1, tank: 1, bay: 1 };

@@ -52,6 +52,7 @@ function finish(s) {
   K.end(s, { score: me.kos, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'SUMO CHAMPION' : `${champ.name} WINS`, text: s.b.map((b) => `${b.name} ${b.wins}`).join(' · ') });
 }
 K.game({
+  touch: { buttons: [['Space', 'DASH']], buttons2: [['Enter', 'DASH']] },
   bg: '#0a0d1e',
   init(s) { s.b = K.seats(K.net || K.local ? 2 : 4).map((p, i) => ({ ...p, col: COLS[i % 8], wins: 0, kos: 0 })); if (K.net && s.b.length < 4) while (s.b.length < 4) s.b.push({ id: 'bot' + s.b.length, name: 'BOT ' + (s.b.length + 1), bot: true, col: COLS[s.b.length], wins: 0, kos: 0 }); s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s); },
   onNet(s, d, from) {

@@ -13,6 +13,7 @@ function grade(guess, ans) {
   return res;
 }
 K.game({
+  typing: true,
   bg: '#0e0d17', touch: { stick: false, buttons: [] },
   init(s) { s.score = 0; s.shake = 0; word(s); },
   update(s, dt) {

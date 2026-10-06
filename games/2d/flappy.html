@@ -11,6 +11,7 @@ function pipe(s, x) {
   s.pipes.push({ x, y, gap, moving: s.score >= 8 && Math.random() < 0.45, ph: K.rand(0, 6), passed: false });
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#06040f',
   init(s) {
     s.b = { y: 260, vy: 0, rot: 0 }; s.pipes = []; s.score = 0; s.t = 0; s.dead = false; s.started = false;

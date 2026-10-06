@@ -13,6 +13,7 @@ function pop(s) {
   s.m[i] = { kind, t: 0, up: Math.max(0.55, 1.3 - s.time * 0.016), hp: kind === 'helmet' ? 2 : 1, hit: 0 };
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#3a7a2a',
   init(s) { s.m = Array(9).fill(null); s.score = 0; s.time = 0; s.next = 0.5; s.hammer = 0; },
   update(s, dt) {

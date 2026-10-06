@@ -5,6 +5,7 @@
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#0b0b14', lowerIsBetter: true, noTitleSim: true,
   init(s) { s.tries = []; s.phase = 'wait'; s.t = K.rand(1.4, 3.5); s.flash = 0; s.fake = 0; s.msg = 'WAIT FOR GREEN'; s.early = 0; },
   update(s, dt) {

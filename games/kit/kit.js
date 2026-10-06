@@ -63,6 +63,7 @@
   function bindInput() {
     const block = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab']);
     addEventListener('keydown', (e) => {
+      if (e.target?.classList?.contains('xt-type')) return;
       if (block.has(e.code)) e.preventDefault();
       if (!keys.has(e.code)) tapped.add(e.code);
       keys.add(e.code);
@@ -96,7 +97,8 @@
   K.W = W; K.H = H; K.C = C; K.FONT = FONT; K.attract = ATTRACT; K.meta = META;
   // remember which keys the game reads while playing -> the phone controls show exactly those
   const usedKeys = new Set();
-  let usedDir = false;
+  let usedDir = false, usedTyping = false;
+  const typeQ = []; // letters from the phone's own keyboard, fed in one per frame
   const note = (codes) => { if (state === 'play') codes.forEach((c) => usedKeys.add(c)); };
   K.down = (...codes) => (note(codes), anyOf(keys, codes) || anyOf(vkeys, codes));
   K.tap = (...codes) => (note(codes), anyOf(tapped, codes) || anyOf(vtapped, codes));
@@ -119,7 +121,7 @@
   K.vhold = (code, on = true) => (on ? vkeys.add(code) : vkeys.delete(code));
   K.vtap = (code) => vtapped.add(code);
   K.vmouse = (x, y, click = false, down = click) => { mouse.x = x; mouse.y = y; mouse.down = down; if (click) mouse.clicked = true; };
-  K.typed = () => [...tapped, ...vtapped].filter((c) => /^Key[A-Z]$/.test(c)).map((c) => c[3]);
+  K.typed = () => ((state === 'play' && (usedTyping = true)), [...tapped, ...vtapped].filter((c) => /^Key[A-Z]$/.test(c)).map((c) => c[3]));
 
 
   // ---------- multiplayer helpers for arena games ----------
@@ -138,12 +140,14 @@
   };
   K.isHost = () => !K.net || K.net.isHost;
   K.pad = (n = 0) => {
-    const k = (...c) => (K.down(...c) ? 1 : 0);
+    // read keys without noting them all: the phone controls get one button per action (Space = A, Shift = B)
+    const k = (...c) => (anyOf(keys, c) || anyOf(vkeys, c) ? 1 : 0);
     if (K.local) {
-      if (n === 0) return { x: k('KeyD') - k('KeyA'), y: k('KeyS') - k('KeyW'), a: !!k('Space', 'KeyF'), b: !!k('ShiftLeft', 'KeyG') };
-      return { x: k('ArrowRight') - k('ArrowLeft'), y: k('ArrowDown') - k('ArrowUp'), a: !!k('Enter', 'KeyL'), b: !!k('ShiftRight', 'KeyK') };
+      if (n === 0) return note(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft']), { x: k('KeyD') - k('KeyA'), y: k('KeyS') - k('KeyW'), a: !!k('Space', 'KeyF'), b: !!k('ShiftLeft', 'KeyG') };
+      return note(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'ShiftRight']), { x: k('ArrowRight') - k('ArrowLeft'), y: k('ArrowDown') - k('ArrowUp'), a: !!k('Enter', 'KeyL'), b: !!k('ShiftRight', 'KeyK') };
     }
     const d = K.dir();
+    note(['Space', 'ShiftLeft']);
     return { x: d.x, y: d.y, a: !!k('Space') || mouse.down, b: !!k('ShiftLeft', 'ShiftRight', 'KeyE') };
   };
   K.mouse2 = () => mouse;
@@ -233,6 +237,14 @@
   // on-screen keyboard for word games (works with mouse + touch). Returns 'A'..'Z', 'ENTER', 'BACK' or null.
   // colors: optional { A: '#color', ... } to tint keys (Wordle-style)
   K.keyboard = (x, y, w, colors = {}, opt = {}) => {
+    if (state === 'play') usedTyping = true;
+    if (IS_TOUCH) {
+      const cs = Object.keys(colors).length, kw = w / 26;
+      if (cs) for (let i = 0; i < 26; i++) { const ch = String.fromCharCode(65 + i); K.rect(x + i * kw + 1, y, kw - 2, 24, colors[ch] || '#24203f', 4); K.text(ch, x + i * kw + kw / 2, y + 13, 12, '#fff', 'center', 'd'); }
+      if (document.activeElement !== typeIn) { K.alpha(0.6 + 0.4 * Math.sin(time * 5)); K.text('⌨  TAP HERE TO TYPE', x + w / 2, y + (cs ? 60 : 30), 20, C.cyan || '#22e6ff', 'center', 'd', 10); K.alpha(1); }
+      const t = K.typed();
+      return t.length ? t[0] : K.tap('Enter', 'NumpadEnter') ? 'ENTER' : K.tap('Backspace') ? 'BACK' : null;
+    }
     const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
     const kw = w / 10, kh = opt.h || 44, gap = 5;
     let out = null;
@@ -439,6 +451,7 @@
         if (XC.net) setupNet(XC.net);
         if (XC.local) K.local = XC.local;
       }
+      if (cfg.typing) usedTyping = true;
       s = {}; cfg.init(s);
       state = ATTRACT ? 'attract' : NET ? 'lobby' : 'title';
       last = performance.now();
@@ -450,6 +463,7 @@
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now; time += dt; stateT += dt;
+    if (typeQ.length) tapped.add(typeQ.shift());
     try {
       if (state === 'attract') {
         cfg.ai?.(s, dt); cfg.update(s, dt);
@@ -461,11 +475,11 @@
         if (want) { clearInput(); startRun(); }
         else if (!cfg.noTitleSim && cfg.ai) { cfg.ai(s, dt); cfg.update(s, dt); vkeys.clear(); }
       } else if (state === 'play') {
-        if (K.tap('Escape', 'KeyP')) { state = 'pause'; stateT = 0; }
+        if (K.tap('Escape') || (!usedTyping && K.tap('KeyP'))) { state = 'pause'; stateT = 0; }
         else cfg.update(s, dt);
       } else if (state === 'pause') {
         if (NET) cfg.update(s, dt);
-        if (K.tap('Escape', 'KeyP', 'Space')) state = 'play';
+        if (K.tap('Escape', 'Space') || (!usedTyping && K.tap('KeyP'))) state = 'play';
       } else if (state === 'over') {
         if (stateT > 0.7 && K.tap('Space', 'Enter', 'KeyR') && (!NET || NET.host)) NET ? hostGo() : startRun();
         else if (stateT > 0.3 && K.tap('Escape')) K.exit();
@@ -563,48 +577,59 @@
   // ---------- phone / tablet controls ----------
   // A joystick (if the game reads arrows / WASD / K.dir) and one button per other key the game reads.
   // A game can set its own with K.game({ touch: { stick: true|'tap'|false, buttons: [['Space', 'JUMP'], ...] } }).
+  // Same screen (K.local) on a phone: two sticks - left = P1 (WASD), right = P2 (arrows) - each with its own buttons
+  // (touch.buttons2 sets P2's buttons).
   const IS_TOUCH = !ATTRACT && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || Q.has('touch'));
   const DIR_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
   const WASD = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
-  const SKIP = new Set(['Escape', 'KeyP', 'Tab', 'ShiftRight', 'NumpadEnter']);
-  const LABEL = { Space: 'SPACE', Enter: 'OK', ShiftLeft: 'RUN', ControlLeft: 'CTRL', Backspace: '⌫' };
+  const SKIP = new Set(['Escape', 'KeyP', 'Tab', 'NumpadEnter']);
+  const P2KEYS = new Set(['Enter', 'ShiftRight', 'KeyL', 'KeyK', 'KeyJ', 'KeyI', 'KeyO', 'KeyU', 'Slash', 'Period', 'Comma', 'Semicolon', 'Quote', 'Numpad0', 'Numpad1', 'Numpad2', 'Numpad3']);
+  const LABEL = { Space: 'A', Enter: 'OK', ShiftLeft: 'B', ShiftRight: 'B', ControlLeft: 'CTRL', Backspace: '⌫' };
   const label = (c) => LABEL[c] || (c.startsWith('Key') ? c.slice(3) : c.startsWith('Digit') ? c.slice(5) : c.startsWith('Numpad') ? c.slice(6) : c.replace(/Left|Right/, '').slice(0, 4).toUpperCase());
-  let tui = null, tuiSig = '';
+  // which key codes a stick direction presses: a solo stick drives arrows AND WASD; same-screen sticks drive one player each
+  const STICK = {
+    any: { up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'] },
+    p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'] },
+    p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'] },
+  };
+  let tui = null, tuiSig = '', typeIn = null, focusType = null;
+  // the phone's own keyboard: a hidden text box; whatever it receives is turned into key taps (letters, space, backspace, enter)
+  const SENT = '\u200b\u200b\u200b\u200b';
+  function typeBox() {
+    typeIn = document.createElement('input');
+    typeIn.className = 'xt-type';
+    Object.assign(typeIn, { type: 'text', value: SENT, autocomplete: 'off', spellcheck: false, enterKeyHint: 'enter' });
+    if (cfg.typing === 'numeric') typeIn.inputMode = 'numeric';
+    typeIn.setAttribute('autocorrect', 'off'); typeIn.setAttribute('autocapitalize', 'characters'); typeIn.setAttribute('aria-label', 'Type here');
+    let lastV = SENT, composing = false;
+    const reset = () => { typeIn.value = SENT; lastV = SENT; try { typeIn.setSelectionRange(SENT.length, SENT.length); } catch (e) {} };
+    const code = (ch) => (/[a-z]/i.test(ch) ? 'Key' + ch.toUpperCase() : ch === ' ' ? 'Space' : ch === '\n' ? 'Enter' : /[0-9]/.test(ch) ? 'Digit' + ch : null);
+    typeIn.addEventListener('compositionstart', () => (composing = true));
+    typeIn.addEventListener('compositionend', () => { composing = false; setTimeout(reset, 0); });
+    typeIn.addEventListener('input', () => {
+      const v = typeIn.value;
+      let i = 0; while (i < v.length && i < lastV.length && v[i] === lastV[i]) i++;
+      for (let k = 0; k < lastV.length - i; k++) typeQ.push('Backspace');
+      for (const ch of v.slice(i)) { const c = code(ch); if (c) typeQ.push(c); }
+      lastV = v;
+      if (!composing || v.length < 2 || v.length > 40) reset();
+      audio();
+    });
+    typeIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); typeQ.push('Enter'); reset(); } });
+    document.body.appendChild(typeIn);
+    // focusing has to happen inside the tap itself or the phone will not open its keyboard
+    // (on click, after the tap's own mouse events, which would otherwise take the focus straight back)
+    focusType = () => { typeIn.focus({ preventScroll: true }); reset(); };
+    canvas.addEventListener('click', () => { if (usedTyping && state === 'play') focusType(); });
+  }
   const press = (code) => { if (!keys.has(code)) tapped.add(code); keys.add(code); audio(); };
   const release = (code) => keys.delete(code);
-  function touchUI() {
-    if (!IS_TOUCH || !canvas) return;
-    if (!tui) {
-      tui = document.createElement('div');
-      tui.className = 'xt';
-      tui.innerHTML = '<button class="xt-pause" aria-label="Pause">II</button><div class="xt-stick"><i></i></div><div class="xt-btns"></div><div class="xt-rot">↻ Turn your phone sideways</div>';
-      document.body.appendChild(tui);
-      const pb = tui.querySelector('.xt-pause');
-      pb.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); tapped.add('Escape'); });
-      stickInput(tui.querySelector('.xt-stick'));
-    }
-    const playing = state === 'play';
-    tui.classList.toggle('on', playing || state === 'pause');
-    tui.classList.toggle('paused', state === 'pause');
-    if (!playing) return;
-    const own = cfg.touch || {};
-    const stick = own.stick ?? (usedDir || [...usedKeys].some((c) => DIR_KEYS.has(c)) ? (usedDir === 'tap' ? 'tap' : true) : false);
-    let btns = own.buttons || [...usedKeys].filter((c) => !SKIP.has(c) && !DIR_KEYS.has(c) && !(stick && WASD.has(c))).map((c) => [c, label(c)]);
-    if (!own.buttons) {
-      if (btns.some(([c]) => c === 'Space')) btns = btns.filter(([c]) => c !== 'Enter');
-      btns = btns.slice(0, 6);
-    }
-    const sig = stick + '|' + btns.map((b) => b.join(':')).join(',');
-    if (sig === tuiSig) return;
-    tuiSig = sig;
-    const st = tui.querySelector('.xt-stick');
-    st.style.display = stick ? '' : 'none';
-    st.dataset.mode = stick === 'tap' ? 'tap' : 'hold';
-    const box = tui.querySelector('.xt-btns');
+  function fillButtons(box, btns) {
     box.innerHTML = '';
     btns.forEach(([code, text]) => {
       const b = document.createElement('button');
-      b.className = 'xt-b' + (String(text).length > 2 ? ' wide' : '');
+      const n = String(text).length;
+      b.className = 'xt-b' + (n > 2 ? ' wide' : '') + (n > 5 ? ' wider' : '');
       b.textContent = text;
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); b.classList.add('down'); press(code); });
       const up = (e) => { e.preventDefault(); b.classList.remove('down'); release(code); };
@@ -612,6 +637,54 @@
       b.addEventListener('pointercancel', up);
       box.appendChild(b);
     });
+  }
+  function touchUI() {
+    if (!IS_TOUCH || !canvas) return;
+    if (!tui) {
+      tui = document.createElement('div');
+      tui.className = 'xt';
+      tui.innerHTML = '<button class="xt-pause" aria-label="Pause">II</button><div class="xt-stick"><i></i></div><div class="xt-stick r"><i></i></div><div class="xt-btns l"></div><div class="xt-btns"></div><div class="xt-rot">↻ Turn your phone sideways</div><button class="xt-kb">⌨ TYPE</button>';
+      document.body.appendChild(tui);
+      const pb = tui.querySelector('.xt-pause');
+      pb.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); tapped.add('Escape'); });
+      tui.querySelectorAll('.xt-stick').forEach(stickInput);
+      typeBox();
+      tui.querySelector('.xt-kb').addEventListener('click', (e) => { e.preventDefault(); focusType(); });
+    }
+    tui.classList.toggle('kb', usedTyping && state === 'play' && document.activeElement !== typeIn);
+    if (state !== 'play' && document.activeElement === typeIn) typeIn.blur();
+    const playing = state === 'play';
+    tui.classList.toggle('on', playing || state === 'pause');
+    tui.classList.toggle('paused', state === 'pause');
+    if (!playing) return;
+    const own = cfg.touch || {};
+    const duo = (K.local || 0) >= 2;
+    const stick = own.stick ?? (usedDir || [...usedKeys].some((c) => DIR_KEYS.has(c) || WASD.has(c)) ? (usedDir === 'tap' ? 'tap' : true) : false);
+    const auto = [...usedKeys].filter((c) => !SKIP.has(c) && !DIR_KEYS.has(c) && !(stick && WASD.has(c)) && !/^(Digit|Numpad)/.test(c));
+    let btns, btns2 = [];
+    if (duo) {
+      btns = (own.buttons || auto.filter((c) => !P2KEYS.has(c)).map((c) => [c, label(c)])).slice(0, 3);
+      btns2 = (own.buttons2 || auto.filter((c) => P2KEYS.has(c)).map((c) => [c, c === 'Enter' ? 'A' : label(c)])).slice(0, 3);
+    } else {
+      btns = own.buttons || auto.filter((c) => c !== 'ShiftRight').map((c) => [c, label(c)]);
+      if (!own.buttons) {
+        if (btns.some(([c]) => c === 'Space')) btns = btns.filter(([c]) => c !== 'Enter');
+        btns = btns.slice(0, 6);
+      }
+    }
+    const sig = duo + '|' + stick + '|' + btns.map((b) => b.join(':')).join(',') + '|' + btns2.map((b) => b.join(':')).join(',');
+    if (sig === tuiSig) return;
+    tuiSig = sig;
+    tui.classList.toggle('duo', duo);
+    const [st, st2] = tui.querySelectorAll('.xt-stick');
+    st.style.display = stick ? '' : 'none';
+    st.dataset.mode = stick === 'tap' ? 'tap' : 'hold';
+    st.dataset.who = duo ? 'p1' : 'any';
+    st2.style.display = stick && duo ? '' : 'none';
+    st2.dataset.mode = st.dataset.mode;
+    st2.dataset.who = 'p2';
+    fillButtons(tui.querySelector('.xt-btns:not(.l)'), duo ? btns2 : btns);
+    fillButtons(tui.querySelector('.xt-btns.l'), duo ? btns : []);
   }
   function stickInput(el) {
     const knob = el.querySelector('i');
@@ -627,18 +700,19 @@
       const d = Math.hypot(dx, dy), m = Math.min(d, R * 0.8);
       if (d > 0) { dx = (dx / d) * m; dy = (dy / d) * m; }
       knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-      const want = new Set();
+      const want = new Set(), map = STICK[el.dataset.who] || STICK.any;
       if (d > R * 0.28) {
         const a = Math.atan2(dy, dx), th = el.dataset.mode === 'tap' ? 0.7071 : 0.42;
-        const sx = Math.cos(a), sy = Math.sin(a);
-        if (sx > th) want.add('ArrowRight'); else if (sx < -th) want.add('ArrowLeft');
-        if (sy > th) want.add('ArrowDown'); else if (sy < -th) want.add('ArrowUp');
+        const sx = Math.cos(a), sy = Math.sin(a), dirs = [];
+        if (sx > th) dirs.push('right'); else if (sx < -th) dirs.push('left');
+        if (sy > th) dirs.push('down'); else if (sy < -th) dirs.push('up');
+        dirs.forEach((dn) => map[dn].forEach((c) => want.add(c)));
       }
       set(want);
     };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      id = e.pointerId; el.setPointerCapture(id);
+      id = e.pointerId; el.setPointerCapture(id); el.classList.add('act');
       const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
       move(e);
       clearInterval(rep);
@@ -646,7 +720,7 @@
       rep = setInterval(() => { if (el.dataset.mode === 'tap') held.forEach((k) => tapped.add(k)); }, 190);
     });
     el.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
-    const end = (e) => { if (e.pointerId !== id) return; id = null; clearInterval(rep); knob.style.transform = ''; set(new Set()); };
+    const end = (e) => { if (e.pointerId !== id) return; id = null; clearInterval(rep); el.classList.remove('act'); knob.style.transform = ''; set(new Set()); };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }

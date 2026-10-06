@@ -72,6 +72,7 @@ function finish(s, v) {
   K.end(s, { score: v === mine ? 1 : 0, won: !v || K.local ? null : v === mine, stats: { won: v === mine && !K.local ? 1 : 0 }, title, text: K.net ? `${K.net.players[0].username} vs ${K.net.players[1]?.username || '?'}` : '' });
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#060a1e',
   init(s) { s.b = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); s.turn = 1; s.over = false; s.drop = null; s.line = null; s.wins = [0, 0]; s.think = 0; s.hover = 3; },
   onNet(s, d) { if (d.t === 'mv' && s.turn !== myColor()) play(s, d.c); },

@@ -11,6 +11,7 @@ function night(s) {
   s.src = K.irand(0, n - 1); s.wake = 0; s.noiseT = 1; s.rings = []; s.p = { x: 480, y: 500 }; s.msg = `Night ${s.night + 1}. The scratching starts again.`; s.msgT = 3;
 }
 K.game({
+  touch: { buttons: [['KeyE', 'OPEN']] },
   bg: '#000',
   init(s) { s.night = 0; s.found = 0; night(s); s.drone = null; },
   update(s, dt) {

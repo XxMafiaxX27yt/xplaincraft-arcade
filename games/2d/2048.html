@@ -40,6 +40,7 @@ function stuck(s) {
   return true;
 }
 K.game({
+  touch: { buttons: [['KeyU', 'UNDO']] },
   bg: '#0a0818',
   init(s) { s.b = Array.from({ length: N }, () => Array(N).fill(null)); s.score = 0; s.best = 2; s.prev = null; s.undo = 1; s.won = false; s.ghost = []; add(s); add(s); },
   update(s, dt) {

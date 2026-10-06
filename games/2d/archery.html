@@ -7,6 +7,7 @@
 const BX = 120, BY = 330;
 function round(s) { s.dist = 520 + s.n * 26; s.tx = Math.min(890, BX + s.dist); s.ty = K.rand(220, 380); s.wind = K.rand(-1, 1) * (0.5 + s.n * 0.15); s.arrow = null; s.draw = 0; s.aim = -0.1; }
 K.game({
+  touch: { buttons: [] },
   bg: '#9ad8ff',
   init(s) { s.n = 0; s.score = 0; s.hits = []; round(s); s.sway = 0; },
   update(s, dt) {

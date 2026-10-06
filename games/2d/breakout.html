@@ -21,6 +21,7 @@ function wall(s) {
 }
 function launch(b, s) { const a = -Math.PI / 2 + K.rand(-0.5, 0.5); b.vx = Math.cos(a) * s.speed; b.vy = Math.sin(a) * s.speed; b.stuck = false; K.sfx('laser'); }
 K.game({
+  touch: { buttons: [] },
   bg: '#07051a',
   init(s) { s.px = 480; s.pw = 130; s.score = 0; s.lives = 3; s.walls = 0; s.drops = []; s.wideT = 0; s.slowT = 0; wall(s); },
   update(s, dt) {

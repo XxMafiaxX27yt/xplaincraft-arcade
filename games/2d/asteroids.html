@@ -14,6 +14,7 @@ function rock(x, y, size) {
 function wave(s) { s.rocks = []; for (let i = 0; i < 3 + s.wave; i++) { let x, y; do { x = K.rand(0, W); y = K.rand(0, H); } while (Math.hypot(x - s.sh.x, y - s.sh.y) < 180); s.rocks.push(rock(x, y, 3)); } }
 const wrap = (o) => { o.x = (o.x + W) % W; o.y = (o.y + H) % H; };
 K.game({
+  touch: { buttons: [['ShiftLeft', 'WARP'], ['Space', 'FIRE']] },
   bg: '#02020a',
   init(s) { s.sh = { x: 480, y: 270, vx: 0, vy: 0, a: -Math.PI / 2, inv: 2, shield: 0 }; s.bul = []; s.score = 0; s.lives = 3; s.wave = 1; s.cool = 0; s.ufo = null; s.ufoT = 15; s.ubul = []; s.stars = Array.from({ length: 70 }, () => [K.rand(0, W), K.rand(0, H), K.rand(0.3, 1.5)]); wave(s); },
   update(s, dt) {

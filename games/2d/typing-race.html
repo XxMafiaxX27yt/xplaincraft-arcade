@@ -10,6 +10,7 @@ function racers() {
   return [{ id: 'me', name: 'YOU' }, { id: 'g1', name: 'GHOST 32', wpm: 32 }, { id: 'g2', name: 'GHOST 45', wpm: 45 }, { id: 'g3', name: 'GHOST 60', wpm: 60 }];
 }
 K.game({
+  typing: true,
   bg: '#0a0c18', touch: { stick: false, buttons: [] },
   init(s) {
     const words = []; for (let i = 0; i < 22; i++) words.push(WORDS.list(3, 7)[Math.floor(K.rng() * WORDS.list(3, 7).length)]);

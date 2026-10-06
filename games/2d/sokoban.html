@@ -26,6 +26,7 @@ function load(s) {
 }
 const solved = (s) => [...s.crates].every((k) => s.targets.has(k));
 K.game({
+  touch: { buttons: [['KeyR', 'RESET'], ['KeyU', 'UNDO']] },
   bg: '#14101c',
   init(s) { s.lv = 0; load(s); s.done = 0; },
   update(s, dt) {

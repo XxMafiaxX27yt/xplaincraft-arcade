@@ -11,6 +11,7 @@ function wave(s) {
   for (let r = 0; r < 4; r++) for (let c = 0; c < cols; c++) { const fx = 270 + c * 56, fy = 70 + r * 44, from = c % 2 ? 1 : -1; s.bugs.push({ fx, fy, x: from > 0 ? 1000 : -40, y: 300 + r * 30, st: 'enter', t: -(r * 0.35 + c * 0.08), type: r === 0 ? 2 : r < 2 ? 1 : 0, hp: r === 0 ? 2 : 1, side: from }); }
 }
 K.game({
+  touch: { buttons: [['Space', 'FIRE']] },
   bg: '#02020c',
   init(s) { s.px = 480; s.shots = []; s.eb = []; s.score = 0; s.lives = 3; s.wave = 0; s.sway = 0; s.inv = 0; s.stars = Array.from({ length: 90 }, () => [K.rand(0, 960), K.rand(0, 540), K.rand(20, 120)]); wave(s); },
   update(s, dt) {

@@ -7,6 +7,7 @@
 const SEC = 8, SW = 110, FX = 40, FY = 300;
 function night(s) { s.t = 0; s.hp = Array(SEC).fill(1); s.z = []; s.spawn = 0; }
 K.game({
+  touch: { buttons: [['Space', 'REPAIR']] },
   bg: '#0c120a',
   init(s) { s.night = 0; s.x = 480; night(s); s.drone = null; },
   update(s, dt) {

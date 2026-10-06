@@ -8,6 +8,7 @@ const FISH = [['Minnow', '🐟', 40, 120, 30], ['Perch', '🐟', 200, 600, 25], 
 const DOCK = 420, LEN = 180, COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#4f8bff'];
 function rollFish() { const tot = FISH.reduce((a, f) => a + f[4], 0); let r = Math.random() * tot; for (const f of FISH) { r -= f[4]; if (r <= 0) return f; } return FISH[0]; }
 K.game({
+  touch: { stick: false, buttons: [['Space', 'CAST']] },
   bg: '#0b1428',
   init(s) {
     s.pl = (K.net ? K.net.players.map((p) => ({ id: p.id, name: p.username, me: p.id === K.net.me })) : [{ id: 'me', name: 'YOU', me: true }]).map((p, i, a) => ({ ...p, col: COL[i % 8], x: 120 + (i + 0.5) * (720 / a.length), total: 0, best: null, log: [] }));

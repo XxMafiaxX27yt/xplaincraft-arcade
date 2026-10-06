@@ -15,6 +15,7 @@ function seg(s, x) {
   s.segs.push(g);
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#0c0618',
   init(s) {
     s.y = BOT - 20; s.vy = 0; s.g = 1; s.dist = 0; s.speed = 300; s.segs = [{ x: 0, w: 900, floor: true, ceil: true, spikes: [] }]; s.next = 900; s.troll = 8; s.warn = 0; s.trail = [];

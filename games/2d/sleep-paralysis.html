@@ -6,6 +6,7 @@
 <script>
 const SPOTS = [[160, 200], [480, 140], [800, 210], [300, 330], [680, 340], [880, 400]];
 K.game({
+  touch: { buttons: [['Space', 'BREATHE']] },
   bg: '#05060c',
   init(s) { s.t = 0; s.fig = { i: 1, close: 0 }; s.panic = 0; s.cycle = 0; s.tele = 4; s.lx = 480; s.ly = 270; },
   update(s, dt) {

@@ -5,6 +5,8 @@
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
 K.game({
+  typing: 'numeric',
+  touch: { stick: false, buttons: [['ArrowDown', 'CH ▼'], ['ArrowUp', 'CH ▲']] },
   bg: '#050505',
   init(s) {
     s.code = Array.from({ length: 4 }, () => K.irand(0, 9)); s.where = K.shuffle([2, 5, 7, 9, 11, 15, 17, 19]).slice(0, 4);

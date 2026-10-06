@@ -36,6 +36,7 @@ function phys(s, dt) {
   }
 }
 K.game({
+  touch: { stick: false, buttons: [] },
   bg: '#7ac8ff',
   init(s) { s.score = 0; s.lvl = 0; castle(s); s.aim = null; s.trail = []; },
   update(s, dt) {

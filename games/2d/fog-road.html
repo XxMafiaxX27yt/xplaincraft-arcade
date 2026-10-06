@@ -6,6 +6,7 @@
 <script>
 const GOAL = 1000;
 K.game({
+  touch: { buttons: [['Space', 'LOOK']] },
   bg: '#9aa0a4',
   init(s) { s.d = 0; s.x = 0; s.curve = 0; s.f = 18; s.look = 0; s.step = 0; s.fstep = 1; s.signs = []; s.drone = null; for (let i = 60; i < GOAL; i += K.rand(70, 140)) s.signs.push({ d: i, side: Math.random() < 0.5 ? -1 : 1, t: K.pick(['🌲', '🌲', '🪨', '🪧', '🌳', '⚰']) }); },
   update(s, dt) {

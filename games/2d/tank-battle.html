@@ -54,6 +54,7 @@ function finish(s) {
   K.end(s, { score: me.kills, won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST TANK ROLLING' : `${champ.name} WINS`, text: s.tk.map((t) => `${t.name} ${t.wins}`).join(' · ') });
 }
 K.game({
+  touch: { buttons: [['Space', 'FIRE']], buttons2: [['Enter', 'FIRE']] },
   bg: '#0d1410',
   init(s) {
     s.tk = K.seats(K.net ? Math.max(2, K.net.players.length) : K.local ? 2 : 2).slice(0, 4).map((p, i) => ({ ...p, col: COLS[i], kills: 0, wins: 0 }));

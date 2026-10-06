@@ -43,6 +43,7 @@ function finish(s) {
   K.end(s, { score: Math.max(1, s.p.length + 1 - (me.place || s.p.length)), won: K.local ? null : won, stats: { won: won ? 1 : 0 }, title: winner ? (winner === me && !K.local ? 'LAST ONE STANDING' : `${winner.name} SURVIVES`) : 'BOOM', text: s.p.slice().sort((a, b) => (a.place || 9) - (b.place || 9)).map((p) => `${p.place}. ${p.name}`).join('  ') });
 }
 K.game({
+  touch: { buttons: [['Space', 'SPRINT']], buttons2: [['Enter', 'SPRINT']] },
   bg: '#101018',
   init(s) { s.p = K.seats(K.net || K.local ? 3 : 5).map((p, i) => ({ ...p, col: COL[i % 8], out: false, stam: 1 })); s.rounds = 0; s.inputs = {}; s.fx = []; s.sendT = 0; s.over = false; round(s); },
   onNet(s, d, from) {

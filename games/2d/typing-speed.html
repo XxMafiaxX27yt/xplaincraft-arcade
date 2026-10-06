@@ -6,6 +6,7 @@
 <script>
 function refill(s) { while (s.words.length - s.i < 40) s.words.push(WORDS.pick(K.pick([3, 4, 4, 5, 5, 6, 7]))); }
 K.game({
+  typing: true,
   bg: '#0b0d16', touch: { stick: false, buttons: [] },
   init(s) { s.words = []; s.i = 0; s.cur = ''; s.ok = 0; s.bad = 0; s.chars = 0; s.time = 0; s.started = false; s.marks = []; refill(s); },
   update(s, dt) {

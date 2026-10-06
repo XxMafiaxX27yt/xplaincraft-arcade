@@ -12,6 +12,7 @@ function level(s) {
 }
 const blocked = (s, x, y) => x < 10 || x > 950 || y < 10 || y > 530 || s.walls.some((w) => x > w.x - 9 && x < w.x + w.w + 9 && y > w.y - 9 && y < w.y + w.h + 9);
 K.game({
+  touch: { buttons: [['Space', 'CLAP']] },
   bg: '#000',
   init(s) { s.lv = 0; s.cool = 0; level(s); },
   update(s, dt) {

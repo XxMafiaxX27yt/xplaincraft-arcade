@@ -7,6 +7,7 @@
 const WW = 2400, WH = 1600;
 const NOTES = ['ALWAYS WATCHES', 'NO EYES', 'DON\'T LOOK', 'CAN\'T RUN', 'LEAVE ME ALONE', 'FOLLOWS', 'HELP ME', 'NOWHERE TO HIDE'];
 K.game({
+  touch: { buttons: [['ShiftLeft', 'RUN']] },
   bg: '#080a0c',
   init(s) {
     s.p = { x: WW / 2, y: WH / 2 }; s.look = 0; s.got = 0; s.static = 0; s.tele = 6; s.man = null;
