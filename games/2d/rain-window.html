@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rain Window</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"rain-window","n":196,"title":"RAIN WINDOW","genre":"relax","desc":"A rainy night, a warm room, a cup of tea and a sleepy cat on the windowsill. The glass is all fogged up - draw on it with your finger to see the city lights outside, and watch the raindrops race each other down the pane. The fog slowly comes back. Stay as long as you like.","controls":"Drag on the glass to wipe the fog / draw · tap a big raindrop to send it sliding · DONE when you are ready to go","scoreLabel":"MINUTES","tasks":[{"stat":"score","target":2,"text":"Watch the rain for 2 minutes"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GLASS = { x: 60, y: 30, w: 840, h: 400 };
+const mk = () => { const c = document.createElement('canvas'); c.width = 960; c.height = 540; return [c, c.getContext('2d')]; };
+const [scene, sc] = mk(), [fogT, ft] = mk(), [fog, fc] = mk();
+(function paint() {
+  const g = sc.createLinearGradient(0, 0, 0, 540); g.addColorStop(0, '#0a1028'); g.addColorStop(1, '#2a2040'); sc.fillStyle = g; sc.fillRect(0, 0, 960, 540);
+  for (let i = 0; i < 26; i++) { const x = i * 40 + Math.random() * 20, w = 30 + Math.random() * 50, h = 120 + Math.random() * 230; sc.fillStyle = `rgb(${14 + i % 3 * 6},${16 + i % 4 * 5},${34 + i % 5 * 6})`; sc.fillRect(x, 440 - h, w, h);
+    for (let y = 440 - h + 10; y < 430; y += 16) for (let wx = x + 5; wx < x + w - 8; wx += 12) if (Math.random() < 0.35) { sc.fillStyle = Math.random() < 0.7 ? '#ffd88a' : '#9ad8ff'; sc.fillRect(wx, y, 6, 8); } }
+  sc.fillStyle = '#141018'; sc.fillRect(0, 430, 960, 110);
+  for (let i = 0; i < 9; i++) { const x = 40 + i * 115; sc.fillStyle = '#2a2a30'; sc.fillRect(x, 340, 4, 100); const lg = sc.createRadialGradient(x + 2, 340, 0, x + 2, 340, 60); lg.addColorStop(0, 'rgba(255,200,120,0.9)'); lg.addColorStop(1, 'rgba(255,200,120,0)'); sc.fillStyle = lg; sc.fillRect(x - 60, 280, 124, 120); }
+  for (let i = 0; i < 12; i++) { const x = Math.random() * 960, red = i % 2; const lg = sc.createRadialGradient(x, 455, 0, x, 455, 14); lg.addColorStop(0, red ? 'rgba(255,60,60,0.9)' : 'rgba(255,255,220,0.9)'); lg.addColorStop(1, 'rgba(0,0,0,0)'); sc.fillStyle = lg; sc.fillRect(x - 14, 441, 28, 28); }
+  ft.filter = 'blur(9px)'; ft.drawImage(scene, 0, 0); ft.filter = 'none'; ft.fillStyle = 'rgba(190,200,225,0.32)'; ft.fillRect(0, 0, 960, 540);
+  fc.drawImage(fogT, 0, 0);
+})();
+const drop = () => ({ x: K.rand(GLASS.x + 6, GLASS.x + GLASS.w - 6), y: K.rand(GLASS.y + 6, GLASS.y + GLASS.h - 6), r: Math.random() < 0.12 ? K.rand(4, 6) : K.rand(1.2, 3) });
+function wipe(x0, y0, x1, y1, r) { fc.save(); fc.globalCompositeOperation = 'destination-out'; fc.strokeStyle = 'rgba(0,0,0,0.9)'; fc.lineCap = 'round'; fc.lineWidth = r * 2; fc.shadowColor = '#000'; fc.shadowBlur = r * 0.8; fc.beginPath(); fc.moveTo(x0, y0); fc.lineTo(x1, y1); fc.stroke(); fc.restore(); }
+K.game({
+  bg: '#1a1420', touch: { stick: false, buttons: [] },
+  init(s) { s.time = 0; s.drops = Array.from({ length: 150 }, drop); s.run = []; s.last = null; s.flash = 0; s.bolt = K.rand(18, 35); s.fogT = 0; },
+  update(s, dt) {
+    s.time += dt; const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 840, y: 486, w: 104, h: 40 })) { s.rain?.(); return K.end(s, { score: Math.floor(s.time / 60), won: null, stats: { won: s.time >= 120 ? 1 : 0 }, title: 'COSY', text: `You watched the rain for ${Math.floor(s.time / 60)} min ${Math.floor(s.time % 60)} s.` }); }
+    if (!s.rain && !K.attract) s.rain = K.drone(70, 0.008, 'sine');
+    s.hiss = (s.hiss || 0) - dt; if (s.hiss <= 0) { K.noise(0.35, 0.018, 4000, 0, 0.3); K.noise(0.35, 0.012, 900, 0.1, 0.4); s.hiss = 0.3; }
+    // drawing on the glass
+    const inG = K.inRect(m.x, m.y, GLASS);
+    if (m.down && inG) {
+      if (m.clicked) { const big = s.drops.find((d) => d.r > 3.5 && Math.hypot(d.x - m.x, d.y - m.y) < 14); if (big) { s.drops.splice(s.drops.indexOf(big), 1); s.run.push({ x: big.x, y: big.y, r: big.r + 1, vy: 40, w: K.rand(0, 6) }); K.tone(900, 0.06, 'sine', 0.02, -300); } }
+      if (s.last) wipe(s.last.x, s.last.y, m.x, m.y, 16); s.last = { x: m.x, y: m.y };
+      s.drops = s.drops.filter((d) => Math.hypot(d.x - m.x, d.y - m.y) > 18);
+      if (Math.random() < 0.2) K.noise(0.05, 0.006, 6000);
+    } else s.last = null;
+    // the fog creeps back
+    s.fogT -= dt; if (s.fogT <= 0) { fc.globalAlpha = 0.025; fc.drawImage(fogT, 0, 0); fc.globalAlpha = 1; s.fogT = 0.12; }
+    // new drops land; big ones get heavy and run
+    if (s.drops.length < 190 && Math.random() < dt * 12) s.drops.push(drop());
+    if (Math.random() < dt * 0.45 && s.run.length < 7) { const d = drop(); s.run.push({ x: d.x, y: GLASS.y + K.rand(0, 120), r: K.rand(4, 6), vy: 30, w: K.rand(0, 6) }); }
+    for (const r of s.run) {
+      r.vy = Math.min(220, r.vy + 120 * dt) * (Math.random() < dt * 2 ? 0.2 : 1); const ox = r.x, oy = r.y;
+      r.y += r.vy * dt; r.x += Math.sin(r.y * 0.05 + r.w) * 12 * dt;
+      wipe(ox, oy, r.x, r.y, r.r * 0.8);
+      s.drops = s.drops.filter((d) => { if (Math.hypot(d.x - r.x, d.y - r.y) < r.r + d.r) { r.r = Math.min(9, r.r + d.r * 0.08); return false; } return true; });
+    }
+    s.run = s.run.filter((r) => r.y < GLASS.y + GLASS.h + 10);
+    // lightning now and then
+    s.bolt -= dt; s.flash = Math.max(0, s.flash - dt * 2.5);
+    if (s.bolt <= 0) { s.flash = 1; s.bolt = K.rand(25, 45); K.noise(2.2, 0.12, 120, 0.9, 0.3); K.noise(1.2, 0.06, 400, 1.0, 0.5); }
+  },
+  draw(s) {
+    const c = K.ctx(), G = GLASS;
+    K.rect(0, 0, 960, 540, '#3a2a24');
+    c.save(); c.beginPath(); c.rect(G.x, G.y, G.w, G.h); c.clip();
+    c.drawImage(scene, 0, 0);
+    if (s.flash > 0) { K.alpha(s.flash * 0.6); K.rect(0, 0, 960, 540, '#d8e0ff'); K.alpha(1); }
+    for (let i = 0; i < 60; i++) { const x = (i * 97 + K.time() * 40) % 960, y = (i * 53 + K.time() * 900) % 560; K.alpha(0.12); K.line(x, y, x - 4, y + 22, '#c8d8ff', 1); } K.alpha(1);
+    c.drawImage(fog, 0, 0);
+    s.drops.forEach((d) => { K.circle(d.x, d.y + d.r * 0.3, d.r, 'rgba(10,10,30,0.35)'); K.circle(d.x, d.y, d.r, 'rgba(220,230,255,0.45)'); K.circle(d.x - d.r * 0.3, d.y - d.r * 0.3, d.r * 0.35, 'rgba(255,255,255,0.8)'); });
+    s.run.forEach((r) => { c.fillStyle = 'rgba(220,230,255,0.5)'; c.beginPath(); c.ellipse(r.x, r.y, r.r * 0.85, r.r * 1.15, 0, 0, 6.28); c.fill(); K.circle(r.x - r.r * 0.3, r.y - r.r * 0.4, r.r * 0.3, '#fff'); });
+    c.restore();
+    // window frame, sill, tea, cat
+    K.stroke(G.x - 8, G.y - 8, G.w + 16, G.h + 16, '#6a4a34', 16); K.rect(G.x + G.w / 2 - 6, G.y, 12, G.h, '#6a4a34'); K.rect(G.x, G.y + G.h / 2 - 5, G.w, 10, '#6a4a34');
+    K.rect(30, 438, 900, 30, '#7a5a42', 4); K.rect(20, 462, 920, 10, '#5a3e2c');
+    K.rect(150, 404, 46, 38, '#e8e0d8', 8); c.strokeStyle = '#e8e0d8'; c.lineWidth = 5; c.beginPath(); c.arc(198, 422, 11, -1.4, 1.4); c.stroke(); K.rect(154, 408, 38, 8, '#8a5a3a', 3);
+    for (let i = 0; i < 3; i++) { const t = (K.time() * 0.6 + i / 3) % 1; K.alpha(0.35 * (1 - t)); K.circle(165 + i * 8 + Math.sin(t * 6 + i) * 6, 398 - t * 50, 5 + t * 6, '#fff'); } K.alpha(1);
+    const cx = 700; c.fillStyle = '#1a1418'; c.beginPath(); c.ellipse(cx, 425, 52, 22, 0, 0, 6.28); c.fill(); K.circle(cx + 40, 410, 18, '#1a1418'); K.poly([[cx + 28, 400], [cx + 32, 384], [cx + 40, 396]], '#1a1418'); K.poly([[cx + 42, 396], [cx + 50, 384], [cx + 54, 400]], '#1a1418');
+    c.strokeStyle = '#1a1418'; c.lineWidth = 8; c.lineCap = 'round'; c.beginPath(); c.moveTo(cx - 48, 430); c.quadraticCurveTo(cx - 80, 440 + Math.sin(K.time()) * 4, cx - 70 + Math.sin(K.time() * 0.8) * 8, 452); c.stroke();
+    if (Math.sin(K.time() * 0.4) > 0.8) { K.circle(cx + 34, 408, 2, '#e8d070'); K.circle(cx + 46, 408, 2, '#e8d070'); }
+    K.text(`${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')}`, 30, 506, 14, '#c8b8a8', 'left', 'd');
+    K.rect(840, 486, 104, 40, '#5a3e2c', 10); K.text('DONE', 892, 507, 13, '#e8d8c8', 'center', 'd');
+    if (s.time < 7 && !K.attract) K.text('draw on the fogged glass', 480, 506, 15, '#e8d8c8', 'center', 'u');
+  },
+  ai(s, dt) { s.aa = (s.aa || 0) + dt; const t = s.aa; K.vmouse(480 + Math.sin(t * 1.3) * 200 + Math.sin(t * 3.1) * 40, 230 + Math.sin(t * 2.2) * 120, false, Math.sin(t * 0.5) > -0.2); },
+});
+</script></body></html>

@@ -3572,6 +3572,138 @@ export const GAME_LIST = [
 "cover": "games/covers/domino-topple.png"
 },
 {
+"id": "hue-sort",
+"n": 191,
+"title": "HUE SORT",
+"genre": "relax",
+"desc": "A soft wash of colour, all jumbled up. Swap the tiles until every colour sits where it belongs and the whole board flows from corner to corner in one smooth gradient. Tiles with a dot are pinned in place - they are your clues. No timer, no rush; the boards grow finer as you go.",
+"controls": "Click / tap two tiles to swap them (or drag one onto another) · hold PEEK (or H) to see the finished board · DONE to stop",
+"scoreLabel": "BOARDS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Sort 5 gradients in Hue Sort"
+}
+],
+"file": "games/2d/hue-sort.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/hue-sort.png"
+},
+{
+"id": "power-wash",
+"n": 192,
+"title": "POWER WASH",
+"genre": "relax",
+"desc": "Years of mud, moss and grime, and one very strong hose. Hold to spray and watch the dirt peel away in clean stripes until the whole thing gleams. A garden gnome, a bike, a fence, a car, a doghouse and an old fountain - each one to 100%. Thick moss takes a little longer. No timer.",
+"controls": "Hold the mouse / your finger to spray where you point · 1 = narrow jet, 2 = wide fan (or tap the nozzle buttons) · DONE to stop",
+"scoreLabel": "CLEANED",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Clean 3 things in Power Wash"
+}
+],
+"file": "games/2d/power-wash.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/power-wash.png"
+},
+{
+"id": "color-mix",
+"n": 193,
+"title": "COLOR MIX",
+"genre": "relax",
+"desc": "A quiet afternoon in the paint shop. Each customer brings a little colour swatch; drip red, yellow, blue, white and black into the bowl until your mix matches it. Paints mix like real paint - yellow and blue make green, a drop of black goes a long way. Use as few drops as you can for three stars.",
+"controls": "Click / tap a paint pot (or keys 1 - 5) to add a drop · UNDO / Backspace · EMPTY / E · the bowl shows how close you are",
+"scoreLabel": "STARS",
+"tasks": [
+{
+"stat": "score",
+"target": 15,
+"text": "Earn 15 stars in Color Mix"
+}
+],
+"file": "games/2d/color-mix.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/color-mix.png"
+},
+{
+"id": "firefly-jar",
+"n": 194,
+"title": "FIREFLY JAR",
+"genre": "relax",
+"desc": "A warm summer evening in the meadow. Fireflies drift over the grass, glowing on and off. Catch them in your jar - but only while they are glowing, a dark firefly just slips away. Blue ones are rare and quick, pink ones are shy and flee if you swing the jar too fast. Fill a jar and it becomes a lantern. When it is bedtime, you let them all go.",
+"controls": "Move the mouse (or drag) to carry the jar · click / tap (or Space) to scoop when a firefly is glowing inside the jar's mouth",
+"scoreLabel": "FIREFLIES",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Catch 40 fireflies"
+}
+],
+"file": "games/2d/firefly-jar.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/firefly-jar.png"
+},
+{
+"id": "pottery-wheel",
+"n": 195,
+"title": "POTTERY WHEEL",
+"genre": "relax",
+"desc": "Wet clay spinning on the wheel. Touch its side and drag to shape it - press in and the clay rises taller, ease out and it widens into a bowl. When you like it, pick a glaze and a pattern and slide it into the kiln. Your finished pots line up on the shelf.",
+"controls": "Hold and drag on the edge of the clay to shape it (in = thinner and taller, out = wider) · FIRE when you like it · pick a glaze + pattern · KILN",
+"scoreLabel": "POTS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Fire 3 pots on the Pottery Wheel"
+}
+],
+"file": "games/2d/pottery-wheel.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/pottery-wheel.png"
+},
+{
+"id": "rain-window",
+"n": 196,
+"title": "RAIN WINDOW",
+"genre": "relax",
+"desc": "A rainy night, a warm room, a cup of tea and a sleepy cat on the windowsill. The glass is all fogged up - draw on it with your finger to see the city lights outside, and watch the raindrops race each other down the pane. The fog slowly comes back. Stay as long as you like.",
+"controls": "Drag on the glass to wipe the fog / draw · tap a big raindrop to send it sliding · DONE when you are ready to go",
+"scoreLabel": "MINUTES",
+"tasks": [
+{
+"stat": "score",
+"target": 2,
+"text": "Watch the rain for 2 minutes"
+}
+],
+"file": "games/2d/rain-window.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/rain-window.png"
+},
+{
 "id": "gravity-flip",
 "n": 1,
 "title": "GRAVITY FLIP",

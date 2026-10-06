@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Color Mix</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"color-mix","n":193,"title":"COLOR MIX","genre":"relax","desc":"A quiet afternoon in the paint shop. Each customer brings a little colour swatch; drip red, yellow, blue, white and black into the bowl until your mix matches it. Paints mix like real paint - yellow and blue make green, a drop of black goes a long way. Use as few drops as you can for three stars.","controls":"Click / tap a paint pot (or keys 1 - 5) to add a drop · UNDO / Backspace · EMPTY / E · the bowl shows how close you are","scoreLabel":"STARS","tasks":[{"stat":"score","target":15,"text":"Earn 15 stars in Color Mix"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// each paint reflects this much red / green / blue light; a mix is the weighted geometric mean (like real pigments)
+const PAINT = [{ n: 'RED', r: [0.85, 0.08, 0.1] }, { n: 'YELLOW', r: [0.95, 0.85, 0.08] }, { n: 'BLUE', r: [0.06, 0.22, 0.75] }, { n: 'WHITE', r: [0.97, 0.97, 0.97] }, { n: 'BLACK', r: [0.05, 0.05, 0.06] }];
+const ROUNDS = 10;
+function mixLin(drops) { const n = drops.reduce((a, b) => a + b, 0); if (!n) return null; return [0, 1, 2].map((ch) => Math.exp(drops.reduce((a, d, i) => a + (d / n) * Math.log(PAINT[i].r[ch]), 0))); }
+const toS = (v) => Math.round(255 * Math.min(1, v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055));
+const css = (lin) => (lin ? `rgb(${toS(lin[0])},${toS(lin[1])},${toS(lin[2])})` : '#f4f0ea');
+function lab(lin) { const [r, g, b] = lin, l = Math.cbrt(0.4122214708 * r + 0.5363288 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b); return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s]; }
+const match = (a, b) => { if (!a || !b) return 0; const A = lab(a), B = lab(b); return Math.max(0, 100 * (1 - Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]) / 0.25)); };
+// names by hue (OKLab angle) and light / dark
+const NAMES = [[20, ['Blush', 'Rose', 'Candy'], ['Berry', 'Raspberry']], [45, ['Coral', 'Salmon', 'Peach'], ['Brick', 'Terracotta', 'Rust']], [80, ['Apricot', 'Tangerine'], ['Copper', 'Cinnamon']], [120, ['Butter', 'Lemon', 'Sand'], ['Mustard', 'Ochre']],
+  [175, ['Mint', 'Pistachio', 'Sage'], ['Moss', 'Olive', 'Fern', 'Pine']], [235, ['Sea Glass', 'Aqua'], ['Teal', 'Spruce']], [290, ['Sky', 'Cornflower'], ['Denim', 'Navy', 'Slate']], [345, ['Lavender', 'Lilac'], ['Plum', 'Grape']], [380, ['Blush', 'Rose'], ['Berry', 'Mulberry']]];
+const GREYS = [['Fog', 'Pebble', 'Cloud'], ['Ash', 'Stone', 'Smoke']];
+function order(s) {
+  let rec, tgt;
+  for (let k = 0; k < 50; k++) {
+    const kinds = Math.min(4, 2 + Math.floor(s.r / 3)), pick = K.shuffle([0, 1, 2, 3, 4]).slice(0, kinds); rec = [0, 0, 0, 0, 0];
+    pick.forEach((i) => (rec[i] = i === 4 ? 1 : K.irand(1, 3)));
+    tgt = mixLin(rec); const L = lab(tgt)[0]; if (L > 0.3 && L < 0.95) break;
+  }
+  const L = lab(tgt), hue = Math.atan2(L[2], L[1]), chroma = Math.hypot(L[1], L[2]);
+  const deg = ((hue * 180) / Math.PI + 360) % 360, light = L[0] > 0.7 ? 0 : 1;
+  s.name = K.pick(chroma < 0.035 ? GREYS[light] : NAMES.find((n) => deg < n[0])[1 + light]);
+  s.rec = rec; s.min = rec.reduce((a, b) => a + b, 0); s.tgt = tgt; s.drops = [0, 0, 0, 0, 0]; s.hist = []; s.fall = []; s.ok = 0; s.cust = K.pick(['🧑‍🎨', '👵', '🧔', '👩‍🦱', '🧑', '👨‍🦳', '👧']);
+}
+const POT = (i) => ({ x: 120 + i * 150, y: 410, w: 120, h: 100 });
+K.game({
+  bg: '#efe6d8', touch: { stick: false, buttons: [] },
+  init(s) { s.r = 0; s.stars = 0; s.res = []; order(s); },
+  update(s, dt) {
+    s.fall.forEach((f) => (f.t += dt * 2.6)); s.fall = s.fall.filter((f) => f.t < 1);
+    if (s.ok > 0) { s.ok += dt; if (s.ok > 2.2) { s.r++; if (s.r >= ROUNDS) return K.end(s, { score: s.stars, won: s.stars >= 20, stats: { won: s.stars >= 20 ? 1 : 0 }, title: 'SHOP CLOSED', text: `${s.stars} stars from ${ROUNDS} colours.` }); order(s); } return; }
+    const m = K.mouse; let add = -1;
+    PAINT.forEach((p, i) => { if (K.tap('Digit' + (i + 1), 'Numpad' + (i + 1)) || (m.clicked && K.inRect(m.x, m.y, POT(i)))) add = i; });
+    if (add >= 0 && s.hist.length < 24) { s.drops[add]++; s.hist.push(add); s.fall.push({ i: add, t: 0 }); K.tone(700 - add * 60, 0.12, 'sine', 0.05, -200); }
+    if (K.tap('Backspace') || (m.clicked && K.inRect(m.x, m.y, { x: 640, y: 300, w: 120, h: 40 }))) { const l = s.hist.pop(); if (l != null) { s.drops[l]--; K.sfx('click'); } }
+    if (K.tap('KeyE') || (m.clicked && K.inRect(m.x, m.y, { x: 780, y: 300, w: 120, h: 40 }))) { s.drops = [0, 0, 0, 0, 0]; s.hist = []; K.sfx('splash'); }
+    s.pct = match(mixLin(s.drops), s.tgt);
+    if (s.pct >= 98.5) { const n = s.hist.length, st = n <= s.min ? 3 : n <= s.min + 3 ? 2 : 1; s.stars += st; s.res.push(st); s.got = st; s.ok = 0.001; K.sfx('win'); }
+  },
+  draw(s) {
+    const c = K.ctx(), mix = mixLin(s.drops);
+    // shop wall + counter
+    for (let x = 0; x < 960; x += 60) K.rect(x, 0, 30, 380, '#f4ecdf');
+    K.rect(0, 380, 960, 160, '#c8a882'); K.rect(0, 376, 960, 10, '#a88862');
+    // customer + their swatch
+    K.text(s.cust, 130, 200, 96); K.rect(60, 250, 150, 16, '#a88862', 4);
+    K.rect(230, 70, 190, 150, '#fff', 8); K.rect(240, 80, 170, 105, css(s.tgt), 6); K.text(s.name, 325, 202, 16, '#5a4a3a', 'center', 'd');
+    K.text('"could you mix me this?"', 325, 50, 14, '#7a6a5a', 'center', 'u');
+    // the bowl
+    K.alpha(0.2); c.fillStyle = '#000'; c.beginPath(); c.ellipse(560, 290, 120, 18, 0, 0, 6.28); c.fill(); K.alpha(1);
+    c.fillStyle = '#e8e4e0'; c.beginPath(); c.ellipse(560, 170, 130, 36, 0, 0, 6.28); c.fill(); c.beginPath(); c.moveTo(430, 170); c.quadraticCurveTo(440, 290, 560, 290); c.quadraticCurveTo(680, 290, 690, 170); c.fill();
+    c.fillStyle = css(mix); c.beginPath(); c.ellipse(560, 176, 112, 28, 0, 0, 6.28); c.fill();
+    if (mix) { const t = K.time() * 1.4; K.alpha(0.18); for (let i = 0; i < 3; i++) { c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.ellipse(560, 176, 30 + i * 26, 7 + i * 6, 0, t + i, t + i + 2); c.stroke(); } K.alpha(1); }
+    else K.text('empty', 560, 178, 14, '#b8b0a8', 'center', 'u');
+    // drops falling
+    s.fall.forEach((f) => { const p = POT(f.i), x = K.lerp(p.x + 60, 560, f.t), y = K.lerp(p.y, 176, f.t) - Math.sin(f.t * Math.PI) * 120; K.circle(x, y, 7, css(PAINT[f.i].r)); });
+    // closeness
+    const pct = Math.floor(s.pct || 0); K.rect(720, 90, 200, 16, '#e8dcc8', 8); K.rect(720, 90, 2 * pct, 16, pct > 95 ? '#3ac87a' : pct > 80 ? '#e8b84a' : '#d88a6a', 8);
+    K.text(`${pct}% match`, 820, 124, 15, '#5a4a3a', 'center', 'd'); K.text(`${s.hist.length} drop${s.hist.length === 1 ? '' : 's'}`, 820, 150, 13, '#7a6a5a', 'center', 'u');
+    K.text(`3★ in ${s.min} drops`, 820, 172, 12, '#9a8a7a', 'center', 'u');
+    [['UNDO ⌫', 640], ['EMPTY', 780]].forEach(([l, x]) => { K.rect(x, 300, 120, 40, '#f8f2e8', 10); K.stroke(x, 300, 120, 40, '#a88862', 2, 10); K.text(l, x + 60, 321, 13, '#5a4a3a', 'center', 'd'); });
+    // paint pots
+    PAINT.forEach((p, i) => { const b = POT(i), hov = K.inRect(K.mouse.x, K.mouse.y, b) && !K.isTouch; K.rect(b.x + 10, b.y + (hov ? 14 : 20), 100, 76, '#d8d4d0', 12); K.rect(b.x + 14, b.y + (hov ? 18 : 24), 92, 30, css(p.r), 10); K.text(p.n, b.x + 60, b.y + (hov ? 70 : 76), 12, '#5a4a3a', 'center', 'd'); K.text(`${i + 1}`, b.x + 60, b.y + (hov ? 88 : 94), 10, '#9a8a7a', 'center', 'd'); if (s.drops[i]) K.text(`×${s.drops[i]}`, b.x + 100, b.y + 18, 14, '#5a4a3a', 'center', 'd'); });
+    K.text(`colour ${Math.min(ROUNDS, s.r + 1)} / ${ROUNDS}`, 940, 30, 13, '#7a6a5a', 'right', 'd'); K.text(`${s.stars} ★`, 940, 56, 18, '#c8962a', 'right', 'd');
+    if (s.ok > 0) { K.alpha(Math.min(1, s.ok * 3)); K.rect(300, 200, 520, 100, '#fffaf0ee', 16); K.text('perfect match!', 560, 232, 22, '#5a4a3a', 'center', 'd'); K.text('★'.repeat(s.got) + '☆'.repeat(3 - s.got), 560, 272, 30, '#e8a82a', 'center', 'u'); K.alpha(1); }
+  },
+  ai(s, dt) {
+    s.aw = (s.aw || 0) - dt; if (s.aw > 0 || s.ok > 0) return; s.aw = 0.4;
+    const i = s.rec.findIndex((n, k) => s.drops[k] < n); if (i >= 0) K.vtap('Digit' + (i + 1));
+  },
+});
+</script></body></html>

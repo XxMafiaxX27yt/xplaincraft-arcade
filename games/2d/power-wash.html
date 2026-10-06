@@ -1,0 +1,94 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Power Wash</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"power-wash","n":192,"title":"POWER WASH","genre":"relax","desc":"Years of mud, moss and grime, and one very strong hose. Hold to spray and watch the dirt peel away in clean stripes until the whole thing gleams. A garden gnome, a bike, a fence, a car, a doghouse and an old fountain - each one to 100%. Thick moss takes a little longer. No timer.","controls":"Hold the mouse / your finger to spray where you point · 1 = narrow jet, 2 = wide fan (or tap the nozzle buttons) · DONE to stop","scoreLabel":"CLEANED","tasks":[{"stat":"score","target":3,"text":"Clean 3 things in Power Wash"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CELL = 8, GW = 120, GH = 68;
+const base = document.createElement('canvas'), dirtSmall = document.createElement('canvas'), dirtBig = document.createElement('canvas'), grime = document.createElement('canvas');
+base.width = dirtBig.width = grime.width = 960; base.height = dirtBig.height = grime.height = 540; dirtSmall.width = GW; dirtSmall.height = GH;
+const bc = base.getContext('2d'), sc = dirtSmall.getContext('2d'), dc = dirtBig.getContext('2d'), gc = grime.getContext('2d');
+(() => { gc.fillStyle = '#5a4630'; gc.fillRect(0, 0, 960, 540); for (let i = 0; i < 14000; i++) { const g = Math.random(); gc.fillStyle = g < 0.5 ? `rgba(40,30,18,${Math.random() * 0.5})` : g < 0.8 ? `rgba(110,90,60,${Math.random() * 0.4})` : `rgba(70,90,40,${Math.random() * 0.5})`; gc.fillRect(Math.random() * 960, Math.random() * 540, 2 + Math.random() * 5, 2 + Math.random() * 5); } })();
+const R = (x, y, w, h, c, r = 0) => { bc.fillStyle = c; bc.beginPath(); bc.roundRect(x, y, w, h, r); bc.fill(); };
+const Cc = (x, y, r, c) => { bc.fillStyle = c; bc.beginPath(); bc.arc(x, y, r, 0, 6.28); bc.fill(); };
+const P = (pts, c) => { bc.fillStyle = c; bc.beginPath(); pts.forEach(([x, y], i) => (i ? bc.lineTo(x, y) : bc.moveTo(x, y))); bc.fill(); };
+const Ln = (x1, y1, x2, y2, c, w) => { bc.strokeStyle = c; bc.lineWidth = w; bc.lineCap = 'round'; bc.beginPath(); bc.moveTo(x1, y1); bc.lineTo(x2, y2); bc.stroke(); };
+const THINGS = [
+  { name: 'GARDEN GNOME', draw() { R(420, 420, 50, 40, '#5a3a24', 10); R(490, 420, 50, 40, '#5a3a24', 10); R(410, 290, 140, 140, '#3a6ac8', 30); Cc(480, 250, 52, '#f0c8a0'); P([[480, 220], [520, 245], [500, 330], [480, 360], [460, 330], [440, 245]], '#f4f4f0'); Cc(480, 238, 10, '#e8907a'); Cc(462, 222, 5, '#2a2020'); Cc(498, 222, 5, '#2a2020'); P([[420, 215], [540, 215], [480, 70]], '#d83a3a'); R(400, 320, 30, 70, '#3a6ac8', 14); R(530, 320, 30, 70, '#3a6ac8', 14); Cc(415, 395, 14, '#f0c8a0'); Cc(545, 395, 14, '#f0c8a0'); R(410, 380, 140, 14, '#2a2a2a'); R(470, 380, 20, 14, '#e8c040'); } },
+  { name: 'BICYCLE', draw() { for (const x of [330, 630]) { bc.strokeStyle = '#222'; bc.lineWidth = 14; bc.beginPath(); bc.arc(x, 380, 82, 0, 6.28); bc.stroke(); for (let i = 0; i < 8; i++) Ln(x, 380, x + Math.cos(i * 0.785) * 76, 380 + Math.sin(i * 0.785) * 76, '#b8b8c0', 3); Cc(x, 380, 10, '#888'); } Ln(330, 380, 450, 380, '#2a8ac8', 12); Ln(450, 380, 410, 250, '#2a8ac8', 12); Ln(410, 250, 590, 250, '#2a8ac8', 12); Ln(590, 250, 450, 380, '#2a8ac8', 12); Ln(330, 380, 410, 250, '#2a8ac8', 10); Ln(590, 250, 630, 380, '#2a8ac8', 10); Ln(590, 250, 575, 200, '#555', 8); Ln(545, 195, 615, 195, '#333', 10); Ln(410, 250, 400, 220, '#555', 8); R(370, 205, 70, 16, '#2a2a2a', 8); Cc(450, 380, 18, '#666'); } },
+  { name: 'GARDEN FENCE', draw() { for (let i = 0; i < 9; i++) { const x = 190 + i * 66; P([[x, 190], [x + 26, 160], [x + 52, 190], [x + 52, 470], [x, 470]], i % 2 ? '#c8a070' : '#d8b080'); } R(180, 230, 600, 24, '#b08858'); R(180, 400, 600, 24, '#b08858'); } },
+  { name: 'LITTLE RED CAR', draw() { R(220, 300, 520, 110, '#d8302a', 40); P([[330, 300], [380, 210], [590, 210], [650, 300]], '#d8302a'); P([[350, 296], [392, 222], [470, 222], [470, 296]], '#9ad8f0'); P([[490, 296], [490, 222], [580, 222], [625, 296]], '#9ad8f0'); R(230, 330, 40, 20, '#ffe8a0', 8); R(700, 330, 34, 18, '#ff6a5a', 8); for (const x of [330, 630]) { Cc(x, 410, 56, '#222'); Cc(x, 410, 28, '#c8c8d0'); } R(420, 330, 40, 8, '#8a1a1a', 4); R(560, 330, 40, 8, '#8a1a1a', 4); } },
+  { name: 'DOGHOUSE', draw() { R(330, 260, 300, 200, '#e8a050'); P([[300, 270], [480, 130], [660, 270]], '#8a3a2a'); bc.fillStyle = '#2a1a10'; bc.beginPath(); bc.moveTo(430, 460); bc.lineTo(430, 360); bc.arc(480, 360, 50, Math.PI, 0); bc.lineTo(530, 460); bc.fill(); R(440, 220, 80, 26, '#f4e8c8', 6); for (let i = 0; i < 4; i++) R(330, 280 + i * 46, 300, 3, '#c88030'); R(560, 430, 70, 30, '#c8c8d0', 12); } },
+  { name: 'OLD FOUNTAIN', draw() { R(260, 400, 440, 70, '#a8a8b0', 20); R(280, 390, 400, 20, '#b8b8c0', 10); R(455, 250, 50, 150, '#b0b0b8', 10); bc.fillStyle = '#b8b8c0'; bc.beginPath(); bc.ellipse(480, 250, 130, 30, 0, 0, 3.14); bc.fill(); R(350, 236, 260, 18, '#c0c0c8', 9); R(465, 160, 30, 80, '#b0b0b8', 10); Cc(480, 150, 26, '#c0c0c8'); for (let i = 0; i < 5; i++) R(290 + i * 80, 420, 50, 30, '#9a9aa2', 6); } },
+];
+function load(s) {
+  bc.clearRect(0, 0, 960, 540); THINGS[s.i].draw();
+  const px = bc.getImageData(0, 0, 960, 540).data; s.d = new Float32Array(GW * GH); s.total = 0;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    let on = 0; for (const [ox, oy] of [[2, 2], [6, 2], [2, 6], [6, 6], [4, 4]]) if (px[((y * CELL + oy) * 960 + x * CELL + ox) * 4 + 3] > 100) on++;
+    if (on >= 2) { const n = Math.sin(x * 0.31 + s.i) * Math.cos(y * 0.27) + Math.sin(x * 0.07 + y * 0.11) * 0.8; s.d[y * GW + x] = K.clamp(0.9 + n * 0.45 + (Math.random() < 0.04 ? 0.6 : 0), 0.5, 1.9); s.total++; }
+  }
+  s.clean = 0; s.shine = 0; s.dirty = true;
+}
+function paintDirt(s) {
+  const img = sc.createImageData(GW, GH);
+  for (let k = 0; k < GW * GH; k++) { const v = s.d[k]; if (v > 0.03) img.data[k * 4 + 3] = Math.min(255, 70 + v * 100); }
+  sc.putImageData(img, 0, 0);
+  dc.globalCompositeOperation = 'source-over'; dc.clearRect(0, 0, 960, 540); dc.imageSmoothingEnabled = true; dc.drawImage(dirtSmall, 0, 0, 960, 544);
+  dc.globalCompositeOperation = 'source-in'; dc.drawImage(grime, 0, 0); dc.globalCompositeOperation = 'source-over'; s.dirty = false;
+}
+K.game({
+  bg: '#9ac8e8', touch: { stick: false, buttons: [] },
+  init(s) { s.i = 0; s.done = 0; s.wide = false; s.drops = []; load(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (K.tap('Digit1')) s.wide = false; if (K.tap('Digit2')) s.wide = true;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 470, w: 64, h: 50 })) { s.wide = false; return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 92, y: 470, w: 64, h: 50 })) { s.wide = true; return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 840, y: 476, w: 104, h: 40 })) return K.end(s, { score: s.done, won: s.done >= 3 ? true : null, stats: { won: s.done >= 3 ? 1 : 0 }, title: 'SPARKLING', text: `${s.done} thing${s.done === 1 ? '' : 's'} washed clean.` });
+    if (s.shine > 0) { s.shine += dt; if (s.shine > 2.6) { s.i++; if (s.i >= THINGS.length) return K.end(s, { score: s.done, won: true, stats: { won: 1 }, title: 'EVERYTHING GLEAMS', text: 'The whole garden, washed. The neighbours are jealous.' }); load(s); } return; }
+    s.spray = m.down && !K.inRect(m.x, m.y, { x: 10, y: 462, w: 156, h: 70 }) && !K.inRect(m.x, m.y, { x: 832, y: 468, w: 120, h: 60 });
+    if (s.spray) {
+      const rad = s.wide ? 46 : 22, pow = (s.wide ? 1.1 : 3.2) * dt, cx = m.x / CELL, cy = m.y / CELL, rc = rad / CELL;
+      for (let y = Math.max(0, Math.floor(cy - rc)); y <= Math.min(GH - 1, Math.ceil(cy + rc)); y++) for (let x = Math.max(0, Math.floor(cx - rc)); x <= Math.min(GW - 1, Math.ceil(cx + rc)); x++) {
+        const k = y * GW + x, v = s.d[k]; if (v <= 0) continue; const dd = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / rc; if (dd > 1) continue;
+        const nv = Math.max(0, v - pow * (1 - dd * dd)); s.d[k] = nv; if (nv < 0.03 && v >= 0.03) { s.d[k] = 0; s.clean++; } s.dirty = true;
+      }
+      s.hiss = (s.hiss || 0) - dt; if (s.hiss <= 0) { K.noise(0.1, s.wide ? 0.025 : 0.035, s.wide ? 1600 : 2600); s.hiss = 0.08; }
+      for (let i = 0; i < 3; i++) s.drops.push({ x: m.x + K.rand(-rad, rad) * 0.6, y: m.y + K.rand(-rad, rad) * 0.6, vx: K.rand(-90, 90), vy: K.rand(-120, 20), t: 0.4 });
+      if (s.clean / s.total > 0.99) { s.d.fill(0); s.clean = s.total; s.dirty = true; s.shine = 0.001; s.done++; K.sfx('win'); }
+    }
+    s.drops.forEach((d) => { d.vy += 600 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.t -= dt; }); s.drops = s.drops.filter((d) => d.t > 0).slice(-160);
+  },
+  draw(s) {
+    const c = K.ctx(), m = K.mouse;
+    K.rect(0, 380, 960, 160, '#7ab858'); for (let i = 0; i < 40; i++) K.rect((i * 53) % 960, 380 + ((i * 37) % 150), 3, 8, '#6aa848');
+    K.alpha(0.25); c.fillStyle = '#000'; c.beginPath(); c.ellipse(480, 470, 300, 24, 0, 0, 6.28); c.fill(); K.alpha(1);
+    c.drawImage(base, 0, 0);
+    if (s.dirty) paintDirt(s);
+    c.drawImage(dirtBig, 0, 0);
+    // the last few spots pulse so you can find them
+    if (s.clean / Math.max(1, s.total) > 0.94 && !s.shine) { K.alpha(0.4 + 0.3 * Math.sin(K.time() * 6)); for (let k = 0; k < s.d.length; k++) if (s.d[k] > 0) K.ring((k % GW) * CELL + 4, Math.floor(k / GW) * CELL + 4, 7, '#ffb43a', 2); K.alpha(1); }
+    if (s.shine > 0) for (let i = 0; i < 10; i++) { const a = s.shine * 3 + i * 0.63, x = 480 + Math.cos(a * 1.7 + i) * 220, y = 300 + Math.sin(a * 1.3 + i * 2) * 140; K.text('✦', x, y, 14 + Math.sin(a * 5) * 8, '#ffffff'); }
+    // the hose wand + water
+    if (s.spray) { const nx = 930, ny = 560; K.alpha(0.5); K.line(nx, ny, m.x, m.y, '#e8f8ff', s.wide ? 10 : 4); K.alpha(1); }
+    s.drops.forEach((d) => K.circle(d.x, d.y, 2, '#e8f8ffcc'));
+    if (!K.isTouch || s.spray) { K.ring(m.x, m.y, s.wide ? 46 : 22, '#ffffff99', 2); K.circle(m.x, m.y, 2, '#fff'); }
+    // HUD
+    const pct = Math.floor((s.clean / Math.max(1, s.total)) * 100);
+    K.rect(300, 16, 360, 34, '#ffffffcc', 17); K.rect(306, 22, 348 * (s.clean / Math.max(1, s.total)), 22, '#3ac8a0', 11); K.text(`${THINGS[s.i].name} · ${pct}%`, 480, 34, 14, '#1a3a4a', 'center', 'd');
+    [['JET', false, 20], ['FAN', true, 92]].forEach(([l, w, x]) => { K.rect(x, 470, 64, 50, s.wide === w ? '#1a6a8a' : '#ffffffaa', 10); K.text(l, x + 32, 488, 12, s.wide === w ? '#fff' : '#1a3a4a', 'center', 'd'); K.text(w ? '2' : '1', x + 32, 507, 10, s.wide === w ? '#cce' : '#567', 'center', 'd'); });
+    K.rect(840, 476, 104, 40, '#ffffffcc', 10); K.text('DONE', 892, 497, 13, '#1a3a4a', 'center', 'd');
+    K.text(`${s.done} clean`, 940, 34, 14, '#1a3a4a', 'right', 'd');
+    if (s.shine > 0) K.text('SPOTLESS!', 480, 100, 34, '#ffffff', 'center', 'd', 14);
+    else if (s.i === 0 && pct < 3 && !K.attract) K.text('hold to spray', 480, 84, 16, '#1a3a4a', 'center', 'u');
+  },
+  ai(s, dt) {
+    s.ax = s.ax ?? 0; s.ay = s.ay ?? 0;
+    if (!s.tgt || s.d[s.tgt] <= 0) { const left = []; for (let k = 0; k < s.d.length; k++) if (s.d[k] > 0) left.push(k); s.tgt = left.length ? K.pick(left) : null; }
+    if (s.tgt == null) return; const tx = (s.tgt % GW) * CELL + 4, ty = Math.floor(s.tgt / GW) * CELL + 4;
+    s.ax = K.lerp(s.ax || tx, tx, Math.min(1, dt * 4)); s.ay = K.lerp(s.ay || ty, ty, Math.min(1, dt * 4)); s.wide = true;
+    K.vmouse(s.ax + Math.sin(K.time() * 9) * 20, s.ay, false, true);
+  },
+});
+</script></body></html>

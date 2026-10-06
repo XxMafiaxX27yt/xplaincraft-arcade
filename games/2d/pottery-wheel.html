@@ -1,0 +1,91 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pottery Wheel</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pottery-wheel","n":195,"title":"POTTERY WHEEL","genre":"relax","desc":"Wet clay spinning on the wheel. Touch its side and drag to shape it - press in and the clay rises taller, ease out and it widens into a bowl. When you like it, pick a glaze and a pattern and slide it into the kiln. Your finished pots line up on the shelf.","controls":"Hold and drag on the edge of the clay to shape it (in = thinner and taller, out = wider) · FIRE when you like it · pick a glaze + pattern · KILN","scoreLabel":"POTS","tasks":[{"stat":"score","target":3,"text":"Fire 3 pots on the Pottery Wheel"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const N = 40, CX = 430, BASE = 440;
+const GLAZE = ['#3a7ab8', '#2e8a6a', '#c84a3a', '#e8b84a', '#f2ece0', '#5a3a6a', '#2a2a32', '#d88aa0'];
+const PATTERN = ['plain', 'stripes', 'dots', 'drips'];
+function lump(s) { s.r = Array.from({ length: N }, (_, i) => 80 - i * 0.35); s.h = 150; s.vol = vol(s); s.st = 'shape'; s.glaze = 0; s.pat = 0; s.kiln = 0; s.touched = 0; }
+const vol = (s) => s.r.reduce((a, r) => a + r * r, 0) * (s.h / N);
+const rowY = (s, i) => BASE - (i + 0.5) * (s.h / N);
+function shade(hex, f) { const n = parseInt(hex.slice(1), 16), c = (v) => Math.max(0, Math.min(255, Math.round(v * f))); return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`; }
+function drawPot(s, cx, base, sc, opt) {
+  const c = K.ctx(), rh = (s.h / N) * sc, col = opt.glaze, t = opt.spin || 0;
+  for (let i = 0; i < N; i++) {
+    const r = s.r[i] * sc, y = base - (i + 1) * rh, g = c.createLinearGradient(cx - r, 0, cx + r, 0);
+    g.addColorStop(0, shade(col, 0.5)); g.addColorStop(0.32, shade(col, opt.glossy ? 1.25 : 1.05)); g.addColorStop(0.7, shade(col, 0.85)); g.addColorStop(1, shade(col, 0.45));
+    c.fillStyle = g; c.fillRect(cx - r, y, 2 * r, rh + 1);
+    if (opt.pat === 1 && i % 6 < 2) { c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(cx - r, y, 2 * r, rh + 1); }
+    if (opt.pat === 2 && i % 8 === 4) for (let k = 0; k < 10; k++) { const a = t + (k / 10) * 6.28; if (Math.cos(a) > 0.1) K.circle(cx + Math.sin(a) * r * 0.92, y + rh / 2, 3 * sc, 'rgba(255,255,255,0.6)'); }
+    if (opt.pat === 3 && i > N - 8) { for (let k = 0; k < 12; k++) { const a = t + (k / 12) * 6.28, len = ((k * 37) % 7) + 2; if (Math.cos(a) > 0 && N - i < len) c.fillStyle = 'rgba(255,255,255,0.4)', c.fillRect(cx + Math.sin(a) * r - 3 * sc, y, 6 * sc, rh + 1); } }
+    if (opt.spin != null && !opt.glossy) for (let k = 0; k < 5; k++) { const a = t * 3 + k * 1.26; if (Math.cos(a) > 0) { c.fillStyle = 'rgba(0,0,0,0.06)'; c.fillRect(cx + Math.sin(a) * r, y, 2, rh + 1); } }
+  }
+  const top = s.r[N - 1] * sc, ty = base - s.h * sc;
+  c.fillStyle = shade(col, 0.35); c.beginPath(); c.ellipse(cx, ty, top, Math.max(2, top * 0.18), 0, 0, 6.28); c.fill();
+  c.fillStyle = shade(col, 0.9); c.beginPath(); c.ellipse(cx, ty, top, Math.max(2, top * 0.18), 0, 0, 6.28); c.lineWidth = 3 * sc; c.strokeStyle = shade(col, 1.1); c.stroke();
+  c.fillStyle = shade(col, 0.3); c.beginPath(); c.ellipse(cx, ty + 1, Math.max(0, top - 9 * sc), Math.max(1, top * 0.14), 0, 0, 6.28); c.fill();
+}
+K.game({
+  bg: '#e8dccb', touch: { stick: false, buttons: [] },
+  init(s) { s.shelf = K.attract ? [] : K.load('pots', []); s.made = 0; lump(s); s.spin = 0; },
+  update(s, dt) {
+    s.spin += dt * 4; const m = K.mouse;
+    const B = (x, y, w, h) => m.clicked && K.inRect(m.x, m.y, { x, y, w, h });
+    if (B(840, 486, 104, 40)) return K.end(s, { score: s.made, won: s.made >= 3 ? true : null, stats: { won: s.made >= 3 ? 1 : 0 }, title: 'STUDIO CLOSED', text: `${s.made} pot${s.made === 1 ? '' : 's'} fired today.` });
+    if (s.st === 'shape') {
+      if (m.down && m.x < 700) {
+        const i = Math.round((BASE - m.y) / (s.h / N) - 0.5), t = K.clamp(Math.abs(m.x - CX), 14, 210);
+        if (i >= -2 && i < N + 2) {
+          const ri = s.r[K.clamp(i, 0, N - 1)];
+          if (Math.abs(t - ri) < 70) {
+            for (let j = 0; j < N; j++) { const w = Math.exp(-((j - i) ** 2) / 18); s.r[j] += (t - s.r[j]) * Math.min(1, 5 * w * dt); }
+            for (let j = 1; j < N - 1; j++) s.r[j] = s.r[j] * 0.96 + (s.r[j - 1] + s.r[j + 1]) * 0.02;
+            s.h = K.clamp((s.vol / s.r.reduce((a, r) => a + r * r, 0)) * N, 50, 300); s.touched += dt;
+            s.hum = (s.hum || 0) - dt; if (s.hum <= 0) { K.noise(0.12, 0.015, 500); s.hum = 0.1; }
+          }
+        }
+      }
+      if (B(720, 330, 200, 50) && s.touched > 0.5) { s.st = 'glaze'; K.sfx('select'); }
+      if (B(720, 392, 200, 40)) { lump(s); K.sfx('splash'); }
+    } else if (s.st === 'glaze') {
+      GLAZE.forEach((g, i) => { if (B(720 + (i % 4) * 52, 110 + Math.floor(i / 4) * 52, 44, 44)) { s.glaze = i; K.sfx('click'); } });
+      PATTERN.forEach((p, i) => { if (B(720 + (i % 2) * 104, 240 + Math.floor(i / 2) * 46, 98, 38)) { s.pat = i; K.sfx('click'); } });
+      if (B(720, 350, 200, 50)) { s.st = 'kiln'; s.kiln = 0; K.sfx('whoosh'); }
+      if (B(720, 410, 200, 36)) s.st = 'shape';
+    } else if (s.st === 'kiln') {
+      s.kiln += dt; if (Math.random() < dt * 8) K.noise(0.2, 0.02, 300);
+      if (s.kiln > 2.6) { s.made++; K.sfx('win'); const pot = { r: s.r.filter((_, i) => i % 4 === 0).map(Math.round), h: Math.round(s.h), g: s.glaze, p: s.pat }; s.shelf = [pot, ...s.shelf].slice(0, 7); if (!K.attract) K.store('pots', s.shelf); s.st = 'done'; s.doneT = 0; }
+    } else if (s.st === 'done') { s.doneT += dt; if (B(720, 360, 200, 50) || s.doneT > 6) lump(s); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    K.rect(0, 0, 960, 120, '#d8c8b2'); K.rect(0, 112, 960, 10, '#a88a68');
+    s.shelf.forEach((p, i) => { const mini = { r: p.r.flatMap((r) => [r, r, r, r]).slice(0, N), h: p.h }; while (mini.r.length < N) mini.r.push(mini.r[mini.r.length - 1]); drawPot(mini, 60 + i * 120, 112, Math.min(0.26, 95 / Math.max(1, p.h)), { glaze: GLAZE[p.g], pat: p.p, glossy: true }); });
+    if (!s.shelf.length) K.text('your finished pots will sit up here', 480, 62, 14, '#8a7a68', 'center', 'u');
+    // the wheel
+    K.rect(CX - 210, BASE + 30, 420, 70, '#6a5a4a', 20); c.fillStyle = '#8a8a90'; c.beginPath(); c.ellipse(CX, BASE + 6, 190, 30, 0, 0, 6.28); c.fill(); c.fillStyle = '#a8a8b0'; c.beginPath(); c.ellipse(CX, BASE, 190, 28, 0, 0, 6.28); c.fill();
+    for (let k = 0; k < 6; k++) { const a = s.spin + k * 1.05; if (Math.sin(a) > 0) K.circle(CX + Math.cos(a) * 160, BASE + Math.sin(a) * 22, 3, '#7a7a80'); }
+    if (s.st === 'kiln') { K.rect(CX - 230, 140, 460, 330, '#3a2a24', 20); K.rect(CX - 200, 170, 400, 270, `rgba(255,${120 + Math.sin(s.kiln * 9) * 40},40,${Math.min(0.9, s.kiln / 1.5)})`, 14); K.text('🔥 firing...', CX, 460, 18, '#ffd8a0', 'center', 'd'); }
+    else drawPot(s, CX, BASE, 1, { glaze: s.st === 'shape' ? '#b87a50' : GLAZE[s.glaze], pat: s.st === 'shape' ? 0 : s.pat, spin: s.spin, glossy: s.st === 'done' });
+    if (s.st === 'shape' && K.mouse.down && K.mouse.x < 700) { K.alpha(0.6); K.circle(K.mouse.x, K.mouse.y, 14, '#f0c8a0'); K.alpha(1); }
+    // side panel
+    const btn = (x, y, w, h, label, on = true) => { K.rect(x, y, w, h, on ? '#5a4a3a' : '#b8a898', 12); K.text(label, x + w / 2, y + h / 2 + 1, 15, '#fff', 'center', 'd'); };
+    if (s.st === 'shape') { K.wrapText('touch the side of the clay and drag in or out to shape it', 820, 170, 200, 15, '#5a4a3a', 1.3, 'center', 'u'); btn(720, 330, 200, 50, 'FIRE IT  ➜', s.touched > 0.5); btn(720, 392, 200, 40, 'NEW CLAY'); }
+    if (s.st === 'glaze') {
+      K.text('glaze', 720, 96, 14, '#5a4a3a', 'left', 'd'); GLAZE.forEach((g, i) => { const x = 720 + (i % 4) * 52, y = 110 + Math.floor(i / 4) * 52; K.rect(x, y, 44, 44, g, 10); if (s.glaze === i) K.stroke(x - 3, y - 3, 50, 50, '#5a4a3a', 3, 12); });
+      K.text('pattern', 720, 226, 14, '#5a4a3a', 'left', 'd'); PATTERN.forEach((p, i) => { const x = 720 + (i % 2) * 104, y = 240 + Math.floor(i / 2) * 46; K.rect(x, y, 98, 38, s.pat === i ? '#5a4a3a' : '#f4ece0', 10); K.text(p, x + 49, y + 20, 13, s.pat === i ? '#fff' : '#5a4a3a', 'center', 'd'); });
+      btn(720, 350, 200, 50, 'INTO THE KILN'); btn(720, 410, 200, 36, '← keep shaping');
+    }
+    if (s.st === 'done') { K.text('beautiful.', 820, 200, 26, '#5a4a3a', 'center', 'd'); K.text(`${s.made} pot${s.made === 1 ? '' : 's'} today`, 820, 240, 14, '#8a7a68', 'center', 'u'); btn(720, 360, 200, 50, 'NEW CLAY'); }
+    K.rect(840, 486, 104, 40, '#f4ece0', 10); K.stroke(840, 486, 104, 40, '#a88a68', 2, 10); K.text('DONE', 892, 507, 13, '#5a4a3a', 'center', 'd');
+  },
+  ai(s, dt) {
+    s.at = (s.at || 0) + dt;
+    if (s.st === 'shape') { if (s.at < 7) { const ph = (s.at * 0.7) % 1, i = Math.floor(ph * N), want = 50 + Math.sin(ph * Math.PI * 1.6 + 0.5) * 38; K.vmouse(CX + want, rowY(s, i), false, true); } else { K.vmouse(820, 355, true); s.at = 0; } }
+    else if (s.st === 'glaze') { if (s.at > 1) { s.glaze = K.irand(0, 7); s.pat = K.irand(0, 3); K.vmouse(820, 375, true); s.at = 0; } }
+    else K.vmouse(K.mouse.x, K.mouse.y, false, false);
+  },
+});
+</script></body></html>

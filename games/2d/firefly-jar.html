@@ -1,0 +1,73 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firefly Jar</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"firefly-jar","n":194,"title":"FIREFLY JAR","genre":"relax","desc":"A warm summer evening in the meadow. Fireflies drift over the grass, glowing on and off. Catch them in your jar - but only while they are glowing, a dark firefly just slips away. Blue ones are rare and quick, pink ones are shy and flee if you swing the jar too fast. Fill a jar and it becomes a lantern. When it is bedtime, you let them all go.","controls":"Move the mouse (or drag) to carry the jar · click / tap (or Space) to scoop when a firefly is glowing inside the jar's mouth","scoreLabel":"FIREFLIES","tasks":[{"stat":"score","target":40,"text":"Catch 40 fireflies"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const NIGHT = 150, CAP = 15;
+const fly = () => { const r = Math.random(), k = r < 0.09 ? 'blue' : r < 0.2 ? 'pink' : 'gold'; return { x: K.rand(40, 920), y: K.rand(150, 440), vx: 0, vy: 0, a: K.rand(0, 6.28), k, per: K.rand(2, 3.6), ph: K.rand(0, 4), on: K.rand(0.7, 1.1), sp: k === 'blue' ? 70 : 34 }; };
+const COL = { gold: '#ffe35a', blue: '#7ad8ff', pink: '#ff8ad8' }, PTS = { gold: 1, blue: 3, pink: 2 };
+const lit = (f, t) => ((t + f.ph) % f.per) < f.on;
+K.game({
+  bg: '#1a1838', touch: { stick: false, buttons: [] },
+  init(s) { s.f = Array.from({ length: 26 }, fly); s.jar = { x: 480, y: 360, px: 480, py: 360, n: [], sp: 0 }; s.lanterns = []; s.time = 0; s.caught = 0; s.free = null; s.miss = 0; },
+  update(s, dt) {
+    if (!s.amb && !K.attract) s.amb = K.drone(98, 0.01, 'sine');
+    s.time += dt;
+    if (s.free) { s.free.t += dt; s.free.f.forEach((f) => { f.x += f.vx * dt; f.y += f.vy * dt; f.vy -= 12 * dt; }); if (s.free.t > 4.5) { s.amb?.(); return K.end(s, { score: s.caught, won: true, stats: { won: s.caught >= 40 ? 1 : 0 }, title: 'GOODNIGHT', text: `${s.caught} fireflies caught and set free again. ${s.lanterns.length} lantern${s.lanterns.length === 1 ? '' : 's'}.` }); } return; }
+    if (s.time >= NIGHT) { s.free = { t: 0, f: [] }; [...s.lanterns, s.jar.n].forEach((L, i) => (L.k ? L.k : L).forEach((k) => s.free.f.push({ x: L.x ?? s.jar.x, y: (L.y ?? s.jar.y) - 20, vx: K.rand(-60, 60), vy: K.rand(-90, -20), k }))); K.sfx('chime'); return; }
+    const m = K.mouse, j = s.jar;
+    if (!K.isTouch || m.down) { j.x = K.lerp(j.x, m.x, Math.min(1, dt * 14)); j.y = K.lerp(j.y, K.clamp(m.y, 120, 470), Math.min(1, dt * 14)); }
+    j.sp = Math.hypot(j.x - j.px, j.y - j.py) / Math.max(dt, 0.001); j.px = j.x; j.py = j.y;
+    // drifting fireflies
+    for (const f of s.f) {
+      f.a += K.rand(-2, 2) * dt; const d = Math.hypot(f.x - j.x, f.y - j.y);
+      let tx = Math.cos(f.a) * f.sp, ty = Math.sin(f.a) * f.sp * 0.6;
+      if (f.k === 'pink' && j.sp > 380 && d < 140) { tx = ((f.x - j.x) / d) * 260; ty = ((f.y - j.y) / d) * 260; f.scared = 1; }
+      f.vx = K.lerp(f.vx, tx, Math.min(1, dt * 3)); f.vy = K.lerp(f.vy, ty, Math.min(1, dt * 3)); f.x += f.vx * dt; f.y += f.vy * dt; f.scared = Math.max(0, (f.scared || 0) - dt);
+      if (f.x < 20 || f.x > 940) f.a = Math.PI - f.a; if (f.y < 130 || f.y > 460) f.a = -f.a; f.x = K.clamp(f.x, 20, 940); f.y = K.clamp(f.y, 130, 460);
+    }
+    if (K.tap('Space') || m.clicked) {
+      const mouth = { x: j.x, y: j.y - 34 }, hit = s.f.filter((f) => Math.hypot(f.x - mouth.x, f.y - mouth.y) < 44).sort((a, b) => Math.hypot(a.x - mouth.x, a.y - mouth.y) - Math.hypot(b.x - mouth.x, b.y - mouth.y));
+      const got = hit.find((f) => lit(f, s.time));
+      if (got) { s.f.splice(s.f.indexOf(got), 1); s.f.push(fly()); j.n.push(got.k); s.caught += PTS[got.k]; K.tone(got.k === 'blue' ? 1320 : got.k === 'pink' ? 1100 : 880, 0.25, 'sine', 0.05, 400); K.floatText(`+${PTS[got.k]}`, j.x, j.y - 70, COL[got.k], 16);
+        if (j.n.length >= CAP) { s.lanterns.push({ x: 60 + s.lanterns.length * 80, y: 520, k: j.n }); j.n = []; K.sfx('win'); } }
+      else if (hit.length) { s.miss = 0.8; K.tone(300, 0.1, 'sine', 0.02); }
+      else K.noise(0.08, 0.02, 1200);
+    }
+    s.miss -= dt;
+    s.chirp = (s.chirp || 0) - dt; if (s.chirp <= 0) { s.chirp = K.rand(0.3, 1.4); for (let i = 0; i < 3; i++) K.tone(4200 + Math.random() * 300, 0.03, 'sine', 0.006, 0, i * 0.06); }
+  },
+  draw(s) {
+    const c = K.ctx(), k = Math.min(1, s.time / NIGHT);
+    c.fillStyle = K.grad(0, 0, 0, 540, [k < 0.5 ? '#3a2a58' : '#141430', k < 0.5 ? '#c8705a' : '#2a2448', '#1a1a30']); c.fillRect(0, 0, 960, 540);
+    K.alpha(k); for (let i = 0; i < 60; i++) K.circle((i * 157) % 960, (i * 71) % 260, i % 7 ? 1 : 1.6, '#fff'); K.alpha(1);
+    K.circle(820, 90 + (1 - k) * 60, 30, '#f4ecd0'); K.circle(832, 84 + (1 - k) * 60, 28, k < 0.5 ? '#3a2a58' : '#141430');
+    // hills, trees, grass
+    c.fillStyle = '#0e1a18'; c.beginPath(); c.moveTo(0, 330); for (let x = 0; x <= 960; x += 40) c.lineTo(x, 320 + Math.sin(x * 0.01) * 30); c.lineTo(960, 540); c.lineTo(0, 540); c.fill();
+    for (const [x, h] of [[90, 170], [180, 120], [760, 190], [880, 140]]) { K.rect(x - 6, 330 - h * 0.3, 12, h * 0.3 + 20, '#0a1210'); K.circle(x, 330 - h * 0.45, h * 0.32, '#0a1412'); K.circle(x - h * 0.15, 330 - h * 0.3, h * 0.24, '#0a1412'); K.circle(x + h * 0.15, 330 - h * 0.32, h * 0.22, '#0a1412'); }
+    for (let i = 0; i < 120; i++) { const x = (i * 8.3) % 960, sw = Math.sin(K.time() * 1.5 + i) * 4; K.line(x, 540, x + sw, 470 - ((i * 37) % 40), '#0c1614', 2); }
+    // fireflies
+    s.f.forEach((f) => { const on = lit(f, s.time); if (on) { const g = K.rgrad(f.x, f.y, 26, [COL[f.k] + 'aa', COL[f.k] + '00']); c.fillStyle = g; c.fillRect(f.x - 26, f.y - 26, 52, 52); K.circle(f.x, f.y, 3.5, '#fff'); } else K.circle(f.x, f.y, 2, '#3a3a2a'); });
+    // lanterns made so far
+    s.lanterns.forEach((L) => { const g = K.rgrad(L.x, L.y - 20, 50, ['#ffe35a55', '#ffe35a00']); c.fillStyle = g; c.fillRect(L.x - 50, L.y - 70, 100, 100); K.rect(L.x - 18, L.y - 40, 36, 40, '#ffe35a66', 8); K.stroke(L.x - 18, L.y - 40, 36, 40, '#c8d8e8aa', 2, 8); K.rect(L.x - 12, L.y - 46, 24, 7, '#8a6a4a', 2); });
+    // the jar
+    const j = s.jar, glow = j.n.length / CAP;
+    if (glow) { c.fillStyle = K.rgrad(j.x, j.y, 70, [`rgba(255,227,90,${0.15 + glow * 0.3})`, 'rgba(255,227,90,0)']); c.fillRect(j.x - 70, j.y - 70, 140, 140); }
+    K.alpha(0.35); K.rect(j.x - 26, j.y - 30, 52, 62, '#c8e8ff', 10); K.alpha(1); K.stroke(j.x - 26, j.y - 30, 52, 62, '#e8f4ffcc', 2, 10);
+    j.n.forEach((kk, i) => K.circle(j.x - 16 + (i % 5) * 8 + Math.sin(K.time() * 3 + i) * 2, j.y + 22 - Math.floor(i / 5) * 12 + Math.cos(K.time() * 2 + i) * 2, 2.5, COL[kk]));
+    K.ring(j.x, j.y - 34, 44, s.miss > 0 ? '#ff8a8a55' : '#ffffff22', 1.5); K.rect(j.x - 22, j.y - 36, 44, 7, '#8a6a4a', 2);
+    if (s.free) s.free.f.forEach((f) => { K.circle(f.x, f.y, 3, COL[f.k]); K.alpha(0.3); K.circle(f.x, f.y, 10, COL[f.k]); K.alpha(1); });
+    // HUD
+    K.text(`${s.caught}`, 30, 34, 22, '#ffe35a', 'left', 'd'); K.text(`jar ${j.n.length}/${CAP}`, 30, 60, 13, '#c8c0e8', 'left', 'u');
+    K.text(s.free ? 'goodnight, little lights' : `bedtime in ${Math.max(0, Math.ceil(NIGHT - s.time))}s`, 930, 34, 14, '#c8c0e8', 'right', 'u');
+    if (s.miss > 0) K.text('wait for it to glow', j.x, j.y - 90, 13, '#ffb8b8', 'center', 'u');
+    if (s.time < 6 && !K.attract) K.text('catch fireflies while they glow · pink ones are shy - move gently', 480, 100, 16, '#e8e0ff', 'center', 'u');
+  },
+  ai(s, dt) {
+    const j = s.jar, t = s.f.filter((f) => lit(f, s.time) || ((s.time + f.ph) % f.per) > f.per - 0.4).sort((a, b) => Math.hypot(a.x - j.x, a.y - j.y) - Math.hypot(b.x - j.x, b.y - j.y))[0];
+    if (!t) return; const tx = t.x, ty = t.y + 34; K.vmouse(K.lerp(K.mouse.x, tx, Math.min(1, dt * 5)), K.lerp(K.mouse.y, ty, Math.min(1, dt * 5)));
+    if (lit(t, s.time) && Math.hypot(t.x - j.x, t.y - (j.y - 34)) < 30) K.vtap('Space');
+  },
+});
+</script></body></html>

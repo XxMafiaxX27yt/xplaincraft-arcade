@@ -1,0 +1,73 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hue Sort</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hue-sort","n":191,"title":"HUE SORT","genre":"relax","desc":"A soft wash of colour, all jumbled up. Swap the tiles until every colour sits where it belongs and the whole board flows from corner to corner in one smooth gradient. Tiles with a dot are pinned in place - they are your clues. No timer, no rush; the boards grow finer as you go.","controls":"Click / tap two tiles to swap them (or drag one onto another) · hold PEEK (or H) to see the finished board · DONE to stop","scoreLabel":"BOARDS","tasks":[{"stat":"score","target":5,"text":"Sort 5 gradients in Hue Sort"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SIZES = [[4, 5], [5, 6], [5, 7], [6, 7], [6, 8], [7, 9], [8, 9], [8, 10]];
+// colours are mixed in OKLab so every step looks the same size to the eye
+function oklab(L, a, b) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const g = (x) => Math.round(255 * Math.min(1, Math.max(0, x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)));
+  return `rgb(${g(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)},${g(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s)},${g(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)})`;
+}
+function board(s) {
+  const [c, r] = SIZES[Math.min(s.lv, SIZES.length - 1)], h0 = K.rand(0, 360), Ls = K.shuffle([0.9, 0.74, 0.62, 0.46]);
+  const corner = [0, 75, 160, 235].map((d, i) => { const h = ((h0 + d + K.rand(-15, 15)) * Math.PI) / 180, C = K.rand(0.11, 0.16); return [Ls[i], Math.cos(h) * C, Math.sin(h) * C]; });
+  s.c = c; s.r = r; s.T = Math.min(Math.floor(600 / c), Math.floor(430 / r)); s.ox = 400 - (c * s.T) / 2; s.oy = 275 - (r * s.T) / 2;
+  s.tiles = [];
+  for (let y = 0; y < r; y++) for (let x = 0; x < c; x++) {
+    const u = x / (c - 1), v = y / (r - 1), mix = (k) => corner[0][k] * (1 - u) * (1 - v) + corner[1][k] * u * (1 - v) + corner[2][k] * (1 - u) * v + corner[3][k] * u * v;
+    const corners = (x === 0 || x === c - 1) && (y === 0 || y === r - 1), edge = x === 0 || y === 0 || x === c - 1 || y === r - 1;
+    const fixed = corners || (s.lv < 2 && edge && (x + y) % 2 === 0) || (s.lv < 4 && (x + y) % 4 === 0 && x % 2 === 0) || (s.lv >= 4 && (x * 7 + y * 3) % 11 === 0);
+    s.tiles.push({ id: y * c + x, col: oklab(mix(0), mix(1), mix(2)), fixed });
+  }
+  s.pos = s.tiles.map((t) => t.id);   // pos[i] = which tile sits in slot i
+  const free = s.pos.filter((i) => !s.tiles[i].fixed), mixed = K.shuffle(free.slice()); let k = 0;
+  s.pos = s.pos.map((i) => (s.tiles[i].fixed ? i : mixed[k++]));
+  s.anim = {}; s.sel = null; s.moves = 0; s.solvedT = 0; s.drag = null;
+}
+const slotAt = (s, x, y) => { const cx = Math.floor((x - s.ox) / s.T), cy = Math.floor((y - s.oy) / s.T); return cx >= 0 && cy >= 0 && cx < s.c && cy < s.r ? cy * s.c + cx : -1; };
+function swap(s, a, b) { if (a === b || a < 0 || b < 0 || s.tiles[s.pos[a]].fixed || s.tiles[s.pos[b]].fixed) return; [s.pos[a], s.pos[b]] = [s.pos[b], s.pos[a]]; s.anim[a] = { from: b, t: 0 }; s.anim[b] = { from: a, t: 0 }; s.moves++; K.tone(520 + Math.random() * 200, 0.12, 'sine', 0.04); }
+K.game({
+  bg: '#f2eee8', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.done = 0; board(s); },
+  update(s, dt) {
+    if (!s.amb && !K.attract) s.amb = K.drone(110, 0.012, 'sine');
+    Object.values(s.anim).forEach((a) => (a.t = Math.min(1, a.t + dt * 5)));
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 830, y: 480, w: 110, h: 40 })) { s.amb?.(); return K.end(s, { score: s.done, won: s.done >= 5 ? true : null, stats: { won: s.done >= 5 ? 1 : 0 }, title: 'LOVELY', text: `${s.done} gradient${s.done === 1 ? '' : 's'} sorted.` }); }
+    s.peek = K.down('KeyH') || (m.down && K.inRect(m.x, m.y, { x: 830, y: 420, w: 110, h: 40 }));
+    if (s.solvedT > 0) { s.solvedT += dt; if (s.solvedT > 2.4 || (s.solvedT > 0.8 && m.clicked)) { s.lv++; s.solvedT = 0; if (s.lv >= SIZES.length) { s.amb?.(); return K.end(s, { score: s.done, won: true, stats: { won: 1 }, title: 'EVERY COLOUR IN ITS PLACE', text: `All ${SIZES.length} boards. ${s.done} gradients.` }); } board(s); } return; }
+    const at = slotAt(s, m.x, m.y);
+    if (m.clicked && at >= 0 && !s.tiles[s.pos[at]].fixed) s.drag = at;
+    if (m.released && s.drag != null) { if (at >= 0 && at !== s.drag) { swap(s, s.drag, at); s.sel = null; } else if (at === s.drag) { if (s.sel == null) s.sel = at; else if (s.sel === at) s.sel = null; else { swap(s, s.sel, at); s.sel = null; } } s.drag = null; }
+    if (s.pos.every((p, i) => p === i)) { s.solvedT = 0.001; s.done++; K.sfx('win'); }
+  },
+  draw(s) {
+    const T = s.T, g = 2, m = K.mouse;
+    for (let i = 0; i < s.pos.length; i++) {
+      const x = i % s.c, y = Math.floor(i / s.c), t = s.tiles[s.peek ? i : s.pos[i]], a = s.anim[i];
+      let px = s.ox + x * T, py = s.oy + y * T;
+      if (a && a.t < 1 && !s.peek) { const fx = s.ox + (a.from % s.c) * T, fy = s.oy + Math.floor(a.from / s.c) * T, e = 1 - (1 - a.t) ** 3; px = K.lerp(fx, px, e); py = K.lerp(fy, py, e); }
+      let lift = 0; if (s.sel === i || (s.drag === i && m.down)) lift = 5;
+      const wave = s.solvedT > 0 ? Math.max(0, Math.sin(s.solvedT * 6 - (x + y) * 0.5)) * 6 : 0;
+      if (lift) { K.alpha(0.25); K.rect(px + g + 3, py + g + 5, T - g * 2, T - g * 2, '#000', 6); K.alpha(1); }
+      K.rect(px + g, py + g - lift - wave, T - g * 2, T - g * 2, t.col, s.solvedT > 0 ? 0 : 6);
+      if (t.fixed && !s.solvedT) K.circle(px + T / 2, py + T / 2 - lift, 3, '#ffffffaa');
+    }
+    if (s.drag != null && m.down && slotAt(s, m.x, m.y) !== s.drag) { const t = s.tiles[s.pos[s.drag]]; K.alpha(0.85); K.rect(m.x - T / 2 + 4, m.y - T / 2 + 4, T - 8, T - 8, t.col, 6); K.alpha(1); }
+    K.text('HUE SORT', 870, 60, 18, '#5a5068', 'center', 'd'); K.text(`board ${Math.min(s.lv + 1, SIZES.length)} / ${SIZES.length}`, 870, 92, 13, '#8a8098', 'center', 'u');
+    K.text(`${s.moves} swaps`, 870, 118, 13, '#8a8098', 'center', 'u'); K.text(`${s.done} sorted`, 870, 144, 13, '#8a8098', 'center', 'u');
+    const pk = { x: 830, y: 420, w: 110, h: 40 }; K.rect(pk.x, pk.y, pk.w, pk.h, s.peek ? '#d8d0e8' : '#e8e2f0', 10); K.text('PEEK (H)', pk.x + 55, pk.y + 21, 13, '#5a5068', 'center', 'd');
+    K.rect(830, 480, 110, 40, '#e8e2f0', 10); K.text('DONE', 885, 501, 13, '#5a5068', 'center', 'd');
+    if (s.solvedT > 0) K.text('✿ sorted ✿', 400, 520, 22, '#5a5068', 'center', 'd');
+    else if (s.lv === 0 && s.moves < 2 && !K.attract) K.text('swap tiles until the colours flow smoothly · dotted tiles stay put', 400, 524, 14, '#8a8098', 'center', 'u');
+  },
+  ai(s, dt) {
+    s.aw = (s.aw || 0) - dt; if (s.aw > 0 || s.solvedT > 0) return; s.aw = 0.25;
+    const i = s.pos.findIndex((p, k) => p !== k); if (i < 0) return; const j = s.pos.indexOf(i);
+    swap(s, i, j);
+  },
+});
+</script></body></html>
