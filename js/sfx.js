@@ -15,6 +15,10 @@ const PACKS = {
   scifi: { type: 'sawtooth', m: 0.9, len: 1.1, bubble: true },
   horror: { type: 'sawtooth', m: 0.45, len: 1.6, detune: true },
   piano: { type: 'triangle', m: 1, len: 2.2 },
+  // love sets
+  musicbox: { type: 'sine', m: 2, len: 2.6 },
+  chimes: { type: 'triangle', m: 3, len: 3 },
+  harp: { type: 'sine', m: 1.5, len: 3.4, steps: true },
 };
 
 export function configureSfx({ sfx = true, volume: v = 0.6 } = {}) {

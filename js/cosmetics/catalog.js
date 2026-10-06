@@ -271,13 +271,48 @@ add('pet', 'owl-operator', 'OWL-1961', 'mythic', 'operator', { kind: 'owl', pal:
 add('title', 't-operator', 'OPERATOR', 'mythic', 'operator', { text: 'OPERATOR' });
 add('badge', 'operator', 'Operator', 'mythic', 'operator', { icon: '⛨', pal: 'operator' });
 
+// ---------- love sets: one of a kind, never sold; only NovexYT can give them ----------
+// (the server enforces it: supabase/schema.sql love_gift + save_me drops love items nobody gave you)
+export const LOVE_GIVER = 'NovexYT';
+export const LOVE_SETS = [
+  { id: 'forever', name: 'Forever', tag: 'rose + gold', skin: 'heart', frame: 'hearts', scene: 'lovesun', plate: 'love', fx: 'love', title: 'Forever Yours',
+    font: ['Great Vibes', 1.45], cursor: 'heart', click: 'hearts', pet: 'heart', sticker: ['🌹', 'Forever Rose'], badge: '♥', sound: 'musicbox' },
+  { id: 'sweetheart', name: 'Sweetheart', tag: 'pink + red', skin: 'cupid', frame: 'hearts', scene: 'love', plate: 'love', fx: 'love', title: 'My Favourite Person',
+    font: ['Dancing Script', 1.25], cursor: 'heart', click: 'hearts', pet: 'teddy', sticker: ['💌', 'Love Letter'], badge: '❥', sound: 'chimes' },
+  { id: 'starlight', name: 'Starlight', tag: 'lavender + pink', skin: 'moonlove', frame: 'hearts', scene: 'lovesky', plate: 'love', fx: 'love', title: 'Soulmate',
+    font: ['Parisienne', 1.35], cursor: 'heart', click: 'hearts', pet: 'lovebird', sticker: ['💖', 'Starlight Heart'], badge: '♡', sound: 'harp' },
+];
+export const LOVE_SLOT_NAMES = { skin: 'Avatar', frame: 'Frame', banner: 'Banner', nameplate: 'Callsign BG', font: 'Font', effect: 'Name FX', title: 'Title', cursor: 'Cursor', click: 'Click FX', pet: 'Pet', backdrop: 'Profile BG', sticker: 'Sticker', badge: 'Badge', theme: 'UI Theme', intro: 'Intro', sound: 'Sounds' };
+LOVE_SETS.forEach((L) => {
+  const id = 'love-' + L.id, pal = L.id, N = L.name, a = (slot, name, data) => add(slot, id, name, 'love', 'love', { pal, ...data }, L.id);
+  a('skin', `${N} Heart`, { style: L.skin });
+  a('frame', `${N} Frame`, { style: L.frame });
+  a('banner', `${N} Sky`, { scene: L.scene });
+  a('nameplate', `${N} Plate`, { style: L.plate });
+  a('font', `${N} Script`, { family: L.font[0], scale: L.font[1] });
+  a('effect', `${N} Glow`, { fx: L.fx });
+  a('title', L.title, { text: L.title });
+  a('cursor', `${N} Cursor`, { shape: L.cursor });
+  a('click', `${N} Hearts`, { kind: L.click });
+  a('pet', `${N} Buddy`, { kind: L.pet });
+  a('backdrop', `${N} Backdrop`, { scene: L.scene });
+  a('sticker', L.sticker[1], { emoji: L.sticker[0] });
+  a('badge', N, { icon: L.badge });
+  a('theme', `${N} Theme`, {});
+  a('intro', `${N} Boot`, {});
+  a('sound', `${N} Music Box`, { pack: L.sound });
+});
+export const isLove = (it) => it?.src === 'love';
+export const loveItems = (setId) => items.filter((i) => i.src === 'love' && (!setId || i.srcId === setId));
+
 // ---------- achievement badges + titles ----------
 ACHIEVEMENTS.forEach((a) => {
   add('badge', a.id, a.name, a.rarity, 'achievement', { icon: a.icon, pal: a.pal || ({ common: 'steel', uncommon: 'toxic', rare: 'sky', epic: 'violet', legendary: 'gold', exotic: 'holo', mythic: 'prism' }[a.rarity]) }, a.id);
   if (a.title && !items.some((i) => i.key === 'title:t-' + slug(a.title))) add('title', 't-' + slug(a.title), a.title, a.rarity, 'achievement', { text: a.title }, a.id);
 });
 
-export const ALL_ITEMS = items;
+// the love sets are left out of every list (shop, crates, unlock-all, operator gifts); they are only found by key
+export const ALL_ITEMS = items.filter((i) => i.src !== 'love');
 export const ITEM = Object.fromEntries(items.map((i) => [i.key, i]));
 export const BY_SLOT = Object.fromEntries(SLOTS.map((s) => [s.id, items.filter((i) => i.slot === s.id)]));
 export const STARTER_OWNED = items.filter((i) => i.src === 'default').map((i) => i.key);

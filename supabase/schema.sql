@@ -101,6 +101,14 @@ create table if not exists public.rooms (
   updated_at timestamptz not null default now()
 );
 
+-- love sets: who was given which love item (only NovexYT can add rows, through love_gift)
+create table if not exists public.love_grants (
+  player_id uuid not null references public.players(id) on delete cascade,
+  item text not null,
+  created_at timestamptz not null default now(),
+  primary key (player_id, item)
+);
+
 -- ---------------------------------------------------------------- row level security
 alter table public.players enable row level security;
 alter table public.player_state enable row level security;
@@ -111,6 +119,7 @@ alter table public.patches enable row level security;
 alter table public.arcade_config enable row level security;
 alter table public.op_log enable row level security;
 alter table public.rooms enable row level security;
+alter table public.love_grants enable row level security;
 
 create or replace function public.is_op() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -149,6 +158,9 @@ create policy config_read on public.arcade_config for select using (true);
 drop policy if exists oplog_read on public.op_log;
 create policy oplog_read on public.op_log for select using (public.is_op());
 
+drop policy if exists love_read on public.love_grants;
+create policy love_read on public.love_grants for select using (player_id = auth.uid());
+
 drop policy if exists rooms_read on public.rooms;
 create policy rooms_read on public.rooms for select using (true);
 drop policy if exists rooms_insert on public.rooms;
@@ -157,6 +169,63 @@ drop policy if exists rooms_update on public.rooms;
 create policy rooms_update on public.rooms for update using (host_id = auth.uid()) with check (host_id = auth.uid());
 drop policy if exists rooms_delete on public.rooms;
 create policy rooms_delete on public.rooms for delete using (host_id = auth.uid());
+
+-- ---------------------------------------------------------------- love sets
+-- Love items (keys like 'skin:love-forever') stay only with players NovexYT gave them to: every save drops the
+-- rest from what you own and what you wear. The giver is fixed to NovexYT's account id the first time this runs,
+-- so renaming accounts can't change who may give them.
+do $$
+declare gid uuid;
+begin
+  if to_regprocedure('public.love_giver()') is null then
+    select id into gid from public.players where lower(username) = 'novexyt';
+    if gid is null then raise exception 'Love sets: there is no player called NovexYT yet'; end if;
+    execute format('create function public.love_giver() returns uuid language sql immutable as $f$ select %L::uuid $f$', gid);
+  end if;
+end $$;
+
+create or replace function public.love_equip(p_uid uuid, p_eq jsonb) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if p_eq is null or jsonb_typeof(p_eq) <> 'object' then return p_eq; end if;
+  return (select coalesce(jsonb_object_agg(e.key,
+      case when jsonb_typeof(e.value) = 'array' then
+        coalesce((select jsonb_agg(v) from jsonb_array_elements_text(e.value) v
+                  where v not like 'love-%' or exists (select 1 from public.love_grants g where g.player_id = p_uid and g.item = e.key || ':' || v)), '[]'::jsonb)
+      else e.value end), '{}'::jsonb)
+    from jsonb_each(p_eq) e
+    where not (jsonb_typeof(e.value) = 'string' and (e.value #>> '{}') like 'love-%'
+               and not exists (select 1 from public.love_grants g where g.player_id = p_uid and g.item = e.key || ':' || (e.value #>> '{}'))));
+end $$;
+
+create or replace function public.love_clean_state(p_uid uuid, p_state jsonb) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if jsonb_typeof(p_state->'owned') = 'array' then
+    p_state := jsonb_set(p_state, '{owned}', coalesce((select jsonb_agg(k) from jsonb_array_elements_text(p_state->'owned') k
+      where k not like '%:love-%' or exists (select 1 from public.love_grants g where g.player_id = p_uid and g.item = k)), '[]'::jsonb));
+  end if;
+  if jsonb_typeof(p_state->'equipped') = 'object' then
+    p_state := jsonb_set(p_state, '{equipped}', public.love_equip(p_uid, p_state->'equipped'));
+  end if;
+  return p_state;
+end $$;
+
+-- NovexYT gives love items to a player (shows up in their gifts with the note)
+create or replace function public.love_gift(p_who text, p_items text[], p_msg text) returns void
+language plpgsql security definer set search_path = public as $$
+declare tid uuid; me_name text;
+begin
+  if auth.uid() is null or auth.uid() <> public.love_giver() then raise exception 'Only NovexYT can give the love sets'; end if;
+  select id into tid from public.players where lower(username) = lower(trim(p_who));
+  if tid is null then raise exception 'No player called "%"', p_who; end if;
+  if coalesce(array_length(p_items, 1), 0) = 0 or array_length(p_items, 1) > 64 then raise exception 'Pick between 1 and 64 items'; end if;
+  if exists (select 1 from unnest(p_items) k where k !~ '^[a-z]+:love-[a-z0-9-]+$') then raise exception 'Those are not love items'; end if;
+  select username into me_name from public.players where id = auth.uid();
+  insert into public.love_grants (player_id, item) select tid, k from unnest(p_items) k on conflict do nothing;
+  insert into public.patches (to_id, kind, data, from_name, msg)
+    values (tid, 'gift', jsonb_build_object('items', to_jsonb(p_items), 'coins', 0, 'xp', 0, 'love', true), me_name, left(coalesce(p_msg, ''), 140));
+end $$;
 
 -- ---------------------------------------------------------------- account functions
 create or replace function public.login_email(p_username text) returns text
@@ -175,6 +244,8 @@ begin
   if exists (select 1 from public.players where lower(username) = lower(p_username) and id <> uid) then
     raise exception 'That callsign is taken';
   end if;
+  p_state := public.love_clean_state(uid, p_state);
+  p_profile := jsonb_set(coalesce(p_profile, '{}'::jsonb), '{equipped}', coalesce(public.love_equip(uid, p_profile->'equipped'), '{}'::jsonb));
   insert into public.players (id, username, xp, equipped, stats, owned_count)
   values (uid, p_username, 0, coalesce(p_profile->'equipped', '{}'::jsonb), coalesce(p_profile->'stats', '{}'::jsonb),
           coalesce((p_profile->>'owned_count')::int, 0))
@@ -212,6 +283,8 @@ begin
     if new_coins - old_coins > 40000 + allow_c then raise exception 'Save rejected (coins jumped too much)'; end if;
     if new_xp - pl.xp > 40000 + allow_x then raise exception 'Save rejected (XP jumped too much)'; end if;
   end if;
+  p_state := public.love_clean_state(uid, p_state);
+  p_profile := jsonb_set(p_profile, '{equipped}', coalesce(public.love_equip(uid, p_profile->'equipped'), '{}'::jsonb));
   p_state := jsonb_set(jsonb_set(p_state, '{operator}', to_jsonb(pl.operator)), '{username}', to_jsonb(pl.username));
   update public.players set
     bio = left(coalesce(p_profile->>'bio', ''), 160),
@@ -316,6 +389,7 @@ returns int language plpgsql security definer set search_path = public as $$
 declare me_name text; n int;
 begin
   if not public.is_op() then raise exception 'Operator only'; end if;
+  if coalesce(p_data::text, '') like '%:love-%' then raise exception 'Love items can only be given by NovexYT'; end if;
   select username into me_name from public.players where id = auth.uid();
   if p_who <> '*' and not exists (select 1 from public.players where lower(username) = lower(p_who)) then
     raise exception 'No player called "%"', p_who;
@@ -388,3 +462,4 @@ grant execute on function public.op_send(text, text, jsonb, text, bigint, bigint
 grant execute on function public.op_set_flag(text, text, boolean) to authenticated;
 grant execute on function public.op_delete(text) to authenticated;
 grant execute on function public.op_config(jsonb, jsonb, text) to authenticated;
+grant execute on function public.love_gift(text, text[], text) to authenticated;

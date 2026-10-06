@@ -835,6 +835,10 @@ export const opSetLevel = async (who, level) => opApply(who, OP_PATCH.level(leve
 export const opItem = async (who, key, give = true) => opApply(who, OP_PATCH.item(key, give));
 export const opUnlockAll = async (who) => opApply(who, OP_PATCH.unlockAll());
 export const opGift = async (who, g) => opApply(who, OP_PATCH.gift(g));
+// love sets can only be given with online accounts (the server is what keeps them one of a kind)
+export async function loveGift() {
+  fail('Love sets can only be given with online accounts');
+}
 export const opReset = async (who, what) => opApply(who, OP_PATCH.reset(what));
 export const opPass = async (who, opts) => {
   if (!E.seasonFor()) fail('No season is running');

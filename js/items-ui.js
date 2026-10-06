@@ -1,6 +1,6 @@
 // Shared cosmetic UI: item cards, item detail modal, buy/equip actions, reward lists.
 import { esc, num } from './util.js';
-import { ITEM, SLOT, RARITY } from './cosmetics/catalog.js';
+import { ITEM, SLOT, RARITY, LOVE_GIVER } from './cosmetics/catalog.js';
 import { SEASONS, EVENTS } from './cosmetics/seasons.js';
 import { ACH } from './cosmetics/achievements.js';
 import { previewHTML, avatarHTML, callsignHTML, titleHTML, bannerHTML, badgeHTML, stickerHTML, eqOf } from './cosmetics/render.js';
@@ -20,6 +20,7 @@ export function sourceLabel(it) {
     case 'crate': return 'CRATES ONLY';
     case 'achievement': return `ACHIEVEMENT · ${ACH[it.srcId]?.name ?? ''}`;
     case 'operator': return 'OPERATOR ONLY';
+    case 'love': return `ONE OF A KIND · A GIFT FROM ${LOVE_GIVER}`;
   }
   return '';
 }

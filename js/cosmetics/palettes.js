@@ -9,6 +9,7 @@ export const RARITIES = [
   { id: 'legendary', name: 'LEGENDARY', color: '#ffb52e', price: 1800, w: 4 },
   { id: 'exotic', name: 'EXOTIC', color: '#ff3d9a', price: 4000, w: 5 },
   { id: 'mythic', name: 'MYTHIC', color: '#ff3b3b', price: 9000, w: 6 },
+  { id: 'love', name: 'ONE OF A KIND', color: '#ff6fae', price: 20000, w: 7 },   // the love sets: never sold, only gifted
 ];
 export const RARITY = Object.fromEntries(RARITIES.map((r) => [r.id, r]));
 
@@ -76,6 +77,10 @@ export const SPECIAL_PALETTES = [
   P('veteran', 'Veteran', 'epic', '#c9a86a', '#3a3020', '#ffffff', '#141008'),
   P('mystic', 'Mystic', 'exotic', '#7a5cff', '#ff4bf0', '#7af0ff', '#08041a', 'holo'),
   P('operator', 'Operator', 'mythic', '#ff0040', '#000000', '#ffffff', '#0a0004', 'glitch'),
+  // love sets (only NovexYT can give them)
+  P('forever', 'Forever', 'love', '#ff5c8a', '#ffcf6a', '#fff1f5', '#2a0a18', 'love'),
+  P('sweetheart', 'Sweetheart', 'love', '#ff4f9a', '#ff2d4b', '#ffe0ec', '#2a0612', 'love'),
+  P('starlight', 'Starlight', 'love', '#c9a7ff', '#ff8fc8', '#fff4fd', '#120a2e', 'love'),
 ];
 
 export const PAL = Object.fromEntries([...PALETTES, ...SPECIAL_PALETTES].map((p) => [p.id, p]));

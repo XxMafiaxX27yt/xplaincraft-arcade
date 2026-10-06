@@ -11,6 +11,7 @@ import { GAMES, GAME } from './games.js';
 import { ALL_DONE_BONUS } from './tasks.js';
 import { modal, toast, errToast, rewardPopup, confirmBox } from './ui.js';
 import { go, render, openGame, openDaily, logoutFlow } from './app.js';
+import { canGiveLove, openLoveGift } from './views-love.js';
 
 async function act(fn, okMsg) {
   try {
@@ -60,7 +61,7 @@ export async function viewProfile(el, name) {
         <div class="pf-sub">LEVEL <b>${lv.level}</b> · joined ${fmtDate(p.created)} · ${own ? 'online now' : 'last seen ' + timeAgo(p.lastSeen)}</div>
         <div class="pf-xp"><span class="xpbar big"><i style="width:${(lv.pct * 100).toFixed(1)}%"></i></span><small>${num(lv.into)} / ${num(lv.need)} XP to level ${lv.level + 1}</small></div>
       </div>
-      <div class="pf-actions">${relBtn}</div>
+      <div class="pf-actions">${relBtn}${canGiveLove() ? '<button class="btn love-btn" data-love>💝 GIVE A LOVE SET</button>' : ''}</div>
     </div>
     ${p.equipped.badge.length || p.equipped.sticker.length ? `<div class="pf-show">${p.equipped.badge.map((b) => badgeHTML(b, 44)).join('')}${p.equipped.sticker.map((x) => stickerHTML(x, 52)).join('')}</div>` : own ? '<div class="pf-show dim small">Pin badges and stickers from your <a href="#/locker/badge">LOCKER</a>.</div>' : ''}
     <div class="pf-bio">${p.bio ? esc(p.bio) : `<span class="dim">${own ? 'No bio yet. Click EDIT PROFILE to write one.' : 'No bio yet.'}</span>`}</div>
@@ -97,6 +98,7 @@ export async function viewProfile(el, name) {
     if (b) b.onclick = fn;
   };
   on('[data-edit]', () => editProfile());
+  on('[data-love]', () => openLoveGift(p.username));
   on('[data-add]', async () => (await act(() => api.sendFriendRequest(p.username), `Friend request sent to <b>${esc(p.username)}</b>`)) && render());
   on('[data-cancel]', async () => (await act(() => api.cancelRequest(p.username), 'Request cancelled')) && render());
   on('[data-accept]', async () => (await act(() => api.respondRequest(p.username, true), `You and <b>${esc(p.username)}</b> are now friends`)) && render());

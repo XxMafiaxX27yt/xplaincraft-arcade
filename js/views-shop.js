@@ -181,7 +181,7 @@ async function openCrateFlow(id, after) {
 export async function viewLocker(el, slot = 'skin') {
   if (!SLOT[slot]) slot = 'skin';
   const me = store.me;
-  const all = BY_SLOT[slot];
+  const all = BY_SLOT[slot].filter((i) => i.src !== 'love' || me.owned.includes(i.key));   // love sets only show up once someone gives them to you
   let list = all.filter((i) => locker.show === 'all' || me.owned.includes(i.key));
   if (locker.rarity !== 'all') list = list.filter((i) => i.rarity === locker.rarity);
   if (locker.q) list = list.filter((i) => i.name.toLowerCase().includes(locker.q.toLowerCase()));

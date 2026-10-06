@@ -434,6 +434,19 @@ export const opSetLevel = async (who, level) => opSend(who, L.OP_PATCH.level(lev
 export const opItem = async (who, key, give = true) => opSend(who, L.OP_PATCH.item(key, give));
 export const opUnlockAll = async (who) => opSend(who, L.OP_PATCH.unlockAll());
 export const opGift = async (who, g) => opSend(who, L.OP_PATCH.gift(g));
+
+// love sets: only NovexYT can give them (the server checks who is asking, and save_me drops love items nobody gave you)
+export async function loveGift(who, items, msg = '') {
+  const me = meU();
+  if (!me) fail('Log in first');
+  who = String(who || '').trim();
+  if (!who) fail('Pick a player');
+  items = [...new Set(items)].filter((k) => /^[a-z]+:love-[a-z0-9-]+$/.test(k));
+  if (!items.length) fail('Pick at least one item');
+  await rpc('love_gift', { p_who: who, p_items: items, p_msg: String(msg || '').slice(0, 140) });
+  if (who.toLowerCase() === me.username.toLowerCase()) await pull(true);
+  return clone(meU());
+}
 export const opReset = async (who, what) => opSend(who, L.OP_PATCH.reset(what));
 export const opPass = async (who, opts) => {
   if (!E.seasonFor()) fail('No season is running');
