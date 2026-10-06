@@ -2630,6 +2630,132 @@ export const GAME_LIST = [
 "cover": "games/covers/lying-simon.png"
 },
 {
+"id": "bridges",
+"n": 173,
+"title": "BRIDGES",
+"genre": "mind",
+"desc": "Islands in the sea, each with a number. Build bridges straight across the water so every island has exactly that many bridges - one or two between any pair, never crossing another bridge - and every island ends up joined into one big land. Eight archipelagos, each one bigger.",
+"controls": "Tap the water between two islands to build a bridge (again = double, again = remove) · or drag from an island towards another",
+"scoreLabel": "PUZZLES",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Solve all 8 Bridges puzzles"
+}
+],
+"file": "games/2d/bridges.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "akari",
+"n": 174,
+"title": "AKARI",
+"genre": "mind",
+"desc": "Light up the dark building. Put lamps in the white rooms - a lamp lights its whole row and column until a wall stops it. Every white square must be lit, but no lamp may shine on another lamp, and a numbered wall needs exactly that many lamps right next to it. Eight floors, each bigger.",
+"controls": "Click / tap a square for a lamp · right-click (or DOT mode) marks a square that has no lamp",
+"scoreLabel": "FLOORS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Light all 8 floors in Akari"
+}
+],
+"file": "games/2d/akari.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "kenken",
+"n": 175,
+"title": "KENKEN",
+"genre": "mind",
+"desc": "A number grid with maths inside. Fill every row and column with 1 to N (no repeats, like sudoku), and the numbers inside each outlined cage must make its target with its sign: 7+ adds up to 7, 6× multiplies to 6, 2- and 3÷ use two squares in either order. Eight grids, from 4×4 up to 6×6.",
+"controls": "Click / tap a square, then type a number (or tap the number buttons) · arrows move · Backspace / 0 clears",
+"scoreLabel": "GRIDS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Solve all 8 KenKen grids"
+}
+],
+"file": "games/2d/kenken.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "word-ladder",
+"n": 176,
+"title": "WORD LADDER",
+"genre": "mind",
+"desc": "Turn one word into another by changing a single letter at a time - and every step has to be a real word. CAT, COT, DOT, DOG. Ten ladders; finish one in the fewest steps (par) for bonus points. Stuck? A hint shows the next rung, but costs the bonus.",
+"controls": "Type a word + Enter (phone: tap to open your keyboard) · Backspace on an empty line takes back a step · HINT / SKIP buttons",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 120,
+"text": "Score 120 points in Word Ladder"
+}
+],
+"file": "games/2d/word-ladder.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "anagram-blitz",
+"n": 177,
+"title": "ANAGRAM BLITZ",
+"genre": "mind",
+"desc": "The letters are jumbled - unscramble them into a word before the clock runs out. Every word you solve gives back a few seconds, words get longer as you go, and a streak of quick answers multiplies your points. Any real word that uses all the letters counts.",
+"controls": "Type the word + Enter (phone: tap to open your keyboard) · SHUFFLE mixes the tiles · SKIP costs 5 seconds",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 150,
+"text": "Score 150 points in Anagram Blitz"
+}
+],
+"file": "games/2d/anagram-blitz.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "cryptogram",
+"n": 178,
+"title": "CRYPTOGRAM",
+"genre": "mind",
+"desc": "An old saying, written in a secret code where every letter has been swapped for another. Pick a code letter and guess what it really is - the guess fills in everywhere that letter appears. Short words, double letters and apostrophes are your best friends. Six messages to crack.",
+"controls": "Click / tap a code letter, then type your guess (phone: tap to open your keyboard) · arrows jump between letters · Backspace clears · HINT reveals one",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 60,
+"text": "Score 60 points in Cryptogram"
+}
+],
+"file": "games/2d/cryptogram.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",

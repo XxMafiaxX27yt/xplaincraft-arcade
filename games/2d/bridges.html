@@ -1,0 +1,142 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bridges</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bridges","n":173,"title":"BRIDGES","genre":"mind","desc":"Islands in the sea, each with a number. Build bridges straight across the water so every island has exactly that many bridges - one or two between any pair, never crossing another bridge - and every island ends up joined into one big land. Eight archipelagos, each one bigger.","controls":"Tap the water between two islands to build a bridge (again = double, again = remove) · or drag from an island towards another","scoreLabel":"PUZZLES","tasks":[{"stat":"score","target":8,"text":"Solve all 8 Bridges puzzles"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// [columns, rows, islands]
+const SIZES = [[5, 5, 6], [6, 5, 8], [6, 6, 10], [7, 6, 12], [7, 7, 14], [8, 7, 16], [9, 7, 18], [9, 7, 21]];
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// grow an archipelago from one island; every new island is joined by a bridge, so the puzzle always has an answer
+function gen(W, H, want) {
+  for (let tries = 0; tries < 300; tries++) {
+    const grid = Array.from({ length: H }, () => Array(W).fill(-1)), used = Array.from({ length: H }, () => Array(W).fill(0));
+    const isl = [], sol = [];
+    const add = (x, y) => { grid[y][x] = isl.length; isl.push({ x, y, n: 0 }); };
+    add(K.irand(0, W - 1), K.irand(0, H - 1));
+    let fails = 0;
+    while (isl.length < want && fails < 500) {
+      const ai = K.irand(0, isl.length - 1), a = isl[ai], [dx, dy] = K.pick(DIRS), len = K.irand(2, Math.max(2, Math.ceil((dx ? W : H) / 2)));
+      const x = a.x + dx * len, y = a.y + dy * len;
+      let ok = x >= 0 && y >= 0 && x < W && y < H && grid[y][x] < 0 && !used[y][x];
+      for (let k = 1; ok && k < len; k++) if (grid[a.y + dy * k][a.x + dx * k] >= 0 || used[a.y + dy * k][a.x + dx * k]) ok = false;
+      if (ok) for (const [ex, ey] of DIRS) { const nx = x + ex, ny = y + ey; if (nx >= 0 && ny >= 0 && nx < W && ny < H && grid[ny][nx] >= 0 && grid[ny][nx] !== ai) ok = false; }
+      if (!ok) { fails++; continue; }
+      for (let k = 1; k < len; k++) used[a.y + dy * k][a.x + dx * k] = 1;
+      add(x, y); const c = Math.random() < 0.4 ? 2 : 1;
+      sol.push([ai, isl.length - 1, c]); a.n += c; isl[isl.length - 1].n += c;
+    }
+    if (isl.length < want) continue;
+    // a few extra bridges between islands that already face each other make loops (more interesting to solve)
+    for (const [i, j] of pairs(isl)) {
+      if (sol.some(([p, q]) => (p === i && q === j) || (p === j && q === i)) || Math.random() > 0.3) continue;
+      const a = isl[i], b = isl[j], dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y), len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+      let free = true; for (let k = 1; k < len; k++) if (used[a.y + dy * k][a.x + dx * k]) free = false;
+      if (!free) continue;
+      for (let k = 1; k < len; k++) used[a.y + dy * k][a.x + dx * k] = 1;
+      sol.push([i, j, 1]); a.n++; b.n++;
+    }
+    if (isl.some((q) => q.n > 8)) continue;
+    return { isl, sol };
+  }
+  return gen(W, H, want - 1);
+}
+// every pair of islands that see each other along a row or column (nearest island in each direction)
+function pairs(isl) {
+  const out = [];
+  isl.forEach((a, i) => {
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      let best = -1, bd = 1e9;
+      isl.forEach((b, j) => { const d = dx ? b.x - a.x : b.y - a.y; if ((dx ? b.y === a.y : b.x === a.x) && d > 0 && d < bd) { bd = d; best = j; } });
+      if (best >= 0) out.push([i, best]);
+    }
+  });
+  return out;
+}
+const key = (i, j) => (i < j ? i + '-' + j : j + '-' + i);
+function load(s) {
+  const [W, H, n] = SIZES[s.lv]; const g = gen(W, H, n);
+  s.W = W; s.H = H; s.isl = g.isl; s.sol = g.sol; s.pairs = pairs(g.isl); s.br = {};
+  s.cs = Math.min(64, Math.floor(Math.min(760 / W, 400 / H))); s.ox = 480 - ((W - 1) * s.cs) / 2; s.oy = 290 - ((H - 1) * s.cs) / 2;
+  s.done = 0; s.drag = null; s.aiStep = 0;
+}
+const P = (s, i) => ({ x: s.ox + s.isl[i].x * s.cs, y: s.oy + s.isl[i].y * s.cs });
+const count = (s, i) => s.pairs.reduce((a, [p, q]) => a + (p === i || q === i ? s.br[key(p, q)] || 0 : 0), 0);
+// would a bridge between i and j cross a bridge that is already built?
+function crosses(s, i, j) {
+  const a = s.isl[i], b = s.isl[j], hor = a.y === b.y;
+  return s.pairs.some(([p, q]) => {
+    if (!s.br[key(p, q)]) return false;
+    const c = s.isl[p], d = s.isl[q]; if ((c.y === d.y) === hor) return false;
+    const [h1, h2, v1, v2] = hor ? [a, b, c, d] : [c, d, a, b];
+    return Math.min(h1.x, h2.x) < v1.x && v1.x < Math.max(h1.x, h2.x) && Math.min(v1.y, v2.y) < h1.y && h1.y < Math.max(v1.y, v2.y);
+  });
+}
+function solved(s) {
+  if (!s.isl.every((_, i) => count(s, i) === s.isl[i].n)) return false;
+  const seen = new Set([0]), st = [0];
+  while (st.length) { const i = st.pop(); s.pairs.forEach(([p, q]) => { if (!s.br[key(p, q)]) return; const o = p === i ? q : q === i ? p : -1; if (o >= 0 && !seen.has(o)) { seen.add(o); st.push(o); } }); }
+  return seen.size === s.isl.length;
+}
+function cycle(s, i, j) {
+  const k = key(i, j), v = s.br[k] || 0;
+  if (v === 0 && crosses(s, i, j)) { K.sfx('wrong'); K.shake(4); return; }
+  s.br[k] = (v + 1) % 3; K.tone(s.br[k] ? 380 + s.br[k] * 140 : 220, 0.06, 'triangle', 0.05);
+  if (solved(s)) { s.score++; s.done = 2; K.sfx('win'); }
+}
+// the water gap under the pointer (between two islands that see each other)
+function gapAt(s, x, y) {
+  const gx = (x - s.ox) / s.cs, gy = (y - s.oy) / s.cs;
+  return s.pairs.find(([i, j]) => { const a = s.isl[i], b = s.isl[j]; return a.y === b.y ? Math.abs(gy - a.y) < 0.4 && gx > a.x + 0.35 && gx < b.x - 0.35 : Math.abs(gx - a.x) < 0.4 && gy > a.y + 0.35 && gy < b.y - 0.35; });
+}
+K.game({
+  bg: '#0b2a4a', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.score = 0; load(s); },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= SIZES.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'MASTER BUILDER', text: 'Every archipelago joined' }); load(s); } return; }
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 476, w: 120, h: 44 })) { s.br = {}; K.sfx('click'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 810, y: 476, w: 120, h: 44 })) return K.end(s, { score: s.score, won: null, title: 'NICE BUILDING', text: `${s.score} puzzles solved` });
+    if (m.clicked) {
+      const on = s.isl.findIndex((_, i) => Math.hypot(P(s, i).x - m.x, P(s, i).y - m.y) < s.cs * 0.42);
+      if (on >= 0) s.drag = { i: on, x: m.x, y: m.y };
+      else { const g = gapAt(s, m.x, m.y); if (g) cycle(s, g[0], g[1]); }
+    }
+    if (s.drag && (m.released || !m.down)) {
+      const dx = m.x - s.drag.x, dy = m.y - s.drag.y, i = s.drag.i; s.drag = null;
+      if (Math.hypot(dx, dy) > s.cs * 0.45) {
+        const hor = Math.abs(dx) > Math.abs(dy), sg = Math.sign(hor ? dx : dy);
+        const pr = s.pairs.find(([p, q]) => (p === i || q === i) && (s.isl[p].y === s.isl[q].y) === hor && Math.sign((hor ? s.isl[p === i ? q : p].x - s.isl[i].x : s.isl[p === i ? q : p].y - s.isl[i].y)) === sg);
+        if (pr) cycle(s, pr[0], pr[1]);
+      }
+    }
+  },
+  draw(s) {
+    const c = K.ctx(), m = K.mouse;
+    for (let i = 0; i < 40; i++) { const x = (i * 197 + K.time() * 8) % 990 - 15, y = (i * 113) % 540; K.alpha(0.12); K.line(x, y, x + 18, y, '#9ad8ff', 2); K.alpha(1); }
+    // grid dots
+    for (let y = 0; y < s.H; y++) for (let x = 0; x < s.W; x++) K.circle(s.ox + x * s.cs, s.oy + y * s.cs, 2, '#1d4a74');
+    const hov = s.done ? null : gapAt(s, m.x, m.y);
+    s.pairs.forEach(([i, j]) => {
+      const v = s.br[key(i, j)] || 0, a = P(s, i), b = P(s, j), hor = a.y === b.y;
+      if (hov && hov[0] === i && hov[1] === j && !K.isTouch) { K.alpha(0.25); K.line(a.x, a.y, b.x, b.y, '#fff', 10); K.alpha(1); }
+      const col = s.done > 0 ? '#3dffa0' : '#e8d8b0';
+      if (v === 1) K.line(a.x, a.y, b.x, b.y, col, 5);
+      if (v === 2) { const ox = hor ? 0 : 5, oy = hor ? 5 : 0; K.line(a.x - ox, a.y - oy, b.x - ox, b.y - oy, col, 4); K.line(a.x + ox, a.y + oy, b.x + ox, b.y + oy, col, 4); }
+    });
+    if (s.drag) { const a = P(s, s.drag.i); K.alpha(0.4); K.line(a.x, a.y, m.x, m.y, '#fff', 3); K.alpha(1); }
+    s.isl.forEach((q, i) => {
+      const p = P(s, i), n = count(s, i), r = s.cs * 0.36, st = n === q.n ? 'ok' : n > q.n ? 'over' : 'no';
+      K.circle(p.x, p.y + 3, r, '#06192e'); K.circle(p.x, p.y, r, st === 'ok' ? '#2a9a5a' : st === 'over' ? '#c43a4a' : '#e8c87a'); K.ring(p.x, p.y, r, '#fff8', 2);
+      K.text(String(q.n), p.x, p.y + 1, r * 1.05, st === 'no' ? '#3a2a10' : '#fff', 'center', 'd');
+    });
+    K.text(s.done > 0 ? 'ALL JOINED!' : `ARCHIPELAGO ${s.lv + 1} / ${SIZES.length}`, 480, 34, 20, s.done > 0 ? '#3dffa0' : '#fff', 'center', 'd', s.done > 0 ? 12 : 0);
+    if (s.lv === 0 && !K.attract) K.text('tap the water between two islands to build a bridge · tap again for a double · again to remove', 480, 62, 12, '#9ad8ff', 'center', 'u');
+    K.button(30, 476, 120, 44, 'RESET', { color: '#9ad8ff', size: 12 }); K.button(810, 476, 120, 44, 'FINISH', { color: '#8e88b8', size: 12 });
+  },
+  ai(s, dt) {
+    if (s.done > 0) return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.3) return; s.aw = 0;
+    const st = s.sol[s.aiStep++]; if (!st) return; s.br[key(st[0], st[1])] = st[2]; if (solved(s)) { s.done = 2; }
+  },
+});
+</script></body></html>

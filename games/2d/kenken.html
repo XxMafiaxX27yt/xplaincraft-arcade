@@ -1,0 +1,90 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KenKen</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"kenken","n":175,"title":"KENKEN","genre":"mind","desc":"A number grid with maths inside. Fill every row and column with 1 to N (no repeats, like sudoku), and the numbers inside each outlined cage must make its target with its sign: 7+ adds up to 7, 6× multiplies to 6, 2- and 3÷ use two squares in either order. Eight grids, from 4×4 up to 6×6.","controls":"Click / tap a square, then type a number (or tap the number buttons) · arrows move · Backspace / 0 clears","scoreLabel":"GRIDS","tasks":[{"stat":"score","target":8,"text":"Solve all 8 KenKen grids"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SIZES = [4, 4, 4, 5, 5, 5, 6, 6];
+function latin(n) {
+  const perm = K.shuffle([...Array(n)].map((_, i) => i + 1)), rows = K.shuffle([...Array(n)].map((_, i) => i)), cols = K.shuffle([...Array(n)].map((_, i) => i));
+  return rows.map((r) => cols.map((c) => perm[(r + c) % n]));
+}
+function cages(n, sol) {
+  const id = sol.map((r) => r.map(() => -1)), out = [], cells = [];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) cells.push([x, y]);
+  K.shuffle(cells);
+  for (const [x, y] of cells) {
+    if (id[y][x] >= 0) continue;
+    const r = Math.random(), size = r < 0.1 ? 1 : r < 0.6 ? 2 : r < 0.95 ? 3 : 4, cage = [[x, y]]; id[y][x] = out.length;
+    while (cage.length < size) {
+      const opts = []; cage.forEach(([cx, cy]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const nx = cx + dx, ny = cy + dy; if (nx >= 0 && ny >= 0 && nx < n && ny < n && id[ny][nx] < 0) opts.push([nx, ny]); }));
+      if (!opts.length) break; const [nx, ny] = K.pick(opts); id[ny][nx] = out.length; cage.push([nx, ny]);
+    }
+    const v = cage.map(([cx, cy]) => sol[cy][cx]);
+    let op, t;
+    if (v.length === 1) { op = ''; t = v[0]; }
+    else if (v.length === 2) {
+      const [a, b] = [Math.max(...v), Math.min(...v)], r2 = Math.random();
+      if (a % b === 0 && r2 < 0.35) { op = '÷'; t = a / b; } else if (r2 < 0.6) { op = '-'; t = a - b; } else if (r2 < 0.8) { op = '+'; t = a + b; } else { op = '×'; t = a * b; }
+    } else if (Math.random() < 0.55) { op = '+'; t = v.reduce((a, b) => a + b, 0); } else { op = '×'; t = v.reduce((a, b) => a * b, 1); }
+    out.push({ cells: cage, op, t });
+  }
+  return { id, list: out };
+}
+function load(s) {
+  s.n = SIZES[s.lv]; s.sol = latin(s.n); const c = cages(s.n, s.sol); s.id = c.id; s.cages = c.list;
+  s.g = s.sol.map((r) => r.map(() => 0)); s.sel = [0, 0]; s.T = Math.floor(430 / s.n); s.ox = 400 - (s.n * s.T) / 2; s.oy = 275 - (s.n * s.T) / 2; s.done = 0;
+}
+const cageOk = (s, c) => {
+  const v = c.cells.map(([x, y]) => s.g[y][x]); if (v.some((q) => !q)) return null;
+  if (c.op === '') return v[0] === c.t;
+  if (c.op === '+') return v.reduce((a, b) => a + b, 0) === c.t;
+  if (c.op === '×') return v.reduce((a, b) => a * b, 1) === c.t;
+  const a = Math.max(...v), b = Math.min(...v); return c.op === '-' ? a - b === c.t : a === b * c.t;
+};
+const dup = (s, x, y) => { const v = s.g[y][x]; if (!v) return false; for (let k = 0; k < s.n; k++) { if (k !== x && s.g[y][k] === v) return true; if (k !== y && s.g[k][x] === v) return true; } return false; };
+const solved = (s) => s.g.every((r, y) => r.every((v, x) => v && !dup(s, x, y))) && s.cages.every((c) => cageOk(s, c));
+function put(s, v) { const [x, y] = s.sel; s.g[y][x] = v; K.tone(v ? 400 + v * 60 : 220, 0.05, 'triangle', 0.05); if (solved(s)) { s.score++; s.done = 2.2; K.sfx('win'); } }
+const NB = (s, i) => ({ x: 760, y: 70 + i * 54, w: 150, h: 46 });
+K.game({
+  bg: '#14101e', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.score = 0; load(s); },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= SIZES.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'MATHS WIZARD', text: 'Every grid solved' }); load(s); } return; }
+    const m = K.mouse, td = K.tapDir();
+    if (td) { const [dx, dy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[td]; s.sel = [K.wrap(s.sel[0] + dx, s.n), K.wrap(s.sel[1] + dy, s.n)]; }
+    for (let v = 1; v <= s.n; v++) if (K.tap('Digit' + v, 'Numpad' + v)) put(s, v);
+    if (K.tap('Backspace', 'Delete', 'Digit0', 'Numpad0')) put(s, 0);
+    if (!m.clicked) return;
+    if (K.inRect(m.x, m.y, { x: 40, y: 476, w: 120, h: 44 })) return K.end(s, { score: s.score, won: null, title: 'GOOD MATHS', text: `${s.score} grids solved` });
+    for (let i = 0; i <= s.n; i++) if (K.inRect(m.x, m.y, NB(s, i))) return put(s, i < s.n ? i + 1 : 0);
+    const x = Math.floor((m.x - s.ox) / s.T), y = Math.floor((m.y - s.oy) / s.T);
+    if (x >= 0 && y >= 0 && x < s.n && y < s.n) { s.sel = [x, y]; K.sfx('click'); }
+  },
+  draw(s) {
+    const n = s.n, T = s.T, [sx, sy] = s.sel;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const X = s.ox + x * T, Y = s.oy + y * T, same = x === sx || y === sy;
+      K.rect(X, Y, T, T, s.done > 0 ? '#2a5a3a' : x === sx && y === sy ? '#3a3570' : same ? '#221e36' : '#1a1628');
+      const v = s.g[y][x]; if (v) K.text(String(v), X + T / 2, Y + T / 2 + 6, T * 0.46, dup(s, x, y) ? '#ff3355' : '#fff', 'center', 'd');
+    }
+    for (let k = 0; k <= n; k++) { K.line(s.ox + k * T, s.oy, s.ox + k * T, s.oy + n * T, '#3a3456', 1); K.line(s.ox, s.oy + k * T, s.ox + n * T, s.oy + k * T, '#3a3456', 1); }
+    // cage walls: thick lines where neighbours belong to different cages
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const X = s.ox + x * T, Y = s.oy + y * T, id = s.id[y][x];
+      if (x === n - 1 || s.id[y][x + 1] !== id) K.line(X + T, Y, X + T, Y + T, '#c9b8ff', 4);
+      if (y === n - 1 || s.id[y + 1][x] !== id) K.line(X, Y + T, X + T, Y + T, '#c9b8ff', 4);
+      if (x === 0) K.line(X, Y, X, Y + T, '#c9b8ff', 4); if (y === 0) K.line(X, Y, X + T, Y, '#c9b8ff', 4);
+    }
+    s.cages.forEach((c) => { const [x, y] = c.cells.reduce((a, q) => (q[1] < a[1] || (q[1] === a[1] && q[0] < a[0]) ? q : a)); const ok = cageOk(s, c); K.text(c.t + c.op, s.ox + x * T + 6, s.oy + y * T + 13, Math.max(12, T * 0.2), ok === true ? '#3dffa0' : ok === false ? '#ff6a7a' : '#ffd93a', 'left', 'd'); });
+    for (let i = 0; i <= n; i++) K.button(NB(s, i).x, NB(s, i).y, 150, 46, i < n ? String(i + 1) : '⌫ CLEAR', { color: i < n ? '#c9b8ff' : '#8e88b8', size: i < n ? 20 : 12 });
+    K.text(s.done > 0 ? 'SOLVED!' : `GRID ${s.lv + 1} / ${SIZES.length}`, 400, 30, 18, s.done > 0 ? '#3dffa0' : '#fff', 'center', 'd', s.done > 0 ? 12 : 0);
+    if (s.lv === 0 && !K.attract) K.wrapText(`1-${n} once in every row and column. Each cage makes its number with its sign.`, 100, 120, 150, 13, '#a8a0c8');
+    K.button(40, 476, 120, 44, 'FINISH', { color: '#8e88b8', size: 12 });
+  },
+  ai(s, dt) {
+    if (s.done > 0) return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.2) return; s.aw = 0;
+    for (let y = 0; y < s.n; y++) for (let x = 0; x < s.n; x++) if (s.g[y][x] !== s.sol[y][x]) { s.sel = [x, y]; s.g[y][x] = s.sol[y][x]; if (solved(s)) s.done = 2.2; return; }
+  },
+});
+</script></body></html>

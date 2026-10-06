@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Akari</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"akari","n":174,"title":"AKARI","genre":"mind","desc":"Light up the dark building. Put lamps in the white rooms - a lamp lights its whole row and column until a wall stops it. Every white square must be lit, but no lamp may shine on another lamp, and a numbered wall needs exactly that many lamps right next to it. Eight floors, each bigger.","controls":"Click / tap a square for a lamp · right-click (or DOT mode) marks a square that has no lamp","scoreLabel":"FLOORS","tasks":[{"stat":"score","target":8,"text":"Light all 8 floors in Akari"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SIZES = [7, 7, 8, 8, 9, 9, 10, 10];
+// walls: -1 = white square, 9 = plain wall, 0..4 = numbered wall
+function gen(N) {
+  const g = Array.from({ length: N }, () => Array(N).fill(-1));
+  const dens = 0.16 + Math.random() * 0.06;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (Math.random() < dens) { g[y][x] = 9; g[N - 1 - y][N - 1 - x] = 9; }   // symmetric, like printed puzzles
+  // place lamps greedily on unlit squares: any unlit square is safe, so this always gives a valid answer
+  const lamp = Array.from({ length: N }, () => Array(N).fill(0)), cells = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x] < 0) cells.push([x, y]);
+  K.shuffle(cells);
+  for (const [x, y] of cells) if (!lit(g, lamp, N, x, y)) lamp[y][x] = 1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x] === 9 && Math.random() < 0.75) g[y][x] = around(lamp, N, x, y);
+  return { g, lamp };
+}
+const around = (lamp, N, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].reduce((a, [dx, dy]) => a + (lamp[y + dy]?.[x + dx] ? 1 : 0), 0);
+// is (x,y) lit by any lamp (its own included)?
+function lit(g, lamp, N, x, y) {
+  if (lamp[y][x]) return true;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 1; ; k++) { const nx = x + dx * k, ny = y + dy * k; if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] >= 0) break; if (lamp[ny][nx]) return true; }
+  return false;
+}
+// a lamp that another lamp shines on
+function clash(g, lamp, N, x, y) {
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 1; ; k++) { const nx = x + dx * k, ny = y + dy * k; if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] >= 0) break; if (lamp[ny][nx]) return true; }
+  return false;
+}
+function load(s) {
+  s.N = SIZES[s.lv]; const p = gen(s.N); s.g = p.g; s.sol = p.lamp; s.m = s.g.map((r) => r.map(() => 0)); // 0 empty, 1 lamp, 2 dot
+  s.T = Math.floor(440 / s.N); s.ox = 480 - (s.N * s.T) / 2; s.oy = 280 - (s.N * s.T) / 2; s.done = 0;
+}
+function solved(s) {
+  const N = s.N, lamp = s.m.map((r) => r.map((v) => (v === 1 ? 1 : 0)));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const w = s.g[y][x];
+    if (w < 0) { if (!lit(s.g, lamp, N, x, y)) return false; if (lamp[y][x] && clash(s.g, lamp, N, x, y)) return false; }
+    else if (w <= 4 && around(lamp, N, x, y) !== w) return false;
+  }
+  return true;
+}
+K.game({
+  bg: '#101018', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.score = 0; s.dot = false; load(s); },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= SIZES.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'BUILDING LIT', text: 'Every floor glowing' }); load(s); } return; }
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 420, w: 130, h: 44 })) { s.dot = !s.dot; K.sfx('click'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 476, w: 130, h: 44 })) { s.m = s.g.map((r) => r.map(() => 0)); K.sfx('click'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 800, y: 476, w: 130, h: 44 })) return K.end(s, { score: s.score, won: null, title: 'LIGHTS OUT', text: `${s.score} floors lit` });
+    if (!m.clicked && !m.right) return;
+    const x = Math.floor((m.x - s.ox) / s.T), y = Math.floor((m.y - s.oy) / s.T);
+    if (x < 0 || y < 0 || x >= s.N || y >= s.N || s.g[y][x] >= 0) return;
+    const want = m.right || s.dot ? 2 : 1; s.m[y][x] = s.m[y][x] === want ? 0 : want;
+    K.tone(s.m[y][x] === 1 ? 660 : 330, 0.05, 'triangle', 0.05);
+    if (solved(s)) { s.score++; s.done = 2.2; K.sfx('win'); }
+  },
+  draw(s) {
+    const N = s.N, T = s.T, lamp = s.m.map((r) => r.map((v) => (v === 1 ? 1 : 0)));
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const X = s.ox + x * T, Y = s.oy + y * T, w = s.g[y][x];
+      if (w >= 0) {
+        K.rect(X + 1, Y + 1, T - 2, T - 2, '#05050a', 3);
+        if (w <= 4) { const n = around(lamp, N, x, y); K.text(String(w), X + T / 2, Y + T / 2 + 1, T * 0.5, n === w ? '#3dffa0' : n > w ? '#ff3355' : '#fff', 'center', 'd'); }
+        continue;
+      }
+      const L = lit(s.g, lamp, N, x, y);
+      K.rect(X + 1, Y + 1, T - 2, T - 2, s.done > 0 ? '#ffe9a0' : L ? '#f6d860' : '#d8d8e0', 3);
+      if (s.m[y][x] === 1) { const bad = clash(s.g, lamp, N, x, y); K.glow(bad ? '#ff3355' : '#fff2a0', 16); K.circle(X + T / 2, Y + T / 2, T * 0.28, bad ? '#ff3355' : '#fffbe0'); K.noGlow(); K.rect(X + T / 2 - T * 0.08, Y + T / 2 + T * 0.2, T * 0.16, T * 0.12, '#6a6a70', 2); }
+      if (s.m[y][x] === 2) K.circle(X + T / 2, Y + T / 2, 4, '#555');
+    }
+    K.text(s.done > 0 ? 'ALL LIT!' : `FLOOR ${s.lv + 1} / ${SIZES.length}`, 95, 50, 18, s.done > 0 ? '#ffd93a' : '#fff', 'center', 'd', s.done > 0 ? 12 : 0);
+    if (s.lv === 0 && !K.attract) K.wrapText('Every white square lit. No lamp shines on another. Numbers = lamps touching that wall.', 860, 200, 160, 14, '#c8c8d8');
+    K.button(30, 420, 130, 44, s.dot ? 'MODE: DOT' : 'MODE: LAMP', { color: s.dot ? '#8e88b8' : '#ffd93a', size: 12 });
+    K.button(30, 476, 130, 44, 'CLEAR', { color: '#9ad8ff', size: 12 }); K.button(800, 476, 130, 44, 'FINISH', { color: '#8e88b8', size: 12 });
+  },
+  ai(s, dt) {
+    if (s.done > 0) return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.25) return; s.aw = 0;
+    for (let y = 0; y < s.N; y++) for (let x = 0; x < s.N; x++) if (s.sol[y][x] && s.m[y][x] !== 1) { s.m[y][x] = 1; if (solved(s)) s.done = 2.2; return; }
+  },
+});
+</script></body></html>

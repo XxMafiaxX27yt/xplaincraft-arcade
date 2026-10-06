@@ -1,0 +1,87 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cryptogram</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"cryptogram","n":178,"title":"CRYPTOGRAM","genre":"mind","desc":"An old saying, written in a secret code where every letter has been swapped for another. Pick a code letter and guess what it really is - the guess fills in everywhere that letter appears. Short words, double letters and apostrophes are your best friends. Six messages to crack.","controls":"Click / tap a code letter, then type your guess (phone: tap to open your keyboard) · arrows jump between letters · Backspace clears · HINT reveals one","scoreLabel":"POINTS","tasks":[{"stat":"score","target":60,"text":"Score 60 points in Cryptogram"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SAYINGS = [
+  'THE EARLY BIRD CATCHES THE WORM', 'ACTIONS SPEAK LOUDER THAN WORDS', 'DO NOT COUNT YOUR CHICKENS BEFORE THEY HATCH', 'EVERY CLOUD HAS A SILVER LINING',
+  'A PICTURE IS WORTH A THOUSAND WORDS', 'WHERE THERE IS A WILL THERE IS A WAY', 'BETTER LATE THAN NEVER', 'TWO HEADS ARE BETTER THAN ONE',
+  'PRACTICE MAKES PERFECT', 'DO NOT JUDGE A BOOK BY ITS COVER', 'HONESTY IS THE BEST POLICY', 'LOOK BEFORE YOU LEAP', 'ROME WAS NOT BUILT IN A DAY',
+  'KNOWLEDGE IS POWER', 'THE PEN IS MIGHTIER THAN THE SWORD', 'WHEN IN ROME DO AS THE ROMANS DO', 'A FRIEND IN NEED IS A FRIEND INDEED',
+  'BIRDS OF A FEATHER FLOCK TOGETHER', 'CURIOSITY KILLED THE CAT', 'IGNORANCE IS BLISS', 'LAUGHTER IS THE BEST MEDICINE', 'NO PAIN NO GAIN',
+  'SLOW AND STEADY WINS THE RACE', 'STRIKE WHILE THE IRON IS HOT', 'THE GRASS IS ALWAYS GREENER ON THE OTHER SIDE', 'TIME FLIES WHEN YOU ARE HAVING FUN',
+  'WHAT GOES UP MUST COME DOWN', 'YOU CAN NOT HAVE YOUR CAKE AND EAT IT TOO', 'ALL THAT GLITTERS IS NOT GOLD', 'AN APPLE A DAY KEEPS THE DOCTOR AWAY',
+  'BEAUTY IS IN THE EYE OF THE BEHOLDER', 'DO NOT PUT ALL YOUR EGGS IN ONE BASKET', 'EASY COME EASY GO', 'FORTUNE FAVOURS THE BOLD', 'GOOD THINGS COME TO THOSE WHO WAIT',
+  'HOME IS WHERE THE HEART IS', 'IF IT IS NOT BROKEN DO NOT FIX IT', 'KILL TWO BIRDS WITH ONE STONE', 'MONEY DOES NOT GROW ON TREES', 'NECESSITY IS THE MOTHER OF INVENTION',
+  'OLD HABITS DIE HARD', 'PATIENCE IS A VIRTUE', 'THE QUIET ONES ARE THE ONES TO WATCH', 'THERE IS NO PLACE LIKE HOME', 'TOO MANY COOKS SPOIL THE BROTH',
+  'WHEN LIFE GIVES YOU LEMONS MAKE LEMONADE', 'YOU ARE NEVER TOO OLD TO LEARN', 'A JOURNEY OF A THOUSAND MILES BEGINS WITH A SINGLE STEP',
+];
+const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function puzzle(s) {
+  let text; do text = K.pick(SAYINGS); while (s.usedQ.includes(text)); s.usedQ.push(text);
+  let key; do key = K.shuffle([...A]); while (key.some((c, i) => c === A[i]));   // no letter stands for itself
+  s.plain = text; s.code = [...text].map((ch) => (/[A-Z]/.test(ch) ? key[A.indexOf(ch)] : ch)).join('');
+  s.real = {}; [...text].forEach((ch, i) => { if (/[A-Z]/.test(ch)) s.real[s.code[i]] = ch; });
+  s.guess = {}; s.hints = 0; s.done = 0;
+  // give away a couple of letters to start (fewer on later messages)
+  const letters = K.shuffle(Object.keys(s.real)); for (let i = 0; i < Math.max(0, 3 - s.p); i++) s.guess[letters[i]] = s.real[letters[i]];
+  s.sel = Object.keys(s.real).find((c) => !s.guess[c]);
+  // lay the message out in lines that fit
+  s.lines = []; let line = '';
+  text.split(' ').forEach((w) => { if ((line + ' ' + w).trim().length > 26) { s.lines.push(line.trim()); line = ''; } line += ' ' + w; }); s.lines.push(line.trim());
+  s.lineStart = []; let k = 0; s.lines.forEach((l) => { s.lineStart.push(k); k += l.length + 1; });
+}
+const CW = 30, CH = 64;
+const solved = (s) => Object.keys(s.real).every((c) => s.guess[c] === s.real[c]);
+function cellAt(s, mx, my) {
+  for (let li = 0; li < s.lines.length; li++) { const l = s.lines[li], x0 = 480 - (l.length * CW) / 2, y0 = 90 + li * (CH + 10); for (let i = 0; i < l.length; i++) if (K.inRect(mx, my, { x: x0 + i * CW, y: y0, w: CW, h: CH }) && /[A-Z]/.test(s.code[s.lineStart[li] + i])) return s.code[s.lineStart[li] + i]; }
+  return null;
+}
+function step(s, d) { const ks = [...new Set([...s.code].filter((c) => /[A-Z]/.test(c)))]; let i = ks.indexOf(s.sel); for (let k = 0; k < ks.length; k++) { i = K.wrap(i + d, ks.length); if (!s.guess[ks[i]]) break; } s.sel = ks[i]; }
+function set(s, v) {
+  if (!s.sel) return;
+  if (v) for (const c in s.guess) if (s.guess[c] === v && c !== s.sel) delete s.guess[c];   // a letter can only stand for one code letter
+  if (v) s.guess[s.sel] = v; else delete s.guess[s.sel];
+  K.tone(v ? 520 : 260, 0.05, 'triangle', 0.05);
+  if (solved(s)) { const pts = Math.max(4, 15 - s.hints * 3); s.score += pts; s.done = 3; s.msg = `CRACKED! +${pts}`; K.sfx('win'); }
+  else if (v) step(s, 1);
+}
+K.game({
+  bg: '#14120e', typing: true, touch: { stick: false, buttons: [] },
+  init(s) { s.p = 0; s.score = 0; s.usedQ = []; puzzle(s); },
+  update(s, dt) {
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.p++; if (s.p >= 6) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'CODEBREAKER', text: `${s.score} points` }); puzzle(s); } return; }
+    const m = K.mouse;
+    if (K.tap('ArrowLeft')) step(s, -1); if (K.tap('ArrowRight')) step(s, 1);
+    if (m.clicked) {
+      if (K.inRect(m.x, m.y, { x: 790, y: 20, w: 140, h: 40 })) { if (s.sel) { s.hints++; set(s, s.real[s.sel]); K.sfx('chime'); } return; }
+      if (K.inRect(m.x, m.y, { x: 30, y: 20, w: 120, h: 40 })) return K.end(s, { score: s.score, won: null, title: 'CODE CLOSED', text: `${s.score} points` });
+      const c = cellAt(s, m.x, m.y); if (c) { s.sel = c; K.sfx('click'); }
+    }
+    const k = K.keyboard(255, 384, 450, {}, { h: 42 });
+    if (k === 'BACK') set(s, null); else if (k && k !== 'ENTER') set(s, k);
+  },
+  draw(s) {
+    s.lines.forEach((l, li) => {
+      const x0 = 480 - (l.length * CW) / 2, y0 = 90 + li * (CH + 10);
+      for (let i = 0; i < l.length; i++) {
+        const c = s.code[s.lineStart[li] + i], x = x0 + i * CW; if (c === ' ') continue;
+        if (!/[A-Z]/.test(c)) { K.text(c, x + CW / 2, y0 + 22, 22, '#e8dcc0', 'center', 'd'); continue; }
+        const sel = c === s.sel && !s.done, g = s.guess[c];
+        if (sel) K.rect(x + 2, y0, CW - 4, CH - 4, '#4a3a1a', 4);
+        K.text(g || '', x + CW / 2, y0 + 22, 24, s.done > 0 ? '#3dffa0' : '#fff2d0', 'center', 'd');
+        K.line(x + 4, y0 + 38, x + CW - 4, y0 + 38, sel ? '#ffd93a' : '#6a5a3a', 2);
+        K.text(c, x + CW / 2, y0 + 50, 13, sel ? '#ffd93a' : '#a89a78', 'center', 'u');
+      }
+    });
+    K.text(s.done > 0 ? s.msg : `MESSAGE ${s.p + 1} / 6`, 480, 40, 18, s.done > 0 ? '#3dffa0' : '#e8dcc0', 'center', 'd', s.done > 0 ? 12 : 0);
+    K.text(`★ ${s.score}`, 480, 66, 14, '#ffd93a', 'center', 'd');
+    K.button(790, 20, 140, 40, 'HINT', { color: '#ffd93a', size: 12 }); K.button(30, 20, 120, 40, 'FINISH', { color: '#8e88b8', size: 12 });
+    // which real letters are already used
+    const used = new Set(Object.values(s.guess)); let x = 480 - 13 * 18; for (const ch of A) { K.text(ch, x + 9, 360, 13, used.has(ch) ? '#4a4030' : '#c8b890', 'center', 'd'); x += 18; }
+    K.keyboard(255, 384, 450, {}, { h: 42 });
+  },
+  ai(s, dt) { if (s.done > 0) return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.35) return; s.aw = 0; const c = Object.keys(s.real).find((q) => s.guess[q] !== s.real[q]); if (c) { s.sel = c; K.vtap('Key' + s.real[c]); } },
+});
+</script></body></html>

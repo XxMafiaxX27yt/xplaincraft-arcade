@@ -171,6 +171,7 @@
   K.rpick = (arr) => arr[Math.floor(rng() * arr.length)];
   K.rint = (a, b) => a + Math.floor(rng() * (b - a + 1));
   K.local = Number(Q.get('local')) || 0;
+  K._state = () => s;   // for the test tools (tools/*.py read the running game's state)
 
   // ---------- drawing ----------
   K.ctx = () => ctx;

@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Word Ladder</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"word-ladder","n":176,"title":"WORD LADDER","genre":"mind","desc":"Turn one word into another by changing a single letter at a time - and every step has to be a real word. CAT, COT, DOT, DOG. Ten ladders; finish one in the fewest steps (par) for bonus points. Stuck? A hint shows the next rung, but costs the bonus.","controls":"Type a word + Enter (phone: tap to open your keyboard) · Backspace on an empty line takes back a step · HINT / SKIP buttons","scoreLabel":"POINTS","tasks":[{"stat":"score","target":120,"text":"Score 120 points in Word Ladder"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script>
+<script>
+const ROUNDS = [[3, 3], [3, 3], [3, 4], [4, 3], [4, 3], [4, 4], [4, 4], [4, 5], [4, 5], [4, 6]];   // [letters, par]
+const nbCache = {};
+function nbs(w) {
+  if (nbCache[w]) return nbCache[w];
+  const set = new Set(WORDS[w.length]), o = [];
+  for (let i = 0; i < w.length; i++) for (let c = 97; c < 123; c++) { const x = w.slice(0, i) + String.fromCharCode(c) + w.slice(i + 1); if (x !== w && set.has(x)) o.push(x); }
+  return (nbCache[w] = o);
+}
+// shortest path from a to b (list of words, a first) or null
+function path(a, b) {
+  const prev = { [a]: null }, q = [a];
+  while (q.length) { const w = q.shift(); if (w === b) { const p = []; for (let x = b; x; x = prev[x]) p.unshift(x); return p; } for (const n of nbs(w)) if (!(n in prev)) { prev[n] = w; q.push(n); } }
+  return null;
+}
+function round(s) {
+  const [len, par] = ROUNDS[s.r];
+  for (let t = 0; t < 400; t++) {
+    const a = WORDS.pick(len), dist = { [a]: 0 }, q = [a]; let pool = [];
+    while (q.length) { const w = q.shift(); if (dist[w] === par) { pool.push(w); continue; } for (const n of nbs(w)) if (!(n in dist)) { dist[n] = dist[w] + 1; q.push(n); } }
+    pool = pool.filter((w) => [...w].every((ch, i) => ch !== a[i]) || par < len);   // the target should look different from the start
+    if (pool.length) { s.a = a; s.b = K.pick(pool); s.par = par; break; }
+  }
+  s.steps = [s.a]; s.inp = ''; s.msg = ''; s.msgT = 0; s.hinted = false; s.done = 0;
+}
+function submit(s) {
+  const w = s.inp.toLowerCase(), last = s.steps[s.steps.length - 1];
+  if (w.length !== s.a.length) return say(s, `${s.a.length} letters`);
+  if (!WORDS.has(w)) return say(s, `"${w.toUpperCase()}" is not in my word list`);
+  if ([...w].filter((ch, i) => ch !== last[i]).length !== 1) return say(s, 'change exactly ONE letter');
+  if (s.steps.includes(w)) return say(s, 'already used');
+  s.steps.push(w); s.inp = ''; K.tone(500 + s.steps.length * 40, 0.08, 'triangle', 0.06);
+  if (w === s.b) { const moves = s.steps.length - 1, pts = 10 + (moves <= s.par && !s.hinted ? 10 : 0); s.score += pts; s.done = 2.4; s.msg = moves <= s.par && !s.hinted ? `PAR! +${pts}` : `DONE in ${moves} +${pts}`; K.sfx('win'); }
+}
+function say(s, m) { s.msg = m; s.msgT = 1.6; s.shakeT = 0.3; K.sfx('wrong'); }
+K.game({
+  bg: '#101826', typing: true, touch: { stick: false, buttons: [] },
+  init(s) { s.r = 0; s.score = 0; round(s); },
+  update(s, dt) {
+    s.msgT -= dt; s.shakeT = (s.shakeT || 0) - dt;
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.r++; if (s.r >= ROUNDS.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'TOP OF THE LADDER', text: `${s.score} points` }); round(s); } return; }
+    const m = K.mouse;
+    if (m.clicked && K.inRect(m.x, m.y, { x: 790, y: 120, w: 140, h: 44 })) { const p = path(s.steps[s.steps.length - 1], s.b); if (p && p[1]) { s.hinted = true; s.inp = p[1].toUpperCase(); K.sfx('chime'); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 790, y: 176, w: 140, h: 44 })) { const p = path(s.a, s.b) || [s.a, s.b]; s.steps = p; s.msg = 'the answer'; s.done = 3; K.sfx('lose'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 30, y: 120, w: 120, h: 44 })) return K.end(s, { score: s.score, won: null, title: 'NICE CLIMB', text: `${s.score} points` });
+    const k = K.keyboard(255, 384, 450, {}, { h: 42 });
+    if (!k) return;
+    if (k === 'ENTER') submit(s);
+    else if (k === 'BACK') { if (s.inp) s.inp = s.inp.slice(0, -1); else if (s.steps.length > 1) { s.steps.pop(); K.sfx('click'); } }
+    else if (s.inp.length < s.a.length) { s.inp += k; K.sfx('tick'); }
+  },
+  draw(s) {
+    const len = s.a.length, B = 44, X0 = 480 - (len * (B + 6)) / 2;
+    const row = (w, y, col, txt = '#fff', off = 0) => { for (let i = 0; i < len; i++) { K.rect(X0 + off + i * (B + 6), y, B, B, col, 6); K.text((w[i] || '').toUpperCase(), X0 + off + i * (B + 6) + B / 2, y + B / 2 + 2, 24, txt, 'center', 'd'); } };
+    K.text(`LADDER ${s.r + 1} / ${ROUNDS.length}   ·   PAR ${s.par}`, 480, 24, 16, '#9ad8ff', 'center', 'd');
+    K.text(`★ ${s.score}`, 930, 24, 16, '#ffd93a', 'right', 'd');
+    // show the start word, the last few rungs, the input line and the target
+    const vis = s.steps.length > 3 ? [s.steps[0], '…', ...s.steps.slice(-2)] : s.steps;
+    let y = 46;
+    vis.forEach((w, i) => { if (w === '…') { K.text('⋮', 480, y + 10, 20, '#5a6a8a'); y += 26; return; } const last = s.steps[s.steps.length - 1] === w && i === vis.length - 1; row(w, y, w === s.b ? '#2a9a5a' : i === 0 ? '#3a4a7a' : '#24304a', '#fff'); if (!last) K.text('↓', X0 - 22, y + 22, 14, '#5a6a8a'); y += B + 6; });
+    if (!s.done) { const sh = s.shakeT > 0 ? Math.sin(K.time() * 60) * 6 : 0; for (let i = 0; i < len; i++) K.stroke(X0 + sh + i * (B + 6), y, B, B, '#22e6ff', 2, 6); row(s.inp, y, 'rgba(0,0,0,0)', '#22e6ff', sh); y += B + 6; }
+    K.text('to', 480, Math.max(y + 4, 290), 12, '#5a6a8a'); row(s.b, Math.max(y + 14, 300), '#7a3a8a');
+    if (s.msgT > 0 || s.done > 0) K.text(s.msg, 480, 364, 16, s.done > 0 ? '#3dffa0' : '#ff8a8a', 'center', 'd');
+    K.button(790, 120, 140, 44, 'HINT', { color: '#ffd93a', size: 12 }); K.button(790, 176, 140, 44, 'SKIP', { color: '#ff6a7a', size: 12 }); K.button(30, 120, 120, 44, 'FINISH', { color: '#8e88b8', size: 12 });
+    K.keyboard(255, 384, 450, {}, { h: 42 });
+  },
+  ai(s, dt) {
+    if (s.done > 0) return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.12) return; s.aw = 0;
+    if (!s.plan) s.plan = '';
+    if (!s.plan.length) { const p = path(s.steps[s.steps.length - 1], s.b); if (!p || !p[1]) return; s.plan = p[1].toUpperCase() + '\n'; s.inp = ''; }
+    const ch = s.plan[0]; s.plan = s.plan.slice(1); K.vtap(ch === '\n' ? 'Enter' : 'Key' + ch);
+  },
+});
+</script></body></html>
