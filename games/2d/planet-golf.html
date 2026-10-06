@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planet Golf</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"planet-golf","n":151,"title":"PLANET GOLF","genre":"mystery","desc":"Mini golf in space. Every planet pulls on the ball, so no shot flies straight: slingshot around a moon, land on the right planet and roll into the flag. Drag back from the ball to aim (a dotted line shows the first part of the flight). Nine holes, each with a par. Fly off into space and it costs a stroke.","controls":"Drag back from the ball and let go to shoot · the dotted line shows where it starts to go","scoreLabel":"STROKES","lowerIsBetter":true,"tasks":[{"stat":"won","target":1,"text":"Finish all 9 holes of Planet Golf"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// planets: [x, y, radius, mass, colour]; ball starts on planet 0 at angle a0; hole on planet h at angle ha
+const HOLES = [
+  { par: 2, P: [[200, 300, 70, 1, '#4f8bff'], [720, 280, 80, 1.1, '#3dffa0']], a0: -1.2, h: 1, ha: -1.9 },
+  { par: 3, P: [[150, 400, 60, 1, '#4f8bff'], [480, 200, 50, 1.4, '#c45cff'], [810, 380, 70, 1, '#ff8a3a']], a0: -1, h: 2, ha: -2.2 },
+  { par: 3, P: [[160, 270, 70, 1, '#4f8bff'], [480, 270, 90, 2.2, '#ff3355'], [800, 270, 60, 1, '#3dffa0']], a0: -1.57, h: 2, ha: -1.2 },
+  { par: 3, P: [[130, 120, 60, 1, '#4f8bff'], [400, 380, 70, 1.2, '#ffd93a'], [800, 150, 60, 1, '#3dffa0']], a0: 0.6, h: 2, ha: 1.9 },
+  { par: 4, P: [[120, 440, 60, 1, '#4f8bff'], [380, 120, 50, 1, '#c45cff'], [600, 400, 55, 1.6, '#ff3355'], [840, 160, 60, 1, '#3dffa0']], a0: -0.8, h: 3, ha: 2.4 },
+  { par: 3, P: [[480, 450, 80, 1, '#4f8bff'], [480, 200, 40, 2.5, '#ffd93a']], a0: -2.2, h: 1, ha: -1.57 },
+  { par: 4, P: [[100, 270, 60, 1, '#4f8bff'], [330, 150, 45, 1.2, '#c45cff'], [330, 400, 45, 1.2, '#c45cff'], [620, 270, 60, 1.8, '#ff3355'], [860, 270, 50, 1, '#3dffa0']], a0: 0, h: 4, ha: 0 },
+  { par: 4, P: [[150, 150, 60, 1, '#4f8bff'], [480, 270, 110, 3, '#ff8a3a'], [820, 400, 55, 1, '#3dffa0']], a0: 0.3, h: 2, ha: -2.4 },
+  { par: 5, P: [[100, 480, 55, 1, '#4f8bff'], [300, 280, 40, 1.4, '#c45cff'], [500, 80, 40, 1.4, '#c45cff'], [700, 280, 40, 1.4, '#c45cff'], [880, 470, 55, 1, '#3dffa0']], a0: -1, h: 4, ha: -2.5 },
+];
+const G = 1200000; // strong enough to curve every shot (checked: every hole has holes-in-one and landings)
+function hole(s) { const H = HOLES[s.h], p = H.P[0]; s.ball = { x: p[0] + Math.cos(H.a0) * (p[2] + 9), y: p[1] + Math.sin(H.a0) * (p[2] + 9), vx: 0, vy: 0, rest: true }; s.strokes = 0; s.last = { ...s.ball }; s.sunk = 0; const q = H.P[H.h]; s.flag = { x: q[0] + Math.cos(H.ha) * q[2], y: q[1] + Math.sin(H.ha) * q[2], a: H.ha }; }
+function step(s, b, dt) {
+  for (const [x, y, r, m] of HOLES[s.h].P) { const dx = x - b.x, dy = y - b.y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2); b.vx += (dx / d) * (G * m) / d2 * dt; b.vy += (dy / d) * (G * m) / d2 * dt; }
+  b.x += b.vx * dt; b.y += b.vy * dt;
+  for (const [x, y, r] of HOLES[s.h].P) {
+    const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy);
+    if (d < r + 8) { const nx = dx / d, ny = dy / d; b.x = x + nx * (r + 8); b.y = y + ny * (r + 8); const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.45 * vn * nx; b.vy -= 1.45 * vn * ny; b.vx *= 0.96; b.vy *= 0.96; } b.on = true; }
+  }
+}
+K.game({
+  bg: '#03030c', touch: { stick: false, buttons: [] }, lowerIsBetter: true,
+  init(s) { s.h = 0; s.total = 0; s.card = []; hole(s); s.stars = Array.from({ length: 120 }, () => [K.rand(0, 960), K.rand(0, 540), K.rand(0.3, 1.4)]); },
+  update(s, dt) {
+    const b = s.ball, m = K.mouse;
+    if (s.sunk > 0) { s.sunk -= dt; if (s.sunk <= 0) { s.card.push(s.strokes); s.total += s.strokes; s.h++; if (s.h >= HOLES.length) { const par = HOLES.reduce((a, h) => a + h.par, 0); return K.end(s, { score: s.total, won: true, stats: { won: 1 }, title: s.total <= par ? 'UNDER PAR!' : 'ROUND COMPLETE', text: `${s.total} strokes (par ${par}) · ${s.card.join(' ')}` }); } hole(s); } return; }
+    if (b.rest) {
+      if (m.clicked && Math.hypot(m.x - b.x, m.y - b.y) < 60) s.aim = true;
+      if (s.aim && !m.down) { const dx = b.x - m.x, dy = b.y - m.y, p = Math.min(1, Math.hypot(dx, dy) / 160); if (p > 0.05) { const a = Math.atan2(dy, dx); b.vx = Math.cos(a) * p * 520; b.vy = Math.sin(a) * p * 520; b.rest = false; s.strokes++; s.last = { x: b.x, y: b.y }; s.slow = 0; K.sfx('hit'); } s.aim = false; }
+      return;
+    }
+    for (let k = 0; k < 6; k++) { b.on = false; step(s, b, dt / 6); }
+    const sp = Math.hypot(b.vx, b.vy);
+    if (Math.hypot(b.x - s.flag.x, b.y - s.flag.y) < 16 && sp < 260) { s.sunk = 1.4; b.vx = b.vy = 0; K.sfx('win'); K.burst(s.flag.x, s.flag.y, '#ffd93a', 24); return; }
+    if (b.on && sp < 30) { s.slow += dt; if (s.slow > 0.4) { b.vx = b.vy = 0; b.rest = true; } } else s.slow = 0;
+    if (b.x < -300 || b.x > 1260 || b.y < -300 || b.y > 840) { s.strokes++; Object.assign(b, { x: s.last.x, y: s.last.y, vx: 0, vy: 0, rest: true }); K.sfx('wrong'); K.floatText('LOST IN SPACE +1', 480, 60, '#ff8a3a', 18); }
+  },
+  draw(s) {
+    s.stars.forEach(([x, y, r]) => K.circle(x, y, r, '#ffffff66'));
+    const H = HOLES[s.h], b = s.ball, c = K.ctx();
+    H.P.forEach(([x, y, r, m, col]) => { K.alpha(0.08); K.circle(x, y, r + 40 * m, col); K.alpha(1); c.fillStyle = K.rgrad(x - r * 0.3, y - r * 0.3, r * 1.3, [col, '#0a0a18']); c.beginPath(); c.arc(x, y, r, 0, 6.28); c.fill(); });
+    c.save(); c.translate(s.flag.x, s.flag.y); c.rotate(s.flag.a + Math.PI / 2); K.rect(-1.5, -40, 3, 40, '#ddd'); K.poly([[1.5, -40], [22, -33], [1.5, -26]], '#ff3355'); K.circle(0, 0, 9, '#000'); c.restore();
+    if (b.rest && s.aim) {
+      const m = K.mouse, dx = b.x - m.x, dy = b.y - m.y, p = Math.min(1, Math.hypot(dx, dy) / 160), a = Math.atan2(dy, dx);
+      const g = { x: b.x, y: b.y, vx: Math.cos(a) * p * 520, vy: Math.sin(a) * p * 520 };
+      for (let i = 0; i < 60; i++) { for (let k = 0; k < 3; k++) step(s, g, 1 / 180); if (i % 3 === 0) K.circle(g.x, g.y, 2, `rgba(255,255,255,${1 - i / 60})`); }
+      K.line(b.x, b.y, m.x, m.y, '#ffffff33', 2);
+    }
+    K.glow('#fff', 10); K.circle(b.x, b.y, 8, '#fff'); K.noGlow();
+    K.text(`HOLE ${s.h + 1} / ${HOLES.length}   PAR ${H.par}   STROKES ${s.strokes}`, 20, 22, 14, '#fff', 'left', 'd');
+    K.text(`TOTAL ${s.total}`, 940, 22, 14, '#ffd93a', 'right', 'd');
+    if (b.rest && !s.aim && !K.attract) K.text('drag back from the ball', b.x, b.y - 26, 12, '#8e88b8', 'center', 'u');
+    if (s.sunk > 0) K.text(s.strokes === 1 ? 'HOLE IN ONE!' : s.strokes <= H.par ? 'NICE!' : 'IN!', 480, 270, 40, '#ffd93a', 'center', 'd', 18);
+  },
+  ai(s) { const b = s.ball; if (!b.rest) return; s.aw = (s.aw || 0) + 1; if (s.aw % 60 === 0) { const a = Math.atan2(s.flag.y - b.y, s.flag.x - b.x) + K.rand(-0.4, 0.4); b.vx = Math.cos(a) * 300; b.vy = Math.sin(a) * 300; b.rest = false; s.strokes++; } },
+});
+</script></body></html>

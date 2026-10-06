@@ -3402,5 +3402,135 @@ export const GAME_LIST = [
 "file": "games/2d/telephone-draw.html",
 "dim": "2d",
 "cover": "games/covers/telephone-draw.png"
+},
+{
+"id": "chain-reaction",
+"n": 149,
+"title": "CHAIN REACTION",
+"genre": "mystery",
+"desc": "The screen is full of drifting coloured dots. You get one click. Your click blooms into a bubble, every dot that touches it blooms too, and those catch more... Pick the perfect moment and place and watch the whole screen go off. Each level asks for a bigger chain. Missed? Try the level again.",
+"controls": "One click / tap per level - choose the moment",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 2000,
+"text": "Score 2000 in Chain Reaction"
+}
+],
+"file": "games/2d/chain-reaction.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/chain-reaction.png"
+},
+{
+"id": "mouse-maze",
+"n": 150,
+"title": "MOUSE MAZE",
+"genre": "mystery",
+"desc": "Your cursor is the player. Click the green box, then slide along the glowing path to the gold box without touching the walls. The paths get thinner, they twist, and spinning bars start sweeping across them. Touch anything and you are back at the start of the level. Steady hands only.",
+"controls": "Click the green START, then move the mouse / slide your finger along the path",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 6,
+"text": "Reach level 6 of Mouse Maze"
+}
+],
+"file": "games/2d/mouse-maze.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mouse-maze.png"
+},
+{
+"id": "planet-golf",
+"n": 151,
+"title": "PLANET GOLF",
+"genre": "mystery",
+"desc": "Mini golf in space. Every planet pulls on the ball, so no shot flies straight: slingshot around a moon, land on the right planet and roll into the flag. Drag back from the ball to aim (a dotted line shows the first part of the flight). Nine holes, each with a par. Fly off into space and it costs a stroke.",
+"controls": "Drag back from the ball and let go to shoot · the dotted line shows where it starts to go",
+"scoreLabel": "STROKES",
+"lowerIsBetter": true,
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Finish all 9 holes of Planet Golf"
+}
+],
+"file": "games/2d/planet-golf.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/planet-golf.png"
+},
+{
+"id": "draw-bridge",
+"n": 152,
+"title": "DRAW YOUR BRIDGE",
+"genre": "mystery",
+"desc": "A little cart wants to reach the flag but the road is broken. Draw lines with your limited ink - bridges, ramps, a slide down from a cliff - then press GO and watch it drive. It rolls, it climbs, it falls if your bridge has a gap. Not right? Fix the drawing and try again. Ten levels.",
+"controls": "Drag to draw (ink is limited) · GO to drive · UNDO removes the last line · RESET puts the cart back",
+"scoreLabel": "LEVELS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Get the cart across 5 levels"
+}
+],
+"file": "games/2d/draw-bridge.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "time-stops",
+"n": 153,
+"title": "TIME STOPS",
+"genre": "mystery",
+"desc": "Time only moves when you move. Stand still and the red bullets hang in the air; take a step and the whole room comes alive. Plan your path between the shots, then throw your one shuriken at a gunman (it comes back to you). Clear every room without being touched. Ten rooms.",
+"controls": "WASD / arrows (or the stick) to move · click / tap to throw the shuriken where you point · time only runs while you move or throw",
+"scoreLabel": "ROOMS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Clear 5 rooms in Time Stops"
+}
+],
+"file": "games/2d/time-stops.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "two-hands",
+"n": 154,
+"title": "TWO HANDS",
+"genre": "mystery",
+"desc": "Two lanes, two little runners, one brain. Your left hand steers the blue one (WASD), your right hand steers the pink one (arrows), at the same time. Catch the coins, dodge the red blocks in both lanes. It starts easy. It does not stay easy. On a phone, one stick for each thumb.",
+"controls": "Left runner: W A S D · right runner: arrow keys · phone: left stick + right stick",
+"scoreLabel": "COINS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Catch 40 coins in Two Hands"
+}
+],
+"file": "games/2d/two-hands.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
 }
 ];

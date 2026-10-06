@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draw Your Bridge</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"draw-bridge","n":152,"title":"DRAW YOUR BRIDGE","genre":"mystery","desc":"A little cart wants to reach the flag but the road is broken. Draw lines with your limited ink - bridges, ramps, a slide down from a cliff - then press GO and watch it drive. It rolls, it climbs, it falls if your bridge has a gap. Not right? Fix the drawing and try again. Ten levels.","controls":"Drag to draw (ink is limited) · GO to drive · UNDO removes the last line · RESET puts the cart back","scoreLabel":"LEVELS","tasks":[{"stat":"score","target":5,"text":"Get the cart across 5 levels"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const LEVELS = [
+  { ink: 420, g: [[[0, 380], [330, 380]], [[560, 380], [960, 380]]], s: [60, 360], f: 880 },
+  { ink: 520, g: [[[0, 380], [300, 380]], [[650, 380], [960, 380]]], s: [60, 360], f: 880 },
+  { ink: 560, g: [[[0, 400], [320, 400]], [[620, 300], [960, 300]]], s: [60, 380], f: 880 },
+  { ink: 600, g: [[[0, 300], [280, 300]], [[720, 440], [960, 440]]], s: [60, 280], f: 880 },
+  { ink: 520, g: [[[0, 380], [240, 380]], [[440, 380], [520, 380]], [[730, 380], [960, 380]]], s: [60, 360], f: 880 },
+  { ink: 640, g: [[[0, 240], [230, 240]], [[660, 460], [960, 460]]], s: [60, 220], f: 880 },
+  { ink: 700, g: [[[0, 440], [300, 440]], [[640, 240], [960, 240]]], s: [60, 420], f: 880 },
+  { ink: 640, g: [[[0, 380], [360, 380]], [[460, 160], [500, 160], [500, 540]], [[600, 380], [960, 380]]], s: [60, 360], f: 880 },
+  { ink: 560, g: [[[0, 360], [220, 360]], [[460, 430], [500, 430]], [[740, 360], [960, 360]]], s: [60, 340], f: 880 },
+  { ink: 520, g: [[[0, 300], [200, 300], [260, 330]], [[760, 420], [960, 420]]], s: [60, 280], f: 880 },
+];
+const R = 14;
+function load(s) { const L = LEVELS[s.lv]; s.lines = []; s.ink = L.ink; reset(s); }
+function reset(s) { const L = LEVELS[s.lv]; s.car = { x: L.s[0], y: L.s[1], vx: 0, vy: 0, rot: 0 }; s.phase = 'draw'; s.stuck = 0; }
+function segs(s) { const out = []; LEVELS[s.lv].g.forEach((pl) => { for (let i = 0; i < pl.length - 1; i++) out.push([pl[i], pl[i + 1]]); }); s.lines.forEach((pl) => { for (let i = 0; i < pl.length - 1; i++) out.push([pl[i], pl[i + 1]]); }); return out; }
+function physics(s, dt) {
+  const c = s.car, all = segs(s); let ground = null;
+  c.vy += 900 * dt;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  for (const [a, b] of all) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy || 1, t = K.clamp(((c.x - a[0]) * dx + (c.y - a[1]) * dy) / L, 0, 1);
+    const px = a[0] + dx * t, py = a[1] + dy * t, ex = c.x - px, ey = c.y - py, d = Math.hypot(ex, ey);
+    if (d < R && d > 0) {
+      const nx = ex / d, ny = ey / d; c.x = px + nx * R; c.y = py + ny * R;
+      const vn = c.vx * nx + c.vy * ny; if (vn < 0) { c.vx -= vn * nx * 1.1; c.vy -= vn * ny * 1.1; }
+      if (ny < -0.3) ground = { nx, ny };
+    }
+  }
+  if (ground) {
+    // motor: push along the surface to the right, a little friction
+    let tx = -ground.ny, ty = ground.nx; if (tx < 0) { tx = -tx; ty = -ty; }
+    const along = c.vx * tx + c.vy * ty;
+    if (along < 240) { c.vx += tx * 520 * dt; c.vy += ty * 520 * dt; }
+    c.vx *= Math.pow(0.85, dt); c.vy *= Math.pow(0.85, dt);
+  }
+  c.rot += (c.vx / R) * dt;
+}
+K.game({
+  bg: '#8ad0ff', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.done = 0; load(s); },
+  update(s, dt) {
+    const m = K.mouse, L = LEVELS[s.lv];
+    if (s.phase === 'won') { s.t -= dt; if (s.t <= 0) { s.lv++; s.done++; if (s.lv >= LEVELS.length) return K.end(s, { score: s.done, won: true, stats: { won: 1 }, title: 'MASTER BUILDER', text: 'All ten crossings' }); load(s); } return; }
+    if (m.clicked) {
+      if (K.inRect(m.x, m.y, { x: 20, y: 488, w: 110, h: 40 })) { if (s.phase === 'draw') { s.phase = 'drive'; K.sfx('power'); } else reset(s); return; }
+      if (K.inRect(m.x, m.y, { x: 140, y: 488, w: 100, h: 40 })) { const l = s.lines.pop(); if (l) { for (let i = 0; i < l.length - 1; i++) s.ink += Math.hypot(l[i + 1][0] - l[i][0], l[i + 1][1] - l[i][1]); } reset(s); K.sfx('whoosh'); return; }
+      if (K.inRect(m.x, m.y, { x: 250, y: 488, w: 100, h: 40 })) { reset(s); return; }
+      if (K.inRect(m.x, m.y, { x: 840, y: 488, w: 100, h: 40 })) return K.end(s, { score: s.done, won: null, title: 'NICE BUILDING', text: `${s.done} levels crossed` });
+    }
+    if (s.phase === 'draw') {
+      if (m.down && m.y < 470) {
+        if (m.clicked || !s.cur) { s.cur = [[m.x, m.y]]; s.lines.push(s.cur); }
+        const last = s.cur[s.cur.length - 1], d = Math.hypot(m.x - last[0], m.y - last[1]);
+        if (d >= 12 && s.ink > 0) { const k = Math.min(1, s.ink / d); s.cur.push([last[0] + (m.x - last[0]) * k, last[1] + (m.y - last[1]) * k]); s.ink -= d * k; }
+      } else { if (s.cur && s.cur.length < 2) s.lines.pop(); s.cur = null; }
+      return;
+    }
+    for (let k = 0; k < 4; k++) physics(s, dt / 4);
+    const c = s.car;
+    if (c.x >= L.f - 10 && c.y < 540) { s.phase = 'won'; s.t = 1.6; K.sfx('win'); K.burst(L.f, c.y, '#ffd93a', 24); return; }
+    if (c.y > 600) { K.sfx('lose'); reset(s); return; }
+    if (Math.hypot(c.vx, c.vy) < 8) { s.stuck += dt; if (s.stuck > 3) { K.sfx('wrong'); reset(s); } } else s.stuck = 0;
+  },
+  draw(s) {
+    const L = LEVELS[s.lv], c = K.ctx();
+    for (let i = 0; i < 5; i++) { K.circle(120 + i * 200, 90 + (i % 2) * 30, 26, '#ffffffcc'); K.circle(150 + i * 200, 96 + (i % 2) * 30, 20, '#ffffffcc'); }
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    L.g.forEach((pl) => { c.fillStyle = '#5a8a3a'; c.beginPath(); c.moveTo(pl[0][0], 540); pl.forEach(([x, y]) => c.lineTo(x, y)); c.lineTo(pl[pl.length - 1][0], 540); c.closePath(); c.fill(); c.strokeStyle = '#3a6a2a'; c.lineWidth = 6; c.beginPath(); pl.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); });
+    s.lines.forEach((pl) => { c.strokeStyle = '#6a3a1a'; c.lineWidth = 7; c.beginPath(); pl.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); c.strokeStyle = '#c8874a'; c.lineWidth = 3; c.stroke(); });
+    // flag
+    const fy = (() => { for (const pl of L.g) for (let i = 0; i < pl.length - 1; i++) if (L.f >= pl[i][0] && L.f <= pl[i + 1][0]) return pl[i][1]; return 380; })();
+    K.rect(L.f, fy - 60, 4, 60, '#eee'); K.poly([[L.f + 4, fy - 60], [L.f + 36, fy - 50], [L.f + 4, fy - 40]], '#ff3355');
+    // cart
+    const car = s.car; c.save(); c.translate(car.x, car.y); K.rect(-24, -16, 48, 16, '#ffd93a', 5); K.rect(-12, -28, 22, 14, '#22e6ff', 4); [-13, 13].forEach((wx) => { c.save(); c.translate(wx, 2); c.rotate(car.rot); K.circle(0, 0, 10, '#222'); K.circle(0, 0, 4, '#aaa'); K.line(-7, 0, 7, 0, '#666', 2); c.restore(); }); c.restore();
+    // ink bar
+    K.rect(380, 498, 300, 18, '#00000033', 9); K.rect(380, 498, 300 * (s.ink / L.ink), 18, s.ink < 60 ? '#ff3355' : '#6a3a1a', 9); K.text('INK', 530, 508, 11, '#fff', 'center', 'd');
+    K.button(20, 488, 110, 40, s.phase === 'draw' ? '▶ GO' : '■ STOP', { color: s.phase === 'draw' ? '#1f8a4a' : '#c45cff', size: 13 });
+    K.button(140, 488, 100, 40, '↶ UNDO', { color: '#2a6a9a', size: 11 }); K.button(250, 488, 100, 40, 'RESET', { color: '#9a7a2a', size: 11 }); K.button(840, 488, 100, 40, 'DONE', { color: '#555', size: 11 });
+    K.text(`LEVEL ${s.lv + 1} / ${LEVELS.length}`, 20, 22, 15, '#1a2a3a', 'left', 'd');
+    if (s.phase === 'won') K.text('MADE IT!', 480, 220, 44, '#1f8a4a', 'center', 'd', 10);
+    if (!s.lines.length && s.phase === 'draw' && !K.attract) K.text('draw a path for the cart', 480, 200, 16, '#1a2a3a', 'center', 'u');
+  },
+  ai(s) {},
+});
+</script></body></html>

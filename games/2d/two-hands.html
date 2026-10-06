@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Two Hands</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"two-hands","n":154,"title":"TWO HANDS","genre":"mystery","desc":"Two lanes, two little runners, one brain. Your left hand steers the blue one (WASD), your right hand steers the pink one (arrows), at the same time. Catch the coins, dodge the red blocks in both lanes. It starts easy. It does not stay easy. On a phone, one stick for each thumb.","controls":"Left runner: W A S D · right runner: arrow keys · phone: left stick + right stick","scoreLabel":"COINS","tasks":[{"stat":"score","target":40,"text":"Catch 40 coins in Two Hands"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const LANES = [{ x0: 40, x1: 460, col: '#22e6ff', up: 'KeyW', dn: 'KeyS', lf: 'KeyA', rt: 'KeyD' }, { x0: 500, x1: 920, col: '#ff2bd6', up: 'ArrowUp', dn: 'ArrowDown', lf: 'ArrowLeft', rt: 'ArrowRight' }];
+K.game({
+  touch: { duo: true, buttons: [], buttons2: [] },
+  bg: '#0c0a18',
+  init(s) { s.p = LANES.map((L) => ({ x: (L.x0 + L.x1) / 2, y: 440 })); s.obj = []; s.coins = 0; s.t = 0; s.next = 0.6; s.hp = 3; s.inv = [0, 0]; },
+  update(s, dt) {
+    s.t += dt; s.inv = s.inv.map((v) => v - dt);
+    const sp = 330;
+    LANES.forEach((L, i) => { const p = s.p[i]; p.x = K.clamp(p.x + ((K.down(L.rt) ? 1 : 0) - (K.down(L.lf) ? 1 : 0)) * sp * dt, L.x0 + 16, L.x1 - 16); p.y = K.clamp(p.y + ((K.down(L.dn) ? 1 : 0) - (K.down(L.up) ? 1 : 0)) * sp * dt, 80, 510); });
+    s.next -= dt;
+    if (s.next <= 0) { s.next = Math.max(0.28, 0.85 - s.t * 0.008); const lane = Math.random() < 0.5 ? 0 : 1, L = LANES[lane]; const coin = Math.random() < 0.42; s.obj.push({ lane, coin, x: K.rand(L.x0 + 24, L.x1 - 24), y: -20, w: coin ? 0 : K.rand(40, 110), v: K.rand(160, 240) + s.t * 3 }); }
+    for (const o of s.obj) {
+      o.y += o.v * dt; const p = s.p[o.lane];
+      if (o.coin && Math.hypot(o.x - p.x, o.y - p.y) < 26) { o.dead = true; s.coins++; K.tone(o.lane ? 880 : 660, 0.06, 'triangle', 0.05); }
+      if (!o.coin && s.inv[o.lane] <= 0 && Math.abs(o.y - p.y) < 22 && p.x > o.x - o.w / 2 - 12 && p.x < o.x + o.w / 2 + 12) { o.dead = true; s.hp--; s.inv[o.lane] = 1.2; K.sfx('hit'); K.shake(8); if (s.hp <= 0) return K.end(s, { score: s.coins, won: null, title: 'BRAIN SPLIT', text: `${s.coins} coins in ${Math.floor(s.t)} s` }); }
+    }
+    s.obj = s.obj.filter((o) => !o.dead && o.y < 580);
+  },
+  draw(s) {
+    LANES.forEach((L, i) => { K.rect(L.x0, 40, L.x1 - L.x0, 500, i ? '#1a0f22' : '#0f1a24', 12); K.stroke(L.x0, 40, L.x1 - L.x0, 500, L.col + '55', 2, 12); for (let y = (s.t * 120) % 60; y < 500; y += 60) K.rect(L.x0 + (L.x1 - L.x0) / 2 - 2, 40 + y, 4, 26, L.col + '18'); });
+    s.obj.forEach((o) => { if (o.coin) { K.glow('#ffd93a', 10); K.circle(o.x, o.y, 10, '#ffd93a'); K.noGlow(); } else { K.rect(o.x - o.w / 2, o.y - 12, o.w, 24, '#ff3355', 6); } });
+    s.p.forEach((p, i) => { if (s.inv[i] > 0 && Math.sin(K.time() * 30) > 0) return; K.glow(LANES[i].col, 14); K.circle(p.x, p.y, 15, LANES[i].col); K.noGlow(); K.text(i ? '→' : 'D', p.x, p.y + 1, 12, '#05040c', 'center', 'd'); });
+    K.text(`COINS ${s.coins}`, 480, 22, 18, '#ffd93a', 'center', 'd');
+    for (let i = 0; i < 3; i++) K.text('♥', 880 + i * 22, 22, 18, i < s.hp ? '#ff3355' : '#ffffff22');
+    K.text('WASD', 250, 22, 13, '#22e6ff', 'center', 'd'); K.text('ARROWS', 710, 22, 13, '#ff2bd6', 'center', 'd');
+  },
+  ai(s) {
+    LANES.forEach((L, i) => { const p = s.p[i]; const danger = s.obj.find((o) => o.lane === i && !o.coin && o.y < p.y && o.y > p.y - 160 && Math.abs(o.x - p.x) < o.w / 2 + 20); const coin = s.obj.find((o) => o.lane === i && o.coin && o.y < p.y); const tx = danger ? (p.x < (L.x0 + L.x1) / 2 ? L.x1 - 40 : L.x0 + 40) : coin ? coin.x : p.x; K.vhold(L.lf, tx < p.x - 8); K.vhold(L.rt, tx > p.x + 8); });
+  },
+});
+</script></body></html>

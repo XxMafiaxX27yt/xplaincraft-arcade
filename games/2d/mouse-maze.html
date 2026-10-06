@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mouse Maze</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mouse-maze","n":150,"title":"MOUSE MAZE","genre":"mystery","desc":"Your cursor is the player. Click the green box, then slide along the glowing path to the gold box without touching the walls. The paths get thinner, they twist, and spinning bars start sweeping across them. Touch anything and you are back at the start of the level. Steady hands only.","controls":"Click the green START, then move the mouse / slide your finger along the path","scoreLabel":"LEVELS","tasks":[{"stat":"score","target":6,"text":"Reach level 6 of Mouse Maze"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// each level: path points, width, spinning bars [x, y, length, speed]
+const LEVELS = [
+  { w: 64, p: [[80, 270], [880, 270]] },
+  { w: 56, p: [[80, 450], [300, 450], [300, 100], [660, 100], [660, 450], [880, 450]] },
+  { w: 48, p: [[80, 100], [880, 100], [880, 270], [80, 270], [80, 440], [880, 440]] },
+  { w: 44, p: [[80, 270], [220, 120], [360, 420], [500, 120], [640, 420], [780, 120], [880, 270]], bars: [[500, 270, 90, 1.2]] },
+  { w: 40, p: [[80, 480], [80, 60], [480, 60], [480, 480], [880, 480], [880, 60]], bars: [[280, 60, 70, 1.6], [680, 480, 70, -1.6]] },
+  { w: 36, p: [[80, 270], [880, 270]], bars: [[240, 270, 120, 1.4], [400, 270, 120, -1.7], [560, 270, 120, 2], [720, 270, 120, -2.3]] },
+  { w: 34, p: [[60, 60], [900, 60], [900, 160], [60, 160], [60, 260], [900, 260], [900, 360], [60, 360], [60, 460], [900, 460]] },
+  { w: 30, p: [[80, 270], [200, 80], [480, 80], [480, 460], [760, 460], [880, 270]], bars: [[480, 270, 110, 1.8], [340, 80, 60, 2.6], [620, 460, 60, -2.6]] },
+  { w: 26, p: [[80, 500], [160, 60], [260, 500], [360, 60], [460, 500], [560, 60], [660, 500], [760, 60], [880, 270]] },
+  { w: 22, p: [[480, 500], [480, 270], [880, 270], [880, 60], [80, 60], [80, 270], [440, 270]], bars: [[680, 270, 80, 2.4], [480, 60, 110, -2], [260, 270, 80, 2.8]] },
+];
+const segD = (px, py, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy || 1, t = K.clamp(((px - a[0]) * dx + (py - a[1]) * dy) / L, 0, 1); return Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py); };
+K.game({
+  bg: '#05060f', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.on = false; s.fails = 0; s.t = 0; s.flash = 0; },
+  update(s, dt) {
+    const L = LEVELS[s.lv], m = K.mouse, st = L.p[0], en = L.p[L.p.length - 1];
+    s.t += dt; s.flash -= dt;
+    if (!s.on) { if (m.clicked && Math.hypot(m.x - st[0], m.y - st[1]) < 26) { s.on = true; K.sfx('blip'); } return; }
+    let inside = false; for (let i = 0; i < L.p.length - 1; i++) if (segD(m.x, m.y, L.p[i], L.p[i + 1]) <= L.w / 2) { inside = true; break; }
+    const barHit = (L.bars || []).some(([x, y, len, sp]) => { const a = s.t * sp; return segD(m.x, m.y, [x - Math.cos(a) * len, y - Math.sin(a) * len], [x + Math.cos(a) * len, y + Math.sin(a) * len]) < 6; });
+    if (!inside || barHit) { s.on = false; s.fails++; s.flash = 0.4; K.sfx('hit'); K.shake(8); return; }
+    if (Math.hypot(m.x - en[0], m.y - en[1]) < 22) { s.lv++; s.on = false; K.sfx('win'); if (s.lv >= LEVELS.length) return K.end(s, { score: s.lv, won: true, stats: { won: 1 }, title: 'STEADY HANDS', text: `All 10 paths, ${s.fails} slips` }); }
+  },
+  draw(s) {
+    const L = LEVELS[s.lv], c = K.ctx(), st = L.p[0], en = L.p[L.p.length - 1];
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    const line = (w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); L.p.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); };
+    K.glow('#22e6ff', 18); line(L.w + 4, '#22e6ff55'); K.noGlow(); line(L.w, '#0f2a3a');
+    (L.bars || []).forEach(([x, y, len, sp]) => { const a = s.t * sp; K.glow('#ff3355', 12); K.line(x - Math.cos(a) * len, y - Math.sin(a) * len, x + Math.cos(a) * len, y + Math.sin(a) * len, '#ff3355', 6); K.noGlow(); K.circle(x, y, 6, '#ff8aa0'); });
+    K.rect(st[0] - 22, st[1] - 22, 44, 44, s.on ? '#1f6a4a' : '#3dffa0', 8); K.text('START', st[0], st[1] + 1, 9, '#05040c', 'center', 'd');
+    K.glow('#ffd93a', 16); K.rect(en[0] - 18, en[1] - 18, 36, 36, '#ffd93a', 8); K.noGlow(); K.text('★', en[0], en[1] + 1, 16, '#05040c');
+    K.text(`LEVEL ${s.lv + 1} / ${LEVELS.length}`, 20, 22, 14, '#fff', 'left', 'd'); K.text(`slips ${s.fails}`, 940, 22, 13, '#8e88b8', 'right', 'm');
+    if (!s.on) K.text(s.fails && s.flash > -1.5 ? 'TOUCHED THE WALL - click START again' : 'click START', 480, 528, 14, s.flash > 0 ? '#ff3355' : '#8e88b8', 'center', 'u');
+    if (s.flash > 0) { K.alpha(s.flash); K.rect(0, 0, 960, 540, '#ff335533'); K.alpha(1); }
+  },
+  ai(s) { const L = LEVELS[s.lv]; s.ap = (s.ap || 0) + 0.004; if (!s.on) { K.vmouse(L.p[0][0], L.p[0][1], true); s.ap = 0; return; } const segs = L.p.length - 1, f = Math.min(0.999, s.ap) * segs, i = Math.floor(f), t = f - i, a = L.p[i], b = L.p[i + 1]; K.vmouse(K.lerp(a[0], b[0], t), K.lerp(a[1], b[1], t)); },
+});
+</script></body></html>
