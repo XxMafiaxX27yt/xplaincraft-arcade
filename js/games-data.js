@@ -2234,6 +2234,136 @@ export const GAME_LIST = [
 "cover": "games/covers/memory-pairs.png"
 },
 {
+"id": "pipe-connect",
+"n": 155,
+"title": "PIPE CONNECT",
+"genre": "mind",
+"desc": "The water tower is full and every house is dry. Rotate the pipe pieces until one network reaches every house - no leaking ends allowed. Water flows through as soon as a piece connects, so you can see how far you have got. Boards grow from 5×5 to 9×9; every one has a solution.",
+"controls": "Click / tap a pipe to turn it (right-click turns it back) · L = lock the piece under the cursor",
+"scoreLabel": "BOARDS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Solve 3 boards of Pipe Connect"
+}
+],
+"file": "games/2d/pipe-connect.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/pipe-connect.png"
+},
+{
+"id": "color-flow",
+"n": 156,
+"title": "COLOR FLOW",
+"genre": "mind",
+"desc": "Pairs of coloured dots sit on a grid. Drag a pipe from each dot to its twin. Pipes cannot cross, and a board only counts when every single square is filled. Start on small 5×5 boards and work up to 9×9 with nine colours. Every board has a way through.",
+"controls": "Drag from a dot (or the end of a pipe) to draw · drawing over another pipe cuts it · RESET clears the board",
+"scoreLabel": "BOARDS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Fill 3 boards in Color Flow"
+}
+],
+"file": "games/2d/color-flow.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/color-flow.png"
+},
+{
+"id": "laser-mirrors",
+"n": 157,
+"title": "LASER MIRRORS",
+"genre": "mind",
+"desc": "A laser fires across a dark lab. You have a handful of mirrors: put them on the grid and turn them so the beam bounces around the walls and through every crystal. The beam updates live as you place them. Every lab has a solution that uses exactly the mirrors you are given.",
+"controls": "Click an empty square: / mirror → \\ mirror → empty · the beam updates as you go",
+"scoreLabel": "LABS",
+"tasks": [
+{
+"stat": "score",
+"target": 4,
+"text": "Solve 4 labs in Laser Mirrors"
+}
+],
+"file": "games/2d/laser-mirrors.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/laser-mirrors.png"
+},
+{
+"id": "water-jugs",
+"n": 158,
+"title": "WATER JUGS",
+"genre": "mind",
+"desc": "You have a tap, a drain and some jugs with no markings - a 3 litre and a 5 litre, say - and you need exactly 4 litres. Fill, empty and pour from one jug into another until one of them holds the target. Every puzzle has a solution; finish in the fewest pours for three stars. Twelve puzzles, later ones with three jugs.",
+"controls": "Click a jug, then another jug to pour into it · FILL and EMPTY under each jug · U = undo",
+"scoreLabel": "STARS",
+"tasks": [
+{
+"stat": "score",
+"target": 12,
+"text": "Earn 12 stars in Water Jugs"
+}
+],
+"file": "games/2d/water-jugs.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/water-jugs.png"
+},
+{
+"id": "bomb-defuse",
+"n": 159,
+"title": "BOMB DEFUSE",
+"genre": "mind",
+"desc": "A ticking box of wires and a technician's manual. Read the box - the serial number, the warning light, the wire colours - find the first rule in the manual that matches, and cut exactly that wire. Each later bomb has more wire panels and less time. Two wrong cuts and it goes off.",
+"controls": "Read the manual on the right, then click / tap a wire to cut it",
+"scoreLabel": "BOMBS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Defuse 3 bombs"
+}
+],
+"file": "games/2d/bomb-defuse.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "lying-simon",
+"n": 160,
+"title": "LYING SIMON",
+"genre": "mind",
+"desc": "Simon flashes a sequence of coloured pads for you to repeat - but Simon lies. The word on screen may name the wrong colour (trust the light, not the word), and when the round does not start with SIMON SAYS you must not repeat anything at all: press HOLD instead. The sequence grows every round.",
+"controls": "Click / tap the pads in the order they lit (or keys 1-4) · press HOLD when Simon did not say so",
+"scoreLabel": "ROUNDS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Reach round 8 of Lying Simon"
+}
+],
+"file": "games/2d/lying-simon.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",
@@ -3489,7 +3619,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/draw-bridge.png"
 },
 {
 "id": "time-stops",
@@ -3510,7 +3641,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/time-stops.png"
 },
 {
 "id": "two-hands",
@@ -3531,6 +3663,7 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/two-hands.png"
 }
 ];

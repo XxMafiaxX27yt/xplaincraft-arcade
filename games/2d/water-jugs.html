@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Water Jugs</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"water-jugs","n":158,"title":"WATER JUGS","genre":"mind","desc":"You have a tap, a drain and some jugs with no markings - a 3 litre and a 5 litre, say - and you need exactly 4 litres. Fill, empty and pour from one jug into another until one of them holds the target. Every puzzle has a solution; finish in the fewest pours for three stars. Twelve puzzles, later ones with three jugs.","controls":"Click a jug, then another jug to pour into it · FILL and EMPTY under each jug · U = undo","scoreLabel":"STARS","tasks":[{"stat":"score","target":12,"text":"Earn 12 stars in Water Jugs"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// breadth-first search over jug states: the fewest moves to get the target in any jug
+function solve(cap, target) {
+  const start = cap.map(() => 0), key = (a) => a.join(','), seen = new Map([[key(start), 0]]), q = [start];
+  for (let h = 0; h < q.length; h++) {
+    const st = q[h], d = seen.get(key(st));
+    if (st.includes(target)) return d;
+    const next = [];
+    cap.forEach((c, i) => { const a = st.slice(); a[i] = c; next.push(a); const b = st.slice(); b[i] = 0; next.push(b); cap.forEach((c2, j) => { if (i === j) return; const p = st.slice(), m = Math.min(p[i], c2 - p[j]); p[i] -= m; p[j] += m; next.push(p); }); });
+    for (const n of next) if (!seen.has(key(n))) { seen.set(key(n), d + 1); q.push(n); }
+  }
+  return -1;
+}
+function puzzle(s) {
+  for (let t = 0; t < 400; t++) {
+    const jugs = s.lv < 6 ? 2 : 3, cap = Array.from({ length: jugs }, () => K.irand(2, 6 + s.lv)).sort((a, b) => a - b);
+    if (new Set(cap).size < jugs) continue;
+    const target = K.irand(1, cap[cap.length - 1] - 1);
+    if (cap.includes(target)) continue;
+    const best = solve(cap, target);
+    if (best < 3 + Math.floor(s.lv / 3) || best > 6 + s.lv) continue;
+    s.cap = cap; s.target = target; s.best = best; s.w = cap.map(() => 0); s.moves = 0; s.sel = -1; s.hist = []; s.done = 0; return;
+  }
+}
+const jx = (s, i) => 480 + (i - (s.cap.length - 1) / 2) * 220;
+K.game({
+  bg: '#0c1622', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.stars = 0; puzzle(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= 12) return K.end(s, { score: s.stars, won: true, stats: { won: 1 }, title: 'MASTER POURER', text: `${s.stars} of 36 stars` }); puzzle(s); } return; }
+    const act = (fn) => { s.hist.push(JSON.stringify(s.w)); fn(); s.moves++; check(s); };
+    if ((K.tap('KeyU') || (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 480, w: 100, h: 40 }))) && s.hist.length) { s.w = JSON.parse(s.hist.pop()); s.moves--; s.sel = -1; K.sfx('whoosh'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 840, y: 480, w: 100, h: 40 })) return K.end(s, { score: s.stars, won: null, title: 'NICE POURING', text: `${s.stars} stars` });
+    if (!m.clicked) return;
+    for (let i = 0; i < s.cap.length; i++) {
+      const x = jx(s, i);
+      if (K.inRect(m.x, m.y, { x: x - 70, y: 420, w: 66, h: 34 })) { act(() => (s.w[i] = s.cap[i])); K.noise(0.4, 0.05, 900); return; }
+      if (K.inRect(m.x, m.y, { x: x + 4, y: 420, w: 66, h: 34 })) { act(() => (s.w[i] = 0)); K.noise(0.3, 0.04, 500); return; }
+      const h = s.cap[i] * 26;
+      if (K.inRect(m.x, m.y, { x: x - 50, y: 400 - h, w: 100, h })) {
+        if (s.sel < 0) { s.sel = i; K.sfx('tick'); }
+        else if (s.sel === i) s.sel = -1;
+        else { const a = s.sel; act(() => { const mv = Math.min(s.w[a], s.cap[i] - s.w[i]); s.w[a] -= mv; s.w[i] += mv; }); s.sel = -1; K.noise(0.3, 0.04, 700); }
+        return;
+      }
+    }
+    s.sel = -1;
+  },
+  draw(s) {
+    K.text(`PUZZLE ${s.lv + 1} / 12`, 20, 26, 15, '#fff', 'left', 'd');
+    K.text(`MEASURE EXACTLY ${s.target} L`, 480, 40, 30, '#22e6ff', 'center', 'd', 12);
+    K.text(`moves ${s.moves}   ·   best possible ${s.best}`, 480, 74, 14, '#8e88b8', 'center', 'm');
+    K.text(`★ ${s.stars}`, 940, 26, 16, '#ffd93a', 'right', 'd');
+    s.cap.forEach((cap, i) => {
+      const x = jx(s, i), h = cap * 26, top = 400 - h, sel = s.sel === i;
+      K.rect(x - 50, top, 100, h, '#ffffff10', 10); K.stroke(x - 50, top, 100, h, sel ? '#ffd93a' : '#bfe8ff', sel ? 4 : 3, 10);
+      const wh = s.w[i] * 26; if (wh > 0) { K.alpha(0.85); K.rect(x - 47, 400 - wh, 94, wh - 3, s.w[i] === s.target ? '#3dffa0' : '#3a8aff', 8); K.alpha(1); }
+      for (let k = 1; k < cap; k++) K.line(x - 50, 400 - k * 26, x - 40, 400 - k * 26, '#bfe8ff44', 2);
+      K.text(`${s.w[i]} / ${cap} L`, x, top - 18, 16, '#fff', 'center', 'd');
+      K.button(x - 70, 420, 66, 34, 'FILL', { color: '#22e6ff', size: 10 }); K.button(x + 4, 420, 66, 34, 'EMPTY', { color: '#ff8a3a', size: 10 });
+    });
+    K.button(20, 480, 100, 40, '↶ UNDO', { color: '#c45cff', size: 11 }); K.button(840, 480, 100, 40, 'FINISH', { color: '#8e88b8', size: 11 });
+    if (s.sel >= 0) K.text('now click the jug to pour into', 480, 500, 14, '#ffd93a', 'center', 'u');
+    if (s.done > 0) K.text(`${'★'.repeat(s.got)}${'☆'.repeat(3 - s.got)}`, 480, 140, 40, '#ffd93a', 'center', 'd', 16);
+  },
+});
+function check(s) {
+  if (!s.w.includes(s.target)) return;
+  s.got = s.moves <= s.best ? 3 : s.moves <= s.best + 3 ? 2 : 1; s.stars += s.got; s.done = 1.8; K.sfx('win');
+}
+</script></body></html>

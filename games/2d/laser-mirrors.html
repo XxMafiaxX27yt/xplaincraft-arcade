@@ -1,0 +1,85 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Laser Mirrors</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"laser-mirrors","n":157,"title":"LASER MIRRORS","genre":"mind","desc":"A laser fires across a dark lab. You have a handful of mirrors: put them on the grid and turn them so the beam bounces around the walls and through every crystal. The beam updates live as you place them. Every lab has a solution that uses exactly the mirrors you are given.","controls":"Click an empty square: / mirror → \\ mirror → empty · the beam updates as you go","scoreLabel":"LABS","tasks":[{"stat":"score","target":4,"text":"Solve 4 labs in Laser Mirrors"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 12, H = 8, T = 52, OX = (960 - W * T) / 2, OY = 50;
+const turn = (m, dx, dy) => (m === '/' ? [-dy, -dx] : [dy, dx]);
+function lab(s) {
+  for (let tries = 0; tries < 400; tries++) {
+    const g = Array.from({ length: H }, () => Array(W).fill('.'));
+    let x = -1, y = K.irand(1, H - 2), dx = 1, dy = 0; s.src = [0, y];
+    const used = new Set(), mirrors = [], crystals = [], turns = Math.min(7, 2 + Math.floor(s.lv / 1.5));
+    let ok = true, pathCells = [];
+    for (let t = 0; t <= turns && ok; t++) {
+      const len = K.irand(2, 5);
+      for (let k = 0; k < len; k++) { x += dx; y += dy; if (x < 0 || y < 0 || x >= W || y >= H || used.has(x + ',' + y)) { ok = false; break; } used.add(x + ',' + y); pathCells.push([x, y]); }
+      if (!ok) break;
+      if (t < turns) { const m = Math.random() < 0.5 ? '/' : '\\'; mirrors.push([x, y, m]); [dx, dy] = turn(m, dx, dy); }
+    }
+    if (!ok || mirrors.length < turns) continue;
+    const plain = pathCells.filter(([a, b]) => !mirrors.some(([c, d]) => c === a && d === b));
+    if (plain.length < 3) continue;
+    crystals.push(plain[plain.length - 1]); if (s.lv >= 2) crystals.push(plain[Math.floor(plain.length / 2)]); if (s.lv >= 5) crystals.push(plain[Math.floor(plain.length / 4)]);
+    // walls on squares the beam never needs
+    for (let k = 0; k < 6 + s.lv * 2; k++) { const wx = K.irand(0, W - 1), wy = K.irand(0, H - 1); if (!used.has(wx + ',' + wy) && !(wx === 0 && wy === s.src[1])) g[wy][wx] = '#'; }
+    s.g = g; s.cry = crystals; s.inv = { '/': mirrors.filter((m) => m[2] === '/').length, '\\': mirrors.filter((m) => m[2] === '\\').length }; s.total = { ...s.inv }; s.done = 0;
+    // one fixed mirror as a hint on later labs
+    if (s.lv >= 4) { const [fx, fy, fm] = mirrors[0]; s.g[fy][fx] = 'F' + fm; s.inv[fm]--; s.total[fm]--; }
+    beam(s); return;
+  }
+}
+function beam(s) {
+  let x = s.src[0] - 1, y = s.src[1], dx = 1, dy = 0; const pts = [[OX, OY + y * T + T / 2]], lit = new Set();
+  for (let i = 0; i < 300; i++) {
+    x += dx; y += dy;
+    if (x < 0 || y < 0 || x >= W || y >= H) { pts.push([OX + (x + 0.5) * T - dx * T / 2, OY + (y + 0.5) * T - dy * T / 2]); break; }
+    const c = s.g[y][x];
+    if (c === '#') { pts.push([OX + (x + 0.5) * T - dx * T / 2, OY + (y + 0.5) * T - dy * T / 2]); break; }
+    lit.add(x + ',' + y);
+    const m = c === '/' || c === '\\' ? c : c[0] === 'F' ? c[1] : null;
+    if (m) { pts.push([OX + (x + 0.5) * T, OY + (y + 0.5) * T]); [dx, dy] = turn(m, dx, dy); }
+  }
+  s.pts = pts; s.lit = s.cry.map(([a, b]) => lit.has(a + ',' + b));
+  return s.lit.every(Boolean);
+}
+K.game({
+  bg: '#07070f', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.solved = 0; lab(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= 10) return K.end(s, { score: s.solved, won: true, stats: { won: 1 }, title: 'LIGHT BENDER', text: 'Ten labs lit up.' }); lab(s); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 486, w: 110, h: 40 })) { for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (s.g[y][x] === '/' || s.g[y][x] === '\\') s.g[y][x] = '.'; s.inv = { ...s.total }; beam(s); K.sfx('whoosh'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 830, y: 486, w: 110, h: 40 })) return K.end(s, { score: s.solved, won: null, title: 'NICE BEAMS', text: `${s.solved} labs solved` });
+    if (!m.clicked) return;
+    const x = Math.floor((m.x - OX) / T), y = Math.floor((m.y - OY) / T);
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const c = s.g[y][x];
+    if (c === '#' || c[0] === 'F' || s.cry.some(([a, b]) => a === x && b === y)) { K.sfx('wrong'); return; }
+    // cycle: empty -> / -> \ -> empty (only with mirrors left)
+    if (c === '.') { if (s.inv['/'] > 0) { s.g[y][x] = '/'; s.inv['/']--; } else if (s.inv['\\'] > 0) { s.g[y][x] = '\\'; s.inv['\\']--; } else { K.sfx('wrong'); return; } }
+    else if (c === '/') { s.inv['/']++; if (s.inv['\\'] > 0) { s.g[y][x] = '\\'; s.inv['\\']--; } else s.g[y][x] = '.'; }
+    else { s.inv['\\']++; s.g[y][x] = '.'; }
+    K.tone(600, 0.05, 'triangle', 0.04);
+    if (beam(s)) { s.solved++; s.done = 1.6; K.sfx('win'); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const X = OX + x * T, Y = OY + y * T, v = s.g[y][x];
+      K.rect(X + 1, Y + 1, T - 2, T - 2, v === '#' ? '#2a2a3a' : '#10101c', 4);
+      const m = v === '/' || v === '\\' ? v : v[0] === 'F' ? v[1] : null;
+      if (m) { const a = m === '/' ? [X + 8, Y + T - 8, X + T - 8, Y + 8] : [X + 8, Y + 8, X + T - 8, Y + T - 8]; K.line(a[0], a[1], a[2], a[3], v[0] === 'F' ? '#8e88b8' : '#dfe8ff', 5); }
+    }
+    s.cry.forEach(([x, y], i) => { const X = OX + x * T + T / 2, Y = OY + y * T + T / 2; K.glow(s.lit[i] ? '#3dffa0' : '#22e6ff', s.lit[i] ? 22 : 6); K.poly([[X, Y - 16], [X + 12, Y], [X, Y + 16], [X - 12, Y]], s.lit[i] ? '#3dffa0' : '#1a4a5a'); K.noGlow(); });
+    K.glow('#ff2bd6', 16); c.strokeStyle = '#ff2bd6'; c.lineWidth = 3; c.beginPath(); s.pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); K.noGlow();
+    K.rect(OX - 30, OY + s.src[1] * T + 10, 30, T - 20, '#ff2bd6', 4);
+    K.text(`LAB ${s.lv + 1} / 10`, 20, 26, 15, '#fff', 'left', 'd');
+    K.text(`MIRRORS LEFT   /  ×${s.inv['/']}     \\  ×${s.inv['\\']}`, 480, 28, 16, '#dfe8ff', 'center', 'd');
+    K.text(`CRYSTALS ${s.lit.filter(Boolean).length} / ${s.cry.length}`, 940, 26, 14, '#3dffa0', 'right', 'd');
+    K.button(20, 486, 110, 40, 'CLEAR', { color: '#ff8a3a', size: 11 }); K.button(830, 486, 110, 40, 'FINISH', { color: '#8e88b8', size: 11 });
+    if (s.done > 0) K.text('ALL CRYSTALS LIT!', 480, 280, 34, '#3dffa0', 'center', 'd', 16);
+  },
+});
+</script></body></html>

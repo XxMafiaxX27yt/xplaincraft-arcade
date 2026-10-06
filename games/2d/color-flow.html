@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Color Flow</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"color-flow","n":156,"title":"COLOR FLOW","genre":"mind","desc":"Pairs of coloured dots sit on a grid. Drag a pipe from each dot to its twin. Pipes cannot cross, and a board only counts when every single square is filled. Start on small 5×5 boards and work up to 9×9 with nine colours. Every board has a way through.","controls":"Drag from a dot (or the end of a pipe) to draw · drawing over another pipe cuts it · RESET clears the board","scoreLabel":"BOARDS","tasks":[{"stat":"score","target":3,"text":"Fill 3 boards in Color Flow"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = ['#ff3355', '#22e6ff', '#ffd93a', '#3dffa0', '#ff8a3a', '#c45cff', '#ff9bc8', '#4f8bff', '#ffffff', '#b6ff3a'];
+// a board: one long snake through every square (scrambled with backbite moves), cut into pieces of 3+ squares
+function make(n) {
+  let path = []; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) path.push([y % 2 ? n - 1 - x : x, y]);
+  const key = (p) => p[0] + ',' + p[1];
+  for (let it = 0; it < n * n * 60; it++) {
+    if (Math.random() < 0.5) path.reverse();
+    const [hx, hy] = path[path.length - 1], nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [hx + dx, hy + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < n && y < n);
+    const t = K.pick(nb), idx = path.findIndex((p) => p[0] === t[0] && p[1] === t[1]);
+    if (idx < 0 || idx === path.length - 2) continue;
+    path = path.slice(0, idx + 1).concat(path.slice(idx + 1).reverse()); // backbite
+  }
+  const k = Math.min(COLS.length, n), cuts = [];
+  let left = path.length, start = 0;
+  for (let c = 0; c < k; c++) { const rem = k - c, len = c === k - 1 ? left : K.irand(3, Math.max(3, left - (rem - 1) * 3)); cuts.push(path.slice(start, start + len)); start += len; left -= len; }
+  // no trivial pairs (dots right next to each other)
+  if (cuts.some((p) => p.length < 3 || Math.abs(p[0][0] - p[p.length - 1][0]) + Math.abs(p[0][1] - p[p.length - 1][1]) < 2)) return make(n);
+  return cuts;
+}
+function board(s) {
+  const n = Math.min(9, 5 + Math.floor(s.lv / 2)); s.n = n; s.T = Math.floor(440 / n); s.ox = 480 - (n * s.T) / 2; s.oy = 60;
+  const sol = make(n); s.ends = sol.map((p) => [p[0], p[p.length - 1]]); s.k = sol.length;
+  s.paths = s.ends.map(() => []); s.cur = -1; s.done = 0;
+}
+const cellOf = (s, x, y) => { const cx = Math.floor((x - s.ox) / s.T), cy = Math.floor((y - s.oy) / s.T); return cx >= 0 && cy >= 0 && cx < s.n && cy < s.n ? [cx, cy] : null; };
+const same = (a, b) => a && b && a[0] === b[0] && a[1] === b[1];
+const endAt = (s, c) => s.ends.findIndex((e) => same(e[0], c) || same(e[1], c));
+const owner = (s, c) => s.paths.findIndex((p) => p.some((q) => same(q, c)));
+const complete = (s, i) => { const p = s.paths[i]; return p.length >= 2 && ((same(p[0], s.ends[i][0]) && same(p[p.length - 1], s.ends[i][1])) || (same(p[0], s.ends[i][1]) && same(p[p.length - 1], s.ends[i][0]))); };
+K.game({
+  bg: '#0a0a14', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.solved = 0; board(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= 10) return K.end(s, { score: s.solved, won: true, stats: { won: 1 }, title: 'ALL FLOWING', text: `${s.solved} boards` }); board(s); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 480, w: 110, h: 40 })) { s.paths = s.ends.map(() => []); K.sfx('whoosh'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 830, y: 480, w: 110, h: 40 })) return K.end(s, { score: s.solved, won: null, title: 'NICE FLOWS', text: `${s.solved} boards filled` });
+    const c = cellOf(s, m.x, m.y);
+    if (m.clicked && c) {
+      const e = endAt(s, c), o = owner(s, c);
+      if (e >= 0) { s.cur = e; s.paths[e] = [c]; }
+      else if (o >= 0) { s.cur = o; const p = s.paths[o]; s.paths[o] = p.slice(0, p.findIndex((q) => same(q, c)) + 1); }
+    }
+    if (!m.down) { if (s.cur >= 0) { const filled = s.paths.reduce((a, p) => a + p.length, 0); if (s.paths.every((p, i) => complete(s, i)) && filled >= s.n * s.n) { s.solved++; s.done = 1.4; K.sfx('win'); } } s.cur = -1; return; }
+    if (s.cur < 0 || !c) return;
+    const p = s.paths[s.cur], last = p[p.length - 1];
+    if (same(c, last) || complete(s, s.cur) && !p.some((q) => same(q, c))) return;
+    if (Math.abs(c[0] - last[0]) + Math.abs(c[1] - last[1]) !== 1) return;
+    const back = p.findIndex((q) => same(q, c)); if (back >= 0) { s.paths[s.cur] = p.slice(0, back + 1); return; }
+    const e = endAt(s, c); if (e >= 0 && e !== s.cur) return; // other colour's dot
+    const o = owner(s, c); if (o >= 0 && o !== s.cur) { const q = s.paths[o]; s.paths[o] = q.slice(0, q.findIndex((r) => same(r, c))); }
+    p.push(c); K.tone(300 + p.length * 15, 0.04, 'triangle', 0.03);
+    if (complete(s, s.cur)) K.sfx('pop');
+  },
+  draw(s) {
+    const T = s.T, c = K.ctx();
+    for (let y = 0; y < s.n; y++) for (let x = 0; x < s.n; x++) K.stroke(s.ox + x * T, s.oy + y * T, T, T, '#2a2650', 1);
+    s.paths.forEach((p, i) => {
+      p.forEach((q) => { K.alpha(0.22); K.rect(s.ox + q[0] * T + 1, s.oy + q[1] * T + 1, T - 2, T - 2, COLS[i]); }); K.alpha(1);
+      if (p.length > 1) { c.strokeStyle = COLS[i]; c.lineWidth = T * 0.32; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); p.forEach((q, k) => (k ? c.lineTo : c.moveTo).call(c, s.ox + q[0] * T + T / 2, s.oy + q[1] * T + T / 2)); c.stroke(); }
+    });
+    s.ends.forEach((e, i) => e.forEach((q) => { K.glow(COLS[i], complete(s, i) ? 16 : 6); K.circle(s.ox + q[0] * T + T / 2, s.oy + q[1] * T + T / 2, T * 0.34, COLS[i]); K.noGlow(); }));
+    const flows = s.paths.filter((p, i) => complete(s, i)).length, filled = s.paths.reduce((a, p) => a + p.length, 0);
+    K.text(`BOARD ${s.lv + 1} / 10`, 20, 26, 15, '#fff', 'left', 'd');
+    K.text(`FLOWS ${flows}/${s.k}   ·   FILLED ${Math.round((filled / (s.n * s.n)) * 100)}%`, 480, 30, 16, '#bff6ff', 'center', 'd');
+    K.button(20, 480, 110, 40, 'RESET', { color: '#ff8a3a', size: 11 }); K.button(830, 480, 110, 40, 'FINISH', { color: '#8e88b8', size: 11 });
+    if (s.done > 0) K.text('PERFECT FLOW!', 480, 280, 36, '#3dffa0', 'center', 'd', 16);
+  },
+  ai(s) { if (s.aiDone) return; s.aiDone = true; s.paths = s.paths.map((p, i) => (i % 2 ? [] : [s.ends[i][0]])); },
+});
+</script></body></html>

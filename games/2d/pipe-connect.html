@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pipe Connect</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pipe-connect","n":155,"title":"PIPE CONNECT","genre":"mind","desc":"The water tower is full and every house is dry. Rotate the pipe pieces until one network reaches every house - no leaking ends allowed. Water flows through as soon as a piece connects, so you can see how far you have got. Boards grow from 5×5 to 9×9; every one has a solution.","controls":"Click / tap a pipe to turn it (right-click turns it back) · L = lock the piece under the cursor","scoreLabel":"BOARDS","tasks":[{"stat":"score","target":3,"text":"Solve 3 boards of Pipe Connect"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// a piece = 4 bits: up 1, right 2, down 4, left 8
+const DIRS = [[0, -1, 1, 4], [1, 0, 2, 8], [0, 1, 4, 1], [-1, 0, 8, 2]];
+const rot = (m) => ((m << 1) | (m >> 3)) & 15;
+function board(s) {
+  const n = Math.min(9, 5 + Math.floor(s.lv / 2)); s.n = n; s.T = Math.floor(440 / n); s.ox = 480 - (n * s.T) / 2; s.oy = 60;
+  // random spanning tree (randomised DFS) from the tower
+  const g = Array(n * n).fill(0), seen = Array(n * n).fill(false), st = [K.irand(0, n * n - 1)]; s.src = st[0]; seen[st[0]] = true;
+  while (st.length) {
+    const i = st[st.length - 1], x = i % n, y = Math.floor(i / n);
+    const opts = K.shuffle(DIRS.filter(([dx, dy]) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < n && ny < n && !seen[ny * n + nx]; }));
+    if (!opts.length) { st.pop(); continue; }
+    const [dx, dy, a, b] = opts[0], j = (y + dy) * n + x + dx; g[i] |= a; g[j] |= b; seen[j] = true; st.push(j);
+  }
+  s.sol = g.slice(); s.houses = g.map((m, i) => i !== s.src && [1, 2, 4, 8].includes(m));
+  s.g = g.map((m) => { let r = m; for (let k = K.irand(0, 3); k > 0; k--) r = rot(r); return r; });
+  if (s.g.every((m, i) => m === s.sol[i])) s.g[0] = rot(s.g[0]);
+  s.lock = Array(n * n).fill(false); s.anim = Array(n * n).fill(0); s.done = 0; s.moves = 0; flow(s);
+}
+function flow(s) {
+  const n = s.n, wet = Array(n * n).fill(false), q = [s.src]; wet[s.src] = true;
+  while (q.length) { const i = q.pop(), x = i % n, y = Math.floor(i / n); for (const [dx, dy, a, b] of DIRS) { const nx = x + dx, ny = y + dy, j = ny * n + nx; if (nx < 0 || ny < 0 || nx >= n || ny >= n || wet[j]) continue; if (s.g[i] & a && s.g[j] & b) { wet[j] = true; q.push(j); } } }
+  s.wet = wet;
+  // solved when everything is wet and no pipe end points into nothing
+  const leak = s.g.some((m, i) => { const x = i % n, y = Math.floor(i / n); return DIRS.some(([dx, dy, a, b]) => { if (!(m & a)) return false; const nx = x + dx, ny = y + dy; return nx < 0 || ny < 0 || nx >= n || ny >= n || !(s.g[ny * n + nx] & b); }); });
+  return wet.every(Boolean) && !leak;
+}
+K.game({
+  bg: '#0d1620', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.solved = 0; board(s); },
+  update(s, dt) {
+    const m = K.mouse; s.anim = s.anim.map((a) => Math.max(0, a - dt * 8));
+    if (s.done > 0) { s.done -= dt; if (s.done <= 0) { s.lv++; if (s.lv >= 10) return K.end(s, { score: s.solved, won: true, stats: { won: 1 }, title: 'MASTER PLUMBER', text: `${s.solved} boards` }); board(s); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 820, y: 480, w: 120, h: 40 })) return K.end(s, { score: s.solved, won: null, title: 'NICE PLUMBING', text: `${s.solved} boards solved` });
+    const x = Math.floor((m.x - s.ox) / s.T), y = Math.floor((m.y - s.oy) / s.T);
+    if (x < 0 || y < 0 || x >= s.n || y >= s.n) return;
+    const i = y * s.n + x;
+    if (m.clicked || m.right) {
+      if (s.lock[i]) { K.sfx('tick'); return; }
+      s.g[i] = m.right ? rot(rot(rot(s.g[i]))) : rot(s.g[i]); s.anim[i] = 1; s.moves++; K.tone(400 + (s.wet[i] ? 200 : 0), 0.05, 'triangle', 0.04);
+      if (flow(s)) { s.solved++; s.done = 1.6; K.sfx('win'); }
+    }
+    if (K.tap('KeyL')) s.lock[i] = !s.lock[i];
+  },
+  draw(s) {
+    const T = s.T, c = K.ctx();
+    for (let i = 0; i < s.n * s.n; i++) {
+      const x = s.ox + (i % s.n) * T, y = s.oy + Math.floor(i / s.n) * T, m = s.g[i], wet = s.wet[i];
+      K.rect(x + 2, y + 2, T - 4, T - 4, s.lock[i] ? '#1a2a3a' : '#142230', 6);
+      c.save(); c.translate(x + T / 2, y + T / 2); c.rotate(-s.anim[i] * Math.PI / 2);
+      const col = wet ? '#22e6ff' : '#5a6a7a', w = Math.max(6, T * 0.2);
+      [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]].forEach(([dx, dy, bit]) => { if (m & bit) { if (wet) K.glow('#22e6ff', 10); K.line(0, 0, dx * T / 2, dy * T / 2, col, w); K.noGlow(); } });
+      K.circle(0, 0, w / 2 + 1, col);
+      c.restore();
+      if (i === s.src) { K.rect(x + T * 0.22, y + T * 0.22, T * 0.56, T * 0.56, '#3a8aff', 6); K.text('💧', x + T / 2, y + T / 2 + 1, T * 0.35, '#fff'); }
+      else if (s.houses[i]) K.text(wet ? '🏠' : '🏚', x + T / 2, y + T / 2 + 1, T * 0.42, '#fff');
+    }
+    const houses = s.houses.filter(Boolean).length, wetH = s.houses.filter((h, i) => h && s.wet[i]).length;
+    K.text(`BOARD ${s.lv + 1} / 10`, 20, 26, 15, '#fff', 'left', 'd'); K.text(`HOUSES ${wetH} / ${houses}`, 480, 30, 18, wetH === houses ? '#3dffa0' : '#bff6ff', 'center', 'd');
+    K.button(820, 480, 120, 40, 'FINISH', { color: '#8e88b8', size: 11 });
+    if (s.done > 0) K.text('ALL HOUSES HAVE WATER!', 480, 280, 32, '#3dffa0', 'center', 'd', 16);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 12 || s.done > 0) return; const i = s.g.findIndex((m, k) => m !== s.sol[k]); if (i >= 0) { s.g[i] = rot(s.g[i]); if (flow(s)) s.done = 1.6; } },
+});
+</script></body></html>

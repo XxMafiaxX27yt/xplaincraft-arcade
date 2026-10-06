@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lying Simon</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lying-simon","n":160,"title":"LYING SIMON","genre":"mind","desc":"Simon flashes a sequence of coloured pads for you to repeat - but Simon lies. The word on screen may name the wrong colour (trust the light, not the word), and when the round does not start with SIMON SAYS you must not repeat anything at all: press HOLD instead. The sequence grows every round.","controls":"Click / tap the pads in the order they lit (or keys 1-4) · press HOLD when Simon did not say so","scoreLabel":"ROUNDS","tasks":[{"stat":"score","target":8,"text":"Reach round 8 of Lying Simon"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PADS = [['RED', '#ff3355', 330], ['BLUE', '#4f8bff', 392], ['YELLOW', '#ffd93a', 440], ['GREEN', '#3dffa0', 523]];
+const PX = (i) => 300 + (i % 2) * 190, PY = (i) => 120 + Math.floor(i / 2) * 170;
+function round(s) {
+  s.seq.push(K.irand(0, 3)); s.says = s.round < 2 || Math.random() < 0.78; s.lies = s.seq.map(() => (s.round >= 1 && Math.random() < 0.35 ? K.irand(0, 3) : -1));
+  s.phase = 'show'; s.i = 0; s.t = 1; s.in = 0; s.lit = -1;
+}
+K.game({
+  bg: '#0d0b18', touch: { stick: false, buttons: [] },
+  init(s) { s.seq = []; s.round = 0; round(s); },
+  update(s, dt) {
+    s.t -= dt;
+    if (s.phase === 'show') {
+      if (s.t > 0) return;
+      if (s.lit >= 0) { s.lit = -1; s.t = 0.18; return; }
+      if (s.i >= s.seq.length) { s.phase = 'input'; s.t = s.says ? 99 : 3.5; return; }
+      s.lit = s.seq[s.i]; s.word = s.lies[s.i] >= 0 ? s.lies[s.i] : s.lit; s.i++; s.t = Math.max(0.35, 0.65 - s.round * 0.02); K.tone(PADS[s.lit][2], 0.3, 'triangle', 0.08);
+      return;
+    }
+    if (s.phase === 'ok') { if (s.t <= 0) { s.round++; round(s); } return; }
+    if (s.phase === 'fail') { if (s.t <= 0) return K.end(s, { score: s.round, won: null, title: 'SIMON GOT YOU', text: s.why }); return; }
+    // input
+    if (!s.says && s.t <= 0) { s.phase = 'ok'; s.t = 0.8; K.sfx('coin'); return; } // waited it out: also fine
+    let p = -1;
+    for (let i = 0; i < 4; i++) if (K.tap('Digit' + (i + 1))) p = i;
+    if (K.mouse.clicked) { PADS.forEach((_, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: PX(i), y: PY(i), w: 170, h: 150 })) p = i; }); if (K.inRect(K.mouse.x, K.mouse.y, { x: 700, y: 230, w: 180, h: 70 })) p = 9; }
+    if (K.tap('Space')) p = 9;
+    if (p < 0) return;
+    if (p === 9) { if (!s.says) { s.phase = 'ok'; s.t = 0.8; K.sfx('coin'); } else fail(s, 'Simon DID say. You had to repeat it.'); return; }
+    s.lit = p; s.litT = 0.2; K.tone(PADS[p][2], 0.2, 'triangle', 0.08);
+    if (!s.says) return fail(s, 'Simon did not say! You should have pressed HOLD.');
+    if (p !== s.seq[s.in]) return fail(s, `It was ${PADS[s.seq[s.in]][0]}. Trust the light, not the word.`);
+    s.in++; if (s.in >= s.seq.length) { s.phase = 'ok'; s.t = 0.9; K.sfx('coin'); }
+  },
+  draw(s) {
+    if (s.litT > 0) { s.litT -= 1 / 60; if (s.litT <= 0 && s.phase !== 'show') s.lit = -1; }
+    PADS.forEach(([n, col], i) => { const on = s.lit === i; K.glow(col, on ? 30 : 0); K.rect(PX(i), PY(i), 170, 150, on ? col : col + '33', 20); K.noGlow(); K.stroke(PX(i), PY(i), 170, 150, col, 3, 20); K.text(String(i + 1), PX(i) + 20, PY(i) + 22, 14, col, 'center', 'd'); });
+    K.text(`ROUND ${s.round + 1}`, 20, 26, 16, '#fff', 'left', 'd');
+    if (s.phase === 'show') { K.text(s.says ? 'SIMON SAYS:' : 'REPEAT:', 480, 50, 22, s.says ? '#3dffa0' : '#ff8a3a', 'center', 'd'); if (s.lit >= 0) K.text(PADS[s.word][0], 480, 86, 26, '#fff', 'center', 'd'); }
+    if (s.phase === 'input') K.text(s.says ? 'YOUR TURN' : 'YOUR TURN?', 480, 60, 22, '#fff', 'center', 'd');
+    K.button(700, 230, 180, 70, '✋ HOLD', { color: '#ff8a3a', size: 18 });
+    K.wrapText('Trust the light, not the word. No SIMON SAYS? Press HOLD.', 790, 340, 220, 13, '#8e88b8', 1.3);
+    if (s.phase === 'ok') K.text('✓', 480, 280, 60, '#3dffa0', 'center', 'd', 16);
+    if (s.phase === 'fail') K.wrapText(s.why, 480, 460, 600, 16, '#ff3355');
+  },
+  ai(s) { if (s.phase === 'input' && Math.random() < 0.05) { if (!s.says) K.vtap('Space'); else K.vtap('Digit' + (s.seq[s.in] + 1)); } },
+});
+function fail(s, why) { s.phase = 'fail'; s.t = 2; s.why = why; K.sfx('lose'); K.shake(8); }
+</script></body></html>

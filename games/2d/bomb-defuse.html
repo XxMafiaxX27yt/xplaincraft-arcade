@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bomb Defuse</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bomb-defuse","n":159,"title":"BOMB DEFUSE","genre":"mind","desc":"A ticking box of wires and a technician's manual. Read the box - the serial number, the warning light, the wire colours - find the first rule in the manual that matches, and cut exactly that wire. Each later bomb has more wire panels and less time. Two wrong cuts and it goes off.","controls":"Read the manual on the right, then click / tap a wire to cut it","scoreLabel":"BOMBS","tasks":[{"stat":"score","target":3,"text":"Defuse 3 bombs"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WC = { red: '#ff3355', blue: '#4f8bff', yellow: '#ffd93a', white: '#f2f2f2', black: '#222', green: '#3dffa0' };
+const NAMES = Object.keys(WC);
+// the manual: checked top to bottom, the first rule that matches says which wire to cut (wire numbers count from the top)
+const RULES = [
+  ['If the LIGHT is on and there is a green wire, cut the LAST green wire.', (b, w) => (b.led && w.includes('green') ? w.lastIndexOf('green') : -1)],
+  ['If there are exactly two red wires, cut the SECOND red wire.', (b, w) => (w.filter((c) => c === 'red').length === 2 ? w.indexOf('red', w.indexOf('red') + 1) : -1)],
+  ['If the serial ends in an even digit and there is a yellow wire, cut the FIRST yellow wire.', (b, w) => (b.even && w.includes('yellow') ? w.indexOf('yellow') : -1)],
+  ['If the top and bottom wires are the same colour, cut wire 2.', (b, w) => (w[0] === w[w.length - 1] ? 1 : -1)],
+  ['If there are more than 4 wires and no black wire, cut wire 4.', (b, w) => (w.length > 4 && !w.includes('black') ? 3 : -1)],
+  ['If there is a white wire, cut the wire just below the first white one (or the top wire if white is last).', (b, w) => (w.includes('white') ? (w.indexOf('white') + 1) % w.length : -1)],
+  ['Otherwise, cut the LAST wire.', (b, w) => w.length - 1],
+];
+const answer = (b, w) => { for (const [, f] of RULES) { const r = f(b, w); if (r >= 0) return r; } return w.length - 1; };
+function bomb(s) {
+  s.box = { led: Math.random() < 0.5, serial: Array.from({ length: 5 }, () => K.pick('ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'.split(''))).join('') + K.irand(0, 9) };
+  s.box.even = Number(s.box.serial.slice(-1)) % 2 === 0;
+  const panels = Math.min(4, 1 + Math.floor(s.lv / 2));
+  s.panels = Array.from({ length: panels }, () => { const n = K.irand(3, 6), w = Array.from({ length: n }, () => K.pick(NAMES)); return { w, cut: Array(n).fill(false), done: false, ans: answer(s.box, w) }; });
+  s.time = Math.max(40, 95 - s.lv * 8); s.strikes = 0; s.state = 'live'; s.t = 0;
+}
+const px = (s, i) => 40 + (i % 2) * 260, py = (s, i) => 70 + Math.floor(i / 2) * 230;
+K.game({
+  bg: '#14161a', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.defused = 0; bomb(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.state !== 'live') { s.t -= dt; if (s.t <= 0) { if (s.state === 'boom') return K.end(s, { score: s.defused, won: s.defused > 0, stats: { won: s.defused > 0 ? 1 : 0 }, title: 'BOOM', text: `${s.defused} bomb${s.defused === 1 ? '' : 's'} defused` }); s.lv++; if (s.lv >= 8) return K.end(s, { score: s.defused, won: true, stats: { won: 1 }, title: 'BOMB SQUAD LEGEND', text: 'Eight bombs, eight saves.' }); bomb(s); } return; }
+    s.time -= dt;
+    if (Math.floor(s.time) !== Math.floor(s.time + dt)) K.tone(s.time < 10 ? 1200 : 900, 0.05, 'square', 0.03);
+    if (s.time <= 0) { s.state = 'boom'; s.t = 1.6; K.sfx('boom'); K.shake(30); K.flash('#fff', 0.8); return; }
+    if (!m.clicked) return;
+    s.panels.forEach((p, i) => {
+      if (p.done) return;
+      p.w.forEach((c, k) => {
+        const y = py(s, i) + 40 + k * 28;
+        if (!p.cut[k] && K.inRect(m.x, m.y, { x: px(s, i) + 20, y: y - 10, w: 200, h: 20 })) {
+          p.cut[k] = true; K.noise(0.1, 0.1, 3000);
+          if (k === p.ans) { p.done = true; K.sfx('chime'); if (s.panels.every((q) => q.done)) { s.defused++; s.state = 'safe'; s.t = 1.8; K.sfx('win'); } }
+          else { s.strikes++; K.sfx('wrong'); K.shake(10); if (s.strikes >= 2) { s.state = 'boom'; s.t = 1.6; K.sfx('boom'); K.shake(30); K.flash('#fff', 0.8); } }
+        }
+      });
+    });
+  },
+  draw(s) {
+    // the bomb
+    K.rect(20, 20, 540, 500, '#2a2d33', 14); K.stroke(20, 20, 540, 500, '#4a4e58', 3, 14);
+    K.rect(40, 30, 160, 30, '#0a0a0a', 4); K.text(s.box.serial, 120, 46, 15, '#ff8a3a', 'center', 'm');
+    K.glow(s.box.led ? '#ff3355' : '#000', s.box.led ? 16 : 0); K.circle(240, 45, 9, s.box.led ? '#ff3355' : '#3a1a1a'); K.noGlow(); K.text('LIGHT', 270, 46, 10, '#8e8e9a', 'left', 'd');
+    const tc = s.time < 10 ? '#ff3355' : '#ff8a3a'; K.rect(380, 28, 160, 36, '#0a0a0a', 4); K.text(`${Math.floor(Math.max(0, s.time) / 60)}:${String(Math.floor(Math.max(0, s.time) % 60)).padStart(2, '0')}`, 460, 47, 24, tc, 'center', 'm');
+    for (let i = 0; i < 2; i++) K.text('✕', 340 + i * 18, 47, 16, i < s.strikes ? '#ff3355' : '#3a3d44');
+    s.panels.forEach((p, i) => {
+      const x = px(s, i), y = py(s, i);
+      K.rect(x, y, 240, 210, '#1e2126', 10); K.stroke(x, y, 240, 210, p.done ? '#3dffa0' : '#3a3e48', 2, 10);
+      K.text(`PANEL ${i + 1}`, x + 12, y + 16, 11, p.done ? '#3dffa0' : '#8e8e9a', 'left', 'd');
+      p.w.forEach((c, k) => {
+        const wy = y + 40 + k * 28;
+        K.circle(x + 20, wy, 6, '#777'); K.circle(x + 220, wy, 6, '#777'); K.text(String(k + 1), x + 12, wy, 9, '#aaa', 'right', 'm');
+        if (p.cut[k]) { K.line(x + 20, wy, x + 100, wy + 4, WC[c], 6); K.line(x + 140, wy + 4, x + 220, wy, WC[c], 6); } else K.line(x + 20, wy, x + 220, wy, WC[c], 6);
+      });
+    });
+    // the manual
+    K.rect(580, 20, 360, 500, '#efe6cf', 8);
+    K.text('WIRE MANUAL', 760, 44, 16, '#3a2a10', 'center', 'd');
+    K.text('Each panel on its own. Use the FIRST rule that fits.', 760, 66, 11, '#6a5a3a', 'center', 'u');
+    RULES.forEach(([t], i) => K.wrapText(`${i + 1}. ${t}`, 760, 96 + i * 60, 330, 13, '#2a1a08', 1.25));
+    if (s.state === 'safe') K.text('DEFUSED', 290, 270, 44, '#3dffa0', 'center', 'd', 18);
+    if (s.state === 'boom') { K.alpha(0.7); K.rect(0, 0, 960, 540, '#ff8a3a'); K.alpha(1); K.text('BOOM', 480, 270, 70, '#fff', 'center', 'd', 20); }
+  },
+});
+</script></body></html>
