@@ -658,7 +658,7 @@
     tui.classList.toggle('on', playing || state === 'pause');
     tui.classList.toggle('paused', state === 'pause');
     if (!playing) return;
-    const own = cfg.touch || {};
+    const own = (typeof cfg.touch === 'function' ? cfg.touch() : cfg.touch) || {};
     const duo = (K.local || 0) >= 2;
     const stick = own.stick ?? (usedDir || [...usedKeys].some((c) => DIR_KEYS.has(c) || WASD.has(c)) ? (usedDir === 'tap' ? 'tap' : true) : false);
     const auto = [...usedKeys].filter((c) => !SKIP.has(c) && !DIR_KEYS.has(c) && !(stick && WASD.has(c)) && !/^(Digit|Numpad)/.test(c));

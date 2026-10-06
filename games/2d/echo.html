@@ -5,10 +5,28 @@
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
 function level(s) {
-  s.walls = [];
-  for (let i = 0; i < 14 + s.lv * 3; i++) { const v = Math.random() < 0.5; s.walls.push({ x: K.rand(80, 820), y: K.rand(60, 440), w: v ? 18 : K.rand(80, 220), h: v ? K.rand(80, 200) : 18 }); }
-  s.walls = s.walls.filter((w) => !K.rectHit(w, { x: 20, y: 220, w: 120, h: 120 }) && !K.rectHit(w, { x: 820, y: 200, w: 140, h: 140 }));
+  // random walls, rebuilt until the exit can really be reached
+  for (let tries = 0; tries < 40; tries++) {
+    s.walls = [];
+    for (let i = 0; i < 14 + s.lv * 3; i++) { const v = Math.random() < 0.5; s.walls.push({ x: K.rand(80, 820), y: K.rand(60, 440), w: v ? 18 : K.rand(80, 220), h: v ? K.rand(80, 200) : 18 }); }
+    s.walls = s.walls.filter((w) => !K.rectHit(w, { x: 20, y: 220, w: 120, h: 120 }) && !K.rectHit(w, { x: 820, y: 200, w: 140, h: 140 }));
+    if (reachable(s, 60, 270, 900, 270)) break;
+  }
   s.p = { x: 60, y: 270 }; s.exit = { x: 900, y: 270 }; s.mon = { x: 900, y: K.pick([60, 480]), tx: 480, ty: 270 }; s.rings = []; s.reveal = [];
+}
+function reachable(s, x0, y0, x1, y1) {
+  const C = 12, W = Math.ceil(960 / C), H = Math.ceil(540 / C), seen = new Uint8Array(W * H), q = [[Math.floor(x0 / C), Math.floor(y0 / C)]];
+  seen[q[0][1] * W + q[0][0]] = 1;
+  for (let h = 0; h < q.length; h++) {
+    const [cx, cy] = q[h];
+    if (Math.abs(cx * C + C / 2 - x1) < 24 && Math.abs(cy * C + C / 2 - y1) < 24) return true;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[ny * W + nx] || blocked(s, nx * C + C / 2, ny * C + C / 2)) continue;
+      seen[ny * W + nx] = 1; q.push([nx, ny]);
+    }
+  }
+  return false;
 }
 const blocked = (s, x, y) => x < 10 || x > 950 || y < 10 || y > 530 || s.walls.some((w) => x > w.x - 9 && x < w.x + w.w + 9 && y > w.y - 9 && y < w.y + w.h + 9);
 K.game({

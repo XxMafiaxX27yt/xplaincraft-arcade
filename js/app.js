@@ -97,7 +97,7 @@ async function renderTopbar() {
   const incoming = await api.incomingCount();
   $('#topbar').innerHTML = `
     <a class="tb-logo" href="#/" aria-label="Home">
-      <span class="tb-mark">XC</span>
+      <span class="tb-mark">NX</span>
       <span class="tb-name"><b>${esc(CONFIG.brand.top)}</b><i>${esc(CONFIG.brand.name)}</i></span>
     </a>
     <nav class="nav">

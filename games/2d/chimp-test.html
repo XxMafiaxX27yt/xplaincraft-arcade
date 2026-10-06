@@ -15,7 +15,7 @@ K.game({
     const x = Math.floor((K.mouse.x - BX) / T), y = Math.floor((K.mouse.y - BY) / T); if (x < 0 || y < 0 || x >= GW || y >= GH) return;
     const c = y * GW + x, idx = s.pos.indexOf(c);
     if (idx < 0 || idx < s.next) return;
-    if (idx === s.next) { s.next++; s.hidden = true; K.tone(400 + s.next * 50, 0.08, 'triangle', 0.06); if (s.next >= s.n) { K.sfx('coin'); s.n++; round(s); } }
+    if (idx === s.next) { s.next++; s.hidden = true; K.tone(400 + s.next * 50, 0.08, 'triangle', 0.06); if (s.next >= s.n) { K.sfx('coin'); s.n++; if (s.n > GW * GH) return K.end(s, { score: s.n - 1, won: true, title: 'BETTER THAN A CHIMP', text: 'Every square on the board.' }); round(s); } }
     else { s.strikes++; s.flash = 0.8; K.sfx('wrong'); K.shake(6); if (s.strikes >= 3) return K.end(s, { score: s.n - 1, won: null, title: 'THREE STRIKES', text: `You reached ${s.n - 1} numbers.` }); round(s); }
   },
   draw(s) {

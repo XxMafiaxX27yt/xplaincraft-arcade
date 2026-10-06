@@ -32,6 +32,7 @@ K.game({
     }
     s.t -= dt;
     if (s.t <= 0) { K.sfx('lose'); return K.end(s, { score: s.score, won: false, title: 'TIME UP', text: `You needed a country starting with ${s.need}.` }); }
+    if (K.tap('Space') && s.cur && !s.cur.endsWith(' ') && s.cur.length < 24) s.cur += ' ';
     const kk = K.keyboard(255, 390, 450, {}, { h: 40 });
     if (!kk) return;
     if (kk === 'BACK') s.cur = s.cur.slice(0, -1);
@@ -44,7 +45,6 @@ K.game({
       else if (s.used.has(k)) say('Already used');
       else { s.used.add(k); s.chain.push({ name: ALL.get(k), who: 'you' }); s.need = last(k); s.score++; s.cur = ''; s.who = 'cpu'; s.wait = K.rand(0.8, 2); K.sfx('coin'); }
     } else if (s.cur.length < 24) s.cur += kk;
-    if (K.tap('Space')) s.cur += ' ';
   },
   draw(s) {
     K.text('ATLAS', 480, 34, 28, '#22e6ff', 'center', 'd', 10);

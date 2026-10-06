@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Last Train</title>
 <link rel="stylesheet" href="../kit/kit.css">
-<script type="application/json" id="meta">{"id":"last-train","n":8,"title":"LAST TRAIN","genre":"horror","desc":"The same train car, over and over. Study it. If anything is different, go back. If nothing changed, go forward. Get it right 8 times in a row to reach your stop.","controls":"→ / D go forward · ← / A go back","scoreLabel":"CARS","tasks":[{"stat":"score","target":8,"text":"Escape the Last Train"}]}</script>
+<script type="application/json" id="meta">{"id":"last-train","n":8,"title":"LAST TRAIN","genre":"horror","desc":"The same train car, over and over. Study it. If anything is different, go back. If nothing changed, go forward. Get it right 8 times in a row to reach your stop.","controls":"→ / D (or tap the right half) go forward · ← / A (or tap the left half) go back","scoreLabel":"CARS","tasks":[{"stat":"score","target":8,"text":"Escape the Last Train"}]}</script>
 </head><body>
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
@@ -14,7 +14,8 @@ K.game({
   update(s, dt) {
     s.c.t += dt;
     if (s.trans > 0) { s.trans -= dt; if (s.trans <= 0) { s.c = car(Math.random() < 0.55 && !s.first ? K.pick(ANOMS) : null); s.first = false; } return; }
-    const d = K.tap('ArrowRight', 'KeyD') ? 1 : K.tap('ArrowLeft', 'KeyA') ? -1 : 0;
+    // keys, or tap the left / right half of the screen (phones)
+    const d = K.tap('ArrowRight', 'KeyD') || (K.mouse.clicked && K.mouse.x >= 480) ? 1 : K.tap('ArrowLeft', 'KeyA') || (K.mouse.clicked && K.mouse.x < 480) ? -1 : 0;
     if (!d) return;
     const right = (d === -1) === !!s.c.an;
     if (right) { s.streak++; s.best = Math.max(s.best, s.streak); K.sfx('select'); s.msg = s.c.an ? `Yes — the ${s.c.an} was wrong.` : 'Nothing changed. Good.'; }

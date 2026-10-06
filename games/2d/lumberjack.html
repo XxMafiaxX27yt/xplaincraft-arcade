@@ -5,7 +5,8 @@
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
 const LH = 64, TX = 480, BASE = 430;
-const nextBranch = (s) => { const last = s.br[s.br.length - 1]; if (last && Math.random() < 0.5) return 0; return Math.random() < 0.5 ? -1 : 1; };
+// after a branch: an empty log or one on the SAME side (opposite branches back to back cannot be survived)
+const nextBranch = (s) => { const last = s.br[s.br.length - 1]; if (last) return Math.random() < 0.5 ? 0 : last; return Math.random() < 0.35 ? 0 : Math.random() < 0.5 ? -1 : 1; };
 K.game({
   bg: '#7ac8ff',
   init(s) { s.br = [0, 0, 0]; while (s.br.length < 9) s.br.push(nextBranch(s)); s.side = -1; s.score = 0; s.time = 1; s.chop = 0; s.fly = []; s.started = false; },

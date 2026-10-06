@@ -17,6 +17,7 @@ K.game({
     if (K.tap('ArrowRight', 'KeyD')) { s.room = (s.room + 1) % ROOMS.length; s.photo = null; K.sfx('creak'); }
     if (K.tap('ArrowLeft', 'KeyA')) { s.room = (s.room + ROOMS.length - 1) % ROOMS.length; s.photo = null; K.sfx('creak'); }
     if (s.photo) { s.photo.t += dt; if (K.mouse.clicked && s.photo.t > 0.6) s.photo = null; return; }
+    if (K.mouse.clicked && K.mouse.y > 476) { const r = Math.floor((K.mouse.x - 12) / 156); if (r >= 0 && r < ROOMS.length && r !== s.room) { s.room = r; s.photo = null; K.sfx('creak'); } return; }
     if (!K.mouse.clicked || K.mouse.y > 470) return;
     if (s.film <= 0) return K.end(s, { score: s.got, won: s.got >= ROOMS.length, title: 'OUT OF FILM', text: `${s.got} of ${ROOMS.length} ghosts on film.` });
     s.film--; s.flash = 1; K.sfx('click'); K.noise(0.3, 0.1, 3000);

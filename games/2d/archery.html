@@ -23,9 +23,12 @@ K.game({
     }
     const ar = s.arrow;
     if (!ar.stuck) {
-      ar.vy += 300 * dt; ar.vx += s.wind * 40 * dt * 0; ar.y += ar.vy * dt; ar.x += ar.vx * dt; ar.y += s.wind * 26 * dt;
-      if (ar.x >= s.tx - 6 && ar.x <= s.tx + 6) {
-        const off = Math.abs(ar.y - s.ty);
+      const px = ar.x, py = ar.y;
+      ar.vy += 300 * dt; ar.y += ar.vy * dt; ar.x += ar.vx * dt; ar.y += s.wind * 26 * dt;
+      // where the arrow crossed the target line this frame (fast arrows move more than the target is wide)
+      if (px < s.tx && ar.x >= s.tx) {
+        const hitY = py + (ar.y - py) * ((s.tx - px) / (ar.x - px));
+        const off = Math.abs(hitY - s.ty); ar.x = s.tx; ar.y = hitY;
         if (off < 70) { const pts = Math.max(1, 10 - Math.floor(off / 7)); ar.stuck = true; ar.pts = pts; s.score += pts; s.hits.push(pts); K.sfx(pts >= 9 ? 'win' : 'knock'); K.floatText(pts === 10 ? 'BULLSEYE!' : `+${pts}`, s.tx, s.ty - 90, '#ffd93a', 22); ar.t = 1.2; }
       }
       if (!ar.stuck && (ar.y > 540 || ar.x > 980)) { ar.stuck = true; ar.pts = 0; s.hits.push(0); ar.t = 0.8; K.sfx('wrong'); }

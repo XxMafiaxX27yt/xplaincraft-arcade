@@ -2,9 +2,9 @@
 
 export const CONFIG = {
   brand: {
-    top: "NOVEX × XPLAINCRAFT'S",
-    name: 'GAMING ARCADE',
-    short: 'XC ARCADE',
+    top: 'GAMING ARCADE',
+    name: 'NOVEX',
+    short: 'NOVEX ARCADE',
     version: '3.0.0',
   },
   supabase: {

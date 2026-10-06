@@ -5,16 +5,46 @@
 <script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
 <script>
 const CAP = 4, PAL = ['#ff3355', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff', '#ff8a3a', '#ff9bc8', '#4f8bff', '#b6ff3a', '#ffffff'];
+// can this position be finished with real moves? (depth-first search, equal positions skipped)
+function solvable(tubes, limit = 60000) {
+  const key = (t) => t.map((x) => x.join('')).sort().join('|');
+  const seen = new Set(); let nodes = 0;
+  const rec = (t) => {
+    if (t.every((x) => !x.length || (x.length === CAP && x.every((v) => v === x[0])))) return true;
+    if (++nodes > limit) return false;
+    const k = key(t); if (seen.has(k)) return false; seen.add(k);
+    const moves = [];
+    for (let a = 0; a < t.length; a++) {
+      const A = t[a]; if (!A.length) continue;
+      const ball = A[A.length - 1];
+      if (A.length === CAP && A.every((v) => v === ball)) continue;
+      let run = 0; for (let i = A.length - 1; i >= 0 && A[i] === ball; i--) run++;
+      for (let b = 0; b < t.length; b++) {
+        const B = t[b];
+        if (a === b || B.length >= CAP || (B.length && B[B.length - 1] !== ball) || (!B.length && run === A.length)) continue;
+        moves.push([a, b, B.length ? 0 : 1]);
+      }
+    }
+    moves.sort((x, y) => x[2] - y[2]);
+    for (const [a, b] of moves) { const n = t.map((x) => x.slice()); n[b].push(n[a].pop()); if (rec(n)) return true; }
+    return false;
+  };
+  return rec(tubes);
+}
 function level(s) {
   const nc = Math.min(10, 3 + s.lv);
-  // scramble by random reverse moves from a solved state so every level is solvable
-  let tubes = Array.from({ length: nc }, (_, i) => Array(CAP).fill(i)).concat([[], []]);
-  for (let k = 0; k < 400 + nc * 60; k++) {
-    const from = K.irand(0, tubes.length - 1), to = K.irand(0, tubes.length - 1);
-    if (from === to || !tubes[from].length || tubes[to].length >= CAP) continue;
-    tubes[to].push(tubes[from].pop());
+  let tubes;
+  // random scramble, kept only if it can really be solved (random scrambles sometimes cannot)
+  for (let tries = 0; tries < 30; tries++) {
+    tubes = Array.from({ length: nc }, (_, i) => Array(CAP).fill(i)).concat([[], []]);
+    for (let k = 0; k < 400 + nc * 60; k++) {
+      const from = K.irand(0, tubes.length - 1), to = K.irand(0, tubes.length - 1);
+      if (from === to || !tubes[from].length || tubes[to].length >= CAP) continue;
+      tubes[to].push(tubes[from].pop());
+    }
+    if (tubes.every((t) => !t.length || (t.length === CAP && t.every((v) => v === t[0])))) continue;
+    if (solvable(tubes)) break;
   }
-  if (tubes.every((t) => !t.length || (t.length === CAP && t.every((v) => v === t[0])))) return level(s);
   s.t = tubes; s.sel = -1; s.hist = []; s.lift = 0;
 }
 const tubeX = (s, i) => { const per = Math.min(s.t.length, 8), row = Math.floor(i / per), col = i % per, n = row ? s.t.length - per : per; return { x: 480 - (n * 90) / 2 + col * 90 + 45, y: row ? 330 : 90 }; };

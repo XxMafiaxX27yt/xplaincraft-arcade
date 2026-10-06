@@ -11,7 +11,7 @@ K.game({
   bg: '#080a0c',
   init(s) {
     s.p = { x: WW / 2, y: WH / 2 }; s.look = 0; s.got = 0; s.static = 0; s.tele = 6; s.man = null;
-    s.trees = Array.from({ length: 180 }, () => ({ x: K.rand(WW), y: K.rand(WH), r: K.rand(10, 20) }));
+    s.trees = Array.from({ length: 180 }, () => ({ x: K.rand(60, WW - 60), y: K.rand(60, WH - 80), r: K.rand(10, 20) })); // inside the walkable area (pages hang on them)
     s.pages = K.shuffle(s.trees.slice()).slice(0, 8).map((t, i) => ({ x: t.x, y: t.y + t.r + 4, note: NOTES[i], got: false }));
   },
   update(s, dt) {

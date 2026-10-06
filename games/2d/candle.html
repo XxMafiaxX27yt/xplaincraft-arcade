@@ -6,11 +6,11 @@
 <script>
 const WALLS = [[0, 0, 960, 20], [0, 520, 960, 20], [0, 0, 20, 540], [940, 0, 20, 540], [300, 20, 20, 200], [300, 300, 20, 220], [620, 180, 20, 360], [620, 20, 20, 90], [20, 260, 200, 20], [320, 180, 200, 20], [640, 300, 220, 20]];
 const hitWall = (x, y, r) => WALLS.some(([wx, wy, ww, wh]) => x + r > wx && x - r < wx + ww && y + r > wy && y - r < wy + wh);
-function spot() { let x, y; do { x = K.rand(60, 900); y = K.rand(60, 480); } while (hitWall(x, y, 30)); return { x, y }; }
+function spot(away) { let x, y, n = 0; do { x = K.rand(60, 900); y = K.rand(60, 480); n++; } while (hitWall(x, y, 30) || (away && n < 200 && K.dist({ x, y }, away) < 320)); return { x, y }; }
 K.game({
   bg: '#000',
   init(s) {
-    s.p = { x: 120, y: 120 }; s.wax = 1; s.time = 0; s.lit = []; s.spares = [spot(), spot(), spot()]; s.shadows = [{ ...spot(), seen: 0 }, { ...spot(), seen: 0 }]; s.flick = 1; s.whisper = 3; s.drone = null;
+    s.p = { x: 120, y: 120 }; s.wax = 1; s.time = 0; s.lit = []; s.spares = [spot(), spot(), spot()]; s.shadows = [{ ...spot(s.p), seen: 0 }, { ...spot(s.p), seen: 0 }]; s.flick = 1; s.whisper = 3; s.drone = null;
   },
   update(s, dt) {
     if (!s.drone && !K.attract) s.drone = K.drone(41, 0.04);
@@ -29,8 +29,8 @@ K.game({
       else { const a = K.angle(s.p, sh); sh.x += Math.cos(a) * 60 * dt; sh.y += Math.sin(a) * 60 * dt; }
       if (d2 < 22) { K.sfx('scare'); K.flash('#000', 1); return K.end(s, { score: Math.floor(s.time), won: false, title: 'THE DARK TOOK YOU', text: `${Math.floor(s.time)} seconds of light.` }); }
     }
-    if (s.time > 30 && s.shadows.length < 3) s.shadows.push({ ...spot(), seen: 0 });
-    if (s.time > 70 && s.shadows.length < 4) s.shadows.push({ ...spot(), seen: 0 });
+    if (s.time > 30 && s.shadows.length < 3) s.shadows.push({ ...spot(s.p), seen: 0 });
+    if (s.time > 70 && s.shadows.length < 4) s.shadows.push({ ...spot(s.p), seen: 0 });
     if (s.wax <= 0) { K.sfx('lose'); return K.end(s, { score: Math.floor(s.time), won: false, title: 'THE CANDLE WENT OUT', text: `${Math.floor(s.time)} seconds.` }); }
     s.whisper -= dt; if (s.whisper <= 0) { K.sfx('whisper'); s.whisper = K.rand(4, 9) * (0.5 + s.wax); }
     s.flick = 1 + Math.sin(s.time * 13) * 0.04 + (Math.random() < 0.03 ? -0.15 : 0);

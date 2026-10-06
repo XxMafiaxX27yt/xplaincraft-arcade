@@ -24,8 +24,12 @@ function room(s) {
     const all = reach(g, sx, sy); if (!all.has(ex[0] + ',' + ex[1])) continue;
     // no dead ends: from every place you can stop, the exit must still be reachable
     if ([...all].some((k) => { const [a, b] = k.split(',').map(Number); return !reach(g, a, b).has(ex[0] + ',' + ex[1]); })) continue;
+    // fish only on cells you can still slide over now that the exit is placed (it stops you like a wall)
+    const over2 = new Set(); all.forEach((k) => { const [x, y] = k.split(',').map(Number); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const p = passes(g, x, y, dx, dy); if (!p.some((q) => { const [a, b] = q.split(',').map(Number); return g[b][a] === 'o'; })) p.forEach((q) => over2.add(q)); } });
+    const fishSpots = [...over2].filter((k) => { const [a, b] = k.split(',').map(Number); return g[b][a] === '.'; });
+    if (fishSpots.length < 6) continue;
     s.g = g; s.p = [sx, sy]; s.start = [sx, sy];
-    s.fish = K.shuffle(overList.filter((k) => k !== ex.join(','))).slice(0, 3 + Math.min(3, s.lv)).map((k) => k.split(',').map(Number));
+    s.fish = K.shuffle(fishSpots).slice(0, 3 + Math.min(3, s.lv)).map((k) => k.split(',').map(Number));
     s.moving = null; s.moves = 0; return;
   }
 }

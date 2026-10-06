@@ -160,7 +160,7 @@ export const GAME_LIST = [
 "title": "LAST TRAIN",
 "genre": "horror",
 "desc": "The same train car, over and over. Study it. If anything is different, go back. If nothing changed, go forward. Get it right 8 times in a row to reach your stop.",
-"controls": "→ / D go forward · ← / A go back",
+"controls": "→ / D (or tap the right half) go forward · ← / A (or tap the left half) go back",
 "scoreLabel": "CARS",
 "tasks": [
 {

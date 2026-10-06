@@ -35,7 +35,7 @@ K.game({
     if (h.x === s.food.x && h.y === s.food.y) {
       grow = 1; s.score++; s.eaten++; K.sfx('pop'); K.burst(OX + h.x * T + 14, OY + h.y * T + 14, '#ff2bd6', 10, 160);
       s.food = free(s);
-      if (s.eaten % 10 === 0) { s.walls.push(free(s)); K.sfx('knock'); }
+      if (s.eaten % 10 === 0) { let w, n = 0; do { w = free(s); n++; } while (n < 50 && Math.abs(w.x - h.x) + Math.abs(w.y - h.y) < 5); s.walls.push(w); K.sfx('knock'); } // never right in front of you
       if (!s.gold && Math.random() < 0.25) { s.gold = free(s); s.goldT = 5; }
     }
     if (s.gold && h.x === s.gold.x && h.y === s.gold.y) { grow = 3; s.score += 5; s.gold = null; K.sfx('coin'); K.floatText('+5', OX + h.x * T + 14, OY + h.y * T, '#ffd93a'); }

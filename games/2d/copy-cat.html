@@ -19,7 +19,8 @@ K.game({
       const want = s.t - c.lag; const h = s.hist.find((q) => q.t >= want);
       if (h && s.t > c.born + c.lag) { c.x = K.clamp(c.x + h.dx * sp * dt, 16, 944); c.y = K.clamp(c.y + h.dy * sp * dt, 16, 524); }
       if (SPIKES.some(([x, y]) => Math.hypot(x - c.x, y - c.y) < 26)) { c.dead = 2; K.sfx('pop'); K.burst(c.x, c.y, c.col, 14); }
-      if (Math.hypot(c.x - s.p.x, c.y - s.p.y) < 26) { K.sfx('scare'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'COPIED', text: `You were caught by yourself, ${c.lag.toFixed(1)} s ago.` }); }
+      // a new copy is harmless while it fades in (it appears right where you are)
+      if (s.t > c.born + c.lag && Math.hypot(c.x - s.p.x, c.y - s.p.y) < 26) { K.sfx('scare'); K.shake(12); return K.end(s, { score: s.score, won: null, title: 'COPIED', text: `You were caught by yourself, ${c.lag.toFixed(1)} s ago.` }); }
     }
     if (SPIKES.some(([x, y]) => Math.hypot(x - s.p.x, y - s.p.y) < 24)) { K.sfx('hit'); K.shake(10); return K.end(s, { score: s.score, won: null, title: 'SPIKED', text: `${s.score} gems` }); }
     if (Math.hypot(s.g.x - s.p.x, s.g.y - s.p.y) < 26) {

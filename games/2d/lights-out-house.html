@@ -19,7 +19,9 @@ const inCone = (pl, x, y) => { const d = Math.hypot(x - pl.x, y - pl.y); if (d >
 function sim(s, dt) {
   s.t += dt;
   for (const p of s.pl) {
-    const inp = p.me ? { ...K.pad(p.local || 0), ang: K.local ? null : Math.atan2(K.mouse.y - OY - p.y, K.mouse.x - p.x) } : s.inputs[p.id] || { x: 0, y: 0 };
+    // phones: the torch points where you walk, unless a finger is on the screen aiming it
+    const aim = (pp) => (K.local || (K.isTouch && !K.mouse.down) ? null : Math.atan2(K.mouse.y - OY - pp.y, K.mouse.x - pp.x));
+    const inp = p.me ? { ...K.pad(p.local || 0), ang: aim(p) } : s.inputs[p.id] || { x: 0, y: 0 };
     if (p.down) { const help = s.pl.find((o) => o !== p && !o.down && Math.hypot(o.x - p.x, o.y - p.y) < 36); p.rev = help ? p.rev + dt : 0; if (p.rev > 2) { p.down = false; p.rev = 0; s.fx.push('power'); } continue; }
     const L = Math.hypot(inp.x, inp.y) || 1, sp = 150;
     const nx = p.x + (inp.x / L) * sp * dt * (inp.x || inp.y ? 1 : 0), ny = p.y + (inp.y / L) * sp * dt * (inp.x || inp.y ? 1 : 0);
@@ -62,7 +64,7 @@ K.game({
   onLeave(s, id) { s.pl = s.pl.filter((p) => p.id !== id); if (!s.pl.length) finish(s); },
   update(s, dt) {
     if (!s.drone && !K.attract) s.drone = K.drone(42, 0.035);
-    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { const me = s.pl.find((p) => p.me) || s.pl[0]; K.net.send({ t: 'in', k: { ...K.pad(), ang: Math.atan2(K.mouse.y - OY - me.y, K.mouse.x - me.x) } }); s.sendT = 0.05; } return; }
+    if (!K.isHost()) { s.sendT -= dt; if (s.sendT <= 0) { const me = s.pl.find((p) => p.me) || s.pl[0]; K.net.send({ t: 'in', k: { ...K.pad(), ang: K.isTouch && !K.mouse.down ? null : Math.atan2(K.mouse.y - OY - me.y, K.mouse.x - me.x) } }); s.sendT = 0.05; } return; }
     sim(s, dt);
     const fx = [...new Set(s.fx.splice(0))].filter(Boolean); fx.forEach((f) => K.sfx(f)); if (s.shake) { K.shake(16); s.shake = 0; }
     if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || s.won || s.lost || fx.length) { K.net.send({ t: 'st', p: s.pl.map((p) => [Math.round(p.x), Math.round(p.y), +p.ang.toFixed(2), p.down ? 1 : 0, +p.rev.toFixed(1)]), m: [Math.round(s.mon.x), Math.round(s.mon.y), +s.mon.burn.toFixed(2)], f: s.fuses.map((f) => [f.x, f.y]), g: s.got, w: !!s.won, l: !!s.lost, fx }); s.sendT = 0.05; } }

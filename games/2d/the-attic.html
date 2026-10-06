@@ -18,6 +18,7 @@ K.game({
     if (!s.drone && !K.attract) s.drone = K.drone(52, 0.03);
     const d = K.dir(); s.p.x = K.clamp(s.p.x + d.x * 160 * dt, 30, 930); s.p.y = K.clamp(s.p.y + d.y * 160 * dt, 140, 510);
     s.msgT -= dt;
+    if (s.between > 0) { s.between -= dt; if (s.between <= 0) night(s); return; } // short pause between nights: nothing to open
     s.noiseT -= dt;
     const src = s.boxes[s.src];
     if (s.noiseT <= 0) {
@@ -35,7 +36,7 @@ K.game({
     if (pick === s.src) {
       s.found++; K.sfx('chime'); s.msg = `It was ${K.pick(SOURCES)}. You take it downstairs. Quiet. For now.`; s.msgT = 3.5;
       s.night++; if (s.night >= 5) return K.end(s, { score: s.night, won: true, title: 'THE ATTIC IS QUIET', text: 'Five nights. Five things. You stop going up there.' });
-      setTimeout(() => night(s), 2600);
+      s.between = 2.6;
     } else {
       s.wake += 0.34; K.sfx('creak'); K.shake(4); s.msg = K.pick(['Old clothes. Damp.', 'Christmas lights, tangled.', 'Photos with the faces scratched out.', 'Empty. But warm.', 'A note: "STOP LOOKING".']); s.msgT = 2;
       if (s.wake >= 1) { K.sfx('scare'); K.flash('#200', 0.8); K.shake(22); return K.end(s, { score: s.night, won: false, title: 'IT WOKE UP', text: `You made too much noise. ${s.night} night${s.night === 1 ? '' : 's'} survived.` }); }

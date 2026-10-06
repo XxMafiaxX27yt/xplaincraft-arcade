@@ -1,7 +1,7 @@
 {
-  "name": "XplainCraft's Gaming Arcade",
-  "short_name": "XC Arcade",
-  "description": "NOVEX × XPLAINCRAFT'S GAMING ARCADE - hundreds of 2D games, solo and with friends.",
+  "name": "NOVEX Gaming Arcade",
+  "short_name": "NOVEX",
+  "description": "NOVEX GAMING ARCADE - hundreds of 2D games, solo and with friends.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",

@@ -21,7 +21,7 @@ K.game({
     s.sticks = s.sticks.filter((k) => { if (Math.hypot(k.x - s.p.x, k.y - s.p.y) < 26 && s.carry < 5) { s.carry++; K.sfx('click'); return false; } return true; });
     if (s.sticks.length < 25) s.sticks.push({ x: K.rand(100, WW - 100), y: K.rand(100, WH - 100) });
     const df = Math.hypot(s.p.x - FX, s.p.y - FY);
-    if (df < 50 && s.carry) { s.fire = Math.min(1, s.fire + s.carry * 0.15); s.carry = 0; K.sfx('power'); }
+    if (df < 50 && s.carry) { s.fire = Math.min(1, Math.max(s.fire, 0.05) + s.carry * 0.15); s.carry = 0; K.sfx('power'); }
     s.crackle -= dt; if (s.crackle <= 0 && s.fire > 0.1) { K.noise(0.05, 0.05 * s.fire, 2500); s.crackle = K.rand(0.1, 0.5); }
     const light = 60 + s.fire * 260;
     // eyes gather in the dark and creep toward you when you are outside the firelight
@@ -34,7 +34,9 @@ K.game({
       if (dp < 24) { K.sfx('scare'); K.flash('#000', 1); K.shake(20); return K.end(s, { score: Math.floor(s.t / 40), won: false, title: 'TAKEN', text: `${Math.floor(s.t / 40)} hours before it found you.` }); }
     }
     s.eyes = s.eyes.filter((e) => Math.hypot(e.x - s.p.x, e.y - s.p.y) < 900);
-    if (s.fire <= 0 && df > 60) { K.sfx('scare'); return K.end(s, { score: Math.floor(s.t / 40), won: false, title: 'THE FIRE DIED', text: 'Darkness everywhere.' }); }
+    // a dead fire gives you a few seconds to relight it (no hiding next to cold ashes)
+    s.dark = s.fire <= 0 ? (s.dark || 0) + dt : 0;
+    if (s.dark > 4) { K.sfx('scare'); return K.end(s, { score: Math.floor(s.t / 40), won: false, title: 'THE FIRE DIED', text: 'Darkness everywhere.' }); }
     if (s.t >= NIGHT) { K.sfx('win'); return K.end(s, { score: 6, won: true, title: 'MORNING', text: 'Birds start singing. The eyes are gone.' }); }
   },
   draw(s) {

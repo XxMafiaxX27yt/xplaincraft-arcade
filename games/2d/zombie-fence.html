@@ -16,13 +16,16 @@ K.game({
     const d = K.dir(); s.x = K.clamp(s.x + d.x * 330 * dt, FX + 20, FX + SEC * SW - 20);
     let fix = K.down('Space') ? Math.floor((s.x - FX) / SW) : -1;
     if (K.mouse.down && K.mouse.y > FY - 60 && K.mouse.y < FY + 60) { const i = Math.floor((K.mouse.x - FX) / SW); if (i >= 0 && i < SEC) { s.x = K.lerp(s.x, FX + i * SW + SW / 2, dt * 10); if (Math.abs(s.x - (FX + i * SW + SW / 2)) < 30) fix = i; } }
-    if (fix >= 0 && s.hp[fix] < 1) { s.hp[fix] = Math.min(1, s.hp[fix] + dt * 0.55); if (Math.random() < dt * 8) K.noise(0.04, 0.12, 900); }
+    if (fix >= 0 && s.hp[fix] < 1) { s.hp[fix] = Math.min(1, s.hp[fix] + dt * 1.0); if (Math.random() < dt * 8) K.noise(0.04, 0.12, 900); }
+    // the hammering scares the ones at that section back into the field
+    if (fix >= 0) for (const z of s.z) if (z.y >= FY - 40 && Math.floor((z.x - FX) / SW) === fix) { z.y = 60; z.atk = 0; K.sfx('hit'); }
     s.spawn -= dt;
-    if (s.spawn <= 0) { s.z.push({ x: K.rand(FX + 10, FX + SEC * SW - 10), y: -20, sp: K.rand(18, 34), atk: 0 }); s.spawn = Math.max(0.35, 1.6 - s.night * 0.25 - s.t * 0.01); }
+    if (s.spawn <= 0) { s.z.push({ x: K.rand(FX + 10, FX + SEC * SW - 10), y: -20, sp: K.rand(18, 34), atk: 0 }); s.spawn = Math.max(0.6, 1.8 - s.night * 0.2 - s.t * 0.01); }
     for (const z of s.z) {
       if (z.y < FY - 40) z.y += z.sp * dt;
-      else { const i = Math.floor((z.x - FX) / SW); s.hp[i] -= dt * 0.045; z.atk += dt; if (Math.random() < dt * 0.4) K.sfx('knock'); if (s.hp[i] <= 0) { K.sfx('scare'); K.shake(18); K.flash('#300', 0.6); return K.end(s, { score: s.night, won: false, title: 'THE FENCE FELL', text: `Section ${i + 1} gave way on night ${s.night + 1}.` }); } }
+      else { const i = Math.floor((z.x - FX) / SW); s.hp[i] -= dt * 0.025; z.atk += dt; if (Math.random() < dt * 0.4) K.sfx('knock'); if (s.hp[i] <= 0) { K.sfx('scare'); K.shake(18); K.flash('#300', 0.6); return K.end(s, { score: s.night, won: false, title: 'THE FENCE FELL', text: `Section ${i + 1} gave way on night ${s.night + 1}.` }); } }
     }
+    s.z = s.z.filter((z) => z.atk < 8); // after a while at the fence they give up and wander off
     if (s.t >= 50) { s.night++; K.sfx('win'); if (s.night >= 5) return K.end(s, { score: 5, won: true, title: 'RESCUE ARRIVES', text: 'Five nights. The fence held.' }); night(s); }
   },
   draw(s) {

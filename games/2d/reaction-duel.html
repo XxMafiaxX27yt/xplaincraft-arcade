@@ -20,7 +20,7 @@ function award(s, w) {
   if (champ) s.champ = champ.id;
 }
 K.game({
-  bg: '#140b06', touch: { stick: false, buttons: [] },
+  bg: '#140b06', touch: () => (K.local ? { stick: false, buttons: [['KeyA', 'TAP!']], buttons2: [['KeyL', 'TAP!']] } : { stick: false, buttons: [] }),
   init(s) { s.p = seats().map((p) => ({ ...p, wins: 0 })); s.myId = K.net ? K.net.me : 'p0'; s.champ = null; s.over = false; round(s); },
   onNet(s, d, from) {
     const host = K.net.isHost;
