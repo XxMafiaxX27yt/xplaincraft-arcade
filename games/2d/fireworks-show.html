@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fireworks Show</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"fireworks-show","n":146,"title":"FIREWORKS SHOW","genre":"relax","desc":"The city is dark and the sky is yours. Choose a shell - peony, ring, heart, willow, crackle, star or smiley - pick a colour (or rainbow), and tap the sky where it should burst. Hold to fire a volley, press FINALE for the big ending. Nothing to win: just make the sky beautiful.","controls":"Click / tap the sky to launch · hold for a volley · pick shells and colours at the bottom · FINALE = everything at once","scoreLabel":"FIREWORKS","tasks":[{"stat":"score","target":50,"text":"Launch 50 fireworks"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SHELLS = [['peony', '✺'], ['ring', '◎'], ['heart', '♥'], ['willow', '⸙'], ['crackle', '✷'], ['star', '★'], ['smiley', '☺']];
+const COLS = ['rainbow', '#ff3355', '#ffd93a', '#3dffa0', '#22e6ff', '#c45cff', '#ff9bc8', '#ffffff'];
+const hsl = (h) => `hsl(${h % 360},100%,62%)`;
+function launch(s, tx, ty, shell, col) { s.rockets.push({ x: K.clamp(tx + K.rand(-60, 60), 40, 920), y: 470, tx, ty, shell, col, t: 0 }); K.noise(0.4, 0.03, 1800); s.count++; }
+function burst(s, r) {
+  const n = { peony: 90, ring: 60, heart: 70, willow: 70, crackle: 50, star: 60, smiley: 70 }[r.shell], hue = K.rand(0, 360);
+  const colOf = (i) => (r.col === 'rainbow' ? hsl(hue + (i / n) * 360) : r.col);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2; let vx, vy, sp = K.rand(140, 220);
+    if (r.shell === 'peony' || r.shell === 'crackle' || r.shell === 'willow') { vx = Math.cos(a) * sp * K.rand(0.4, 1); vy = Math.sin(a) * sp * K.rand(0.4, 1); }
+    else if (r.shell === 'ring') { vx = Math.cos(a) * 200; vy = Math.sin(a) * 120; }
+    else if (r.shell === 'heart') { const t = a; vx = 16 * Math.sin(t) ** 3 * 11; vy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 11; }
+    else if (r.shell === 'star') { const rr = i % 2 ? 0.45 : 1, aa = (Math.floor(i / 2) / (n / 2)) * Math.PI * 2 - Math.PI / 2; const k = (i % 12) / 12; vx = Math.cos(aa) * 210 * (rr + (1 - rr) * k); vy = Math.sin(aa) * 210 * (rr + (1 - rr) * k); }
+    else { // smiley: face ring + eyes + mouth
+      if (i < 40) { vx = Math.cos(a * 70 / 40) * 200; vy = Math.sin(a * 70 / 40) * 200; } else if (i < 46) { vx = -60 + K.rand(-8, 8); vy = -60 + K.rand(-8, 8); } else if (i < 52) { vx = 60 + K.rand(-8, 8); vy = -60 + K.rand(-8, 8); } else { const m = ((i - 52) / 18) * Math.PI * 0.8 + Math.PI * 0.1; vx = Math.cos(m) * 110; vy = Math.sin(m) * 110; }
+    }
+    s.parts.push({ x: r.tx, y: r.ty, vx, vy, c: colOf(i), life: r.shell === 'willow' ? 3 : 1.8, max: r.shell === 'willow' ? 3 : 1.8, g: r.shell === 'willow' ? 90 : 40, drag: r.shell === 'willow' ? 0.6 : 0.85, crackle: r.shell === 'crackle' });
+  }
+  s.flash = Math.min(1, s.flash + 0.35); K.noise(0.5, 0.12, 600 + Math.random() * 400); K.shake(2);
+}
+K.game({
+  bg: '#04040e', touch: { stick: false, buttons: [] },
+  init(s) { s.rockets = []; s.parts = []; s.shell = 0; s.col = 0; s.count = 0; s.flash = 0; s.vol = 0; s.fin = 0; s.city = Array.from({ length: 40 }, (_, i) => ({ x: i * 24, h: K.rand(30, 120), w: K.rand(18, 26), lit: Array.from({ length: 8 }, () => Math.random() < 0.3) })); },
+  update(s, dt) {
+    const m = K.mouse;
+    s.flash = Math.max(0, s.flash - dt * 1.5);
+    const inSky = m.y < 440;
+    if (m.clicked) {
+      SHELLS.forEach((_, i) => { if (K.inRect(m.x, m.y, { x: 20 + i * 56, y: 474, w: 50, h: 50 })) { s.shell = i; K.sfx('click'); } });
+      COLS.forEach((_, i) => { if (K.inRect(m.x, m.y, { x: 430 + i * 38, y: 486, w: 32, h: 32 })) { s.col = i; K.sfx('click'); } });
+      if (K.inRect(m.x, m.y, { x: 750, y: 480, w: 100, h: 40 })) { s.fin = 3; K.sfx('power'); }
+      if (K.inRect(m.x, m.y, { x: 858, y: 480, w: 90, h: 40 })) return K.end(s, { score: s.count, won: null, title: 'WHAT A SHOW', text: `${s.count} fireworks lit up the city.` });
+      if (inSky) launch(s, m.x, m.y, SHELLS[s.shell][0], COLS[s.col]);
+    }
+    if (m.down && inSky) { s.vol += dt; if (s.vol > 0.35) { s.vol = 0; launch(s, m.x + K.rand(-80, 80), m.y + K.rand(-50, 50), SHELLS[s.shell][0], COLS[s.col]); } } else s.vol = 0;
+    if (s.fin > 0) { s.fin -= dt; if (Math.random() < dt * 9) launch(s, K.rand(100, 860), K.rand(60, 300), K.pick(SHELLS)[0], K.pick(COLS)); }
+    for (const r of s.rockets) { r.t += dt * 1.4; r.x = K.lerp(r.x, r.tx, dt * 2.2); r.y = K.lerp(470, r.ty, Math.min(1, r.t)); if (Math.random() < 0.8) s.parts.push({ x: r.x, y: r.y, vx: K.rand(-10, 10), vy: K.rand(20, 50), c: '#ffd59a', life: 0.4, max: 0.4, g: 0, drag: 1 }); if (r.t >= 1) { r.done = true; burst(s, r); } }
+    s.rockets = s.rockets.filter((r) => !r.done);
+    for (const p of s.parts) { p.vx *= Math.pow(p.drag, dt * 3); p.vy = p.vy * Math.pow(p.drag, dt * 3) + p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; if (p.crackle && p.life < 0.7 && !p.cr) { p.cr = true; if (Math.random() < 0.5) K.noise(0.03, 0.03, 4000); } }
+    s.parts = s.parts.filter((p) => p.life > 0); if (s.parts.length > 3500) s.parts.splice(0, s.parts.length - 3500);
+  },
+  draw(s) {
+    const c = K.ctx();
+    if (s.flash > 0) { K.alpha(s.flash * 0.25); K.rect(0, 0, 960, 540, '#5a4a8a'); K.alpha(1); }
+    for (let i = 0; i < 60; i++) K.circle((i * 157) % 960, (i * 61) % 300, 1, '#ffffff44');
+    c.globalCompositeOperation = 'lighter';
+    for (const p of s.parts) { const k = p.life / p.max; c.globalAlpha = Math.min(1, k * 1.3) * (p.crackle && p.life < 0.7 ? (Math.random() < 0.5 ? 1 : 0.2) : 1); c.fillStyle = p.c; c.fillRect(p.x - 2, p.y - 2, 4, 4); if (k > 0.45) { c.globalAlpha *= 0.18; c.fillRect(p.x - 5, p.y - 5, 10, 10); } }
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    s.city.forEach((b) => { K.rect(b.x, 460 - b.h, b.w, b.h + 80, '#0a0a16'); b.lit.forEach((l, i) => l && K.rect(b.x + 4 + (i % 2) * 9, 470 - b.h + Math.floor(i / 2) * 14, 4, 6, s.flash > 0.2 ? '#ffe9a0' : '#ffe08a88')); });
+    K.rect(0, 460, 960, 80, '#08081a');
+    SHELLS.forEach(([n, ic], i) => { const on = s.shell === i; K.rect(20 + i * 56, 474, 50, 50, on ? '#ffd93a' : '#1c1838', 10); K.text(ic, 45 + i * 56, 497, 24, on ? '#05040c' : '#fff'); });
+    K.text(SHELLS[s.shell][0].toUpperCase(), 215, 466, 10, '#8e88b8', 'center', 'd');
+    COLS.forEach((col, i) => { const x = 430 + i * 38; if (col === 'rainbow') { const g = c.createLinearGradient(x, 0, x + 32, 0); [0, 60, 120, 200, 280].forEach((h, k) => g.addColorStop(k / 4, hsl(h))); c.fillStyle = g; c.beginPath(); c.roundRect(x, 486, 32, 32, 8); c.fill(); } else K.rect(x, 486, 32, 32, col, 8); if (s.col === i) K.stroke(x - 3, 483, 38, 38, '#fff', 2, 10); });
+    K.button(750, 480, 100, 40, 'FINALE!', { color: '#ff2bd6', size: 12 }); K.button(858, 480, 90, 40, 'DONE', { color: '#8e88b8', size: 11 });
+    if (!s.count && !K.attract) K.text('tap the sky', 480, 220, 22, '#ffffff55', 'center', 'd');
+  },
+  ai(s, dt) { s.aw = (s.aw || 0) + dt; if (s.aw > 0.5) { s.aw = 0; launch(s, K.rand(120, 840), K.rand(80, 280), K.pick(SHELLS)[0], K.pick(COLS)); } },
+});
+</script></body></html>

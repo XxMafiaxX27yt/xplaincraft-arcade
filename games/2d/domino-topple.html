@@ -1,0 +1,94 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Domino Topple</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"domino-topple","n":148,"title":"DOMINO TOPPLE","genre":"relax","desc":"Draw a line of dominoes from the little pusher to the bell, around the walls, with only so many dominoes in the box. Press PUSH and watch them clatter down one after another. If the chain breaks, fix the gap and push again - nothing is lost. Ten rooms, each a little trickier.","controls":"Drag to lay dominoes (start next to the pusher or your last domino) · PUSH to tip the first one · UNDO removes the last ones · RESET stands them back up","scoreLabel":"ROOMS","tasks":[{"stat":"score","target":5,"text":"Ring the bell in 5 rooms"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const SP = 24, TOP = 40, BOT = 470, REACH = SP * 1.45;
+function blocked(s, x, y, pad = 8) { if (x < 20 || x > 940 || y < TOP + 10 || y > BOT - 10) return true; return s.walls.some((w) => x > w.x - pad && x < w.x + w.w + pad && y > w.y - pad && y < w.y + w.h + pad); }
+function pathLen(s) {
+  const C = 20, W = 48, H = 24, dist = new Map(), q = [[Math.floor(s.start.x / C), Math.floor(s.start.y / C)]]; dist.set(q[0].join(), 0);
+  for (let h = 0; h < q.length; h++) { const [x, y] = q[h], d = dist.get(x + ',' + y); if (Math.hypot(x * C - s.bell.x, y * C - s.bell.y) < 30) return d * C; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy, k = nx + ',' + ny; if (nx < 0 || ny < 0 || nx >= W || ny >= H || dist.has(k) || blocked(s, nx * C + C / 2, ny * C + C / 2, 14)) continue; dist.set(k, d + 1); q.push([nx, ny]); } }
+  return -1;
+}
+function room(s) {
+  for (let t = 0; t < 200; t++) {
+    s.start = { x: 50, y: K.rand(TOP + 60, BOT - 60) }; s.bell = { x: 905, y: K.rand(TOP + 60, BOT - 60) }; s.walls = [];
+    for (let i = 0; i < 2 + s.lv; i++) { const v = Math.random() < 0.6, w = { x: K.rand(140, 780), y: K.rand(TOP, BOT - 60), w: v ? 22 : K.rand(90, 220), h: v ? K.rand(110, 260) : 22 }; if (Math.hypot(w.x - s.start.x, w.y - s.start.y) > 110 && Math.hypot(w.x + w.w / 2 - s.bell.x, w.y + w.h / 2 - s.bell.y) > 100) s.walls.push(w); }
+    const L = pathLen(s); if (L < 0) continue;
+    s.box = Math.ceil((L / SP) * 1.35) + 4; break;
+  }
+  s.d = []; s.phase = 'build'; s.rung = 0; s.timer = 0;
+}
+const dirOf = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+K.game({
+  bg: '#1e1a14', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.done = 0; room(s); if (K.attract) demo(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.phase === 'won') { s.timer -= dt; if (s.timer <= 0) { s.lv++; s.done++; if (s.lv >= 10) return K.end(s, { score: s.done, won: true, stats: { won: 1 }, title: 'ALL TEN BELLS', text: 'Clack clack clack… ding.' }); room(s); } return; }
+    if (m.clicked) {
+      if (K.inRect(m.x, m.y, { x: 20, y: 486, w: 120, h: 42 })) return push(s);
+      if (K.inRect(m.x, m.y, { x: 150, y: 486, w: 110, h: 42 })) { stand(s); s.d.splice(Math.max(0, s.d.length - 5)); K.sfx('whoosh'); return; }
+      if (K.inRect(m.x, m.y, { x: 270, y: 486, w: 110, h: 42 })) { stand(s); K.sfx('click'); return; }
+      if (K.inRect(m.x, m.y, { x: 390, y: 486, w: 110, h: 42 })) { s.d = []; s.phase = 'build'; K.sfx('whoosh'); return; }
+      if (K.inRect(m.x, m.y, { x: 840, y: 486, w: 100, h: 42 })) return K.end(s, { score: s.done, won: null, title: 'NICE CHAINS', text: `${s.done} bells rung` });
+    }
+    if (s.phase === 'run') { run(s, dt); return; }
+    // laying dominoes: start next to the pusher or the last domino, then every SP pixels along the drag
+    if (m.down && m.y < BOT) {
+      const last = s.d[s.d.length - 1] || { x: s.start.x + 14, y: s.start.y };
+      const d = Math.hypot(m.x - last.x, m.y - last.y);
+      if (m.clicked) s.laying = d < 60;
+      if (s.laying && d >= SP && s.d.length < s.box) {
+        const a = dirOf(last, m), nx = last.x + Math.cos(a) * SP, ny = last.y + Math.sin(a) * SP;
+        if (!blocked(s, nx, ny, 6) && !s.d.some((o) => Math.hypot(o.x - nx, o.y - ny) < SP * 0.7)) { s.d.push({ x: nx, y: ny, a, fall: 0, down: false }); K.tone(900 + s.d.length * 3, 0.03, 'triangle', 0.03); }
+        else s.laying = false;
+      }
+    } else s.laying = false;
+  },
+  draw(s) {
+    const c = K.ctx();
+    for (let x = 0; x < 960; x += 60) K.rect(x, TOP, 59, BOT - TOP, (x / 60) % 2 ? '#2a241a' : '#272117');
+    s.walls.forEach((w) => { K.rect(w.x, w.y, w.w, w.h, '#4a3f30', 4); K.rect(w.x, w.y, w.w, 5, '#6a5a44', 3); });
+    K.rect(s.start.x - 18, s.start.y - 18, 26, 36, '#22e6ff', 6); K.text('▶', s.start.x - 5, s.start.y + 1, 14, '#05040c');
+    const ring = s.rung > 0 ? Math.sin(K.time() * 30) * 0.3 : 0;
+    c.save(); c.translate(s.bell.x, s.bell.y); c.rotate(ring); K.glow('#ffd93a', s.rung ? 20 : 6); K.poly([[-16, 10], [-12, -14], [0, -20], [12, -14], [16, 10]], '#ffd93a'); K.noGlow(); K.circle(0, 13, 4, '#c9a227'); c.restore();
+    s.d.forEach((o, i) => {
+      c.save(); c.translate(o.x, o.y); c.rotate(o.a);
+      const f = Math.min(1, o.fall); // 0 standing, 1 flat
+      if (f <= 0) { K.rect(-3, -11, 6, 22, '#f2ece0', 2); K.rect(-3, -11, 6, 3, '#d8cfbd'); }
+      else { K.rect(-3, -11, 6 + f * 16, 22, f >= 1 ? '#c9c0ad' : '#e8e0cf', 2); K.circle(4 + f * 6, -4, 1.6, '#333'); K.circle(4 + f * 6, 4, 1.6, '#333'); }
+      c.restore();
+    });
+    K.text(`ROOM ${s.lv + 1} / 10`, 20, 22, 14, '#ffe7b0', 'left', 'd');
+    K.text(`DOMINOES ${s.box - s.d.length} left`, 480, 22, 14, s.box - s.d.length < 3 ? '#ff8a3a' : '#ffe7b0', 'center', 'd');
+    K.button(20, 486, 120, 42, '▶ PUSH', { color: '#3dffa0', size: 14 }); K.button(150, 486, 110, 42, '↶ UNDO 5', { color: '#22e6ff', size: 11 }); K.button(270, 486, 110, 42, 'RESET', { color: '#ffd93a', size: 11 }); K.button(390, 486, 110, 42, 'CLEAR', { color: '#ff3355', size: 11 }); K.button(840, 486, 100, 42, 'DONE', { color: '#8e88b8', size: 11 });
+    if (!s.d.length && s.phase === 'build') K.text('drag from the blue pusher toward the bell', 480, 270, 16, '#ffffff55', 'center', 'u');
+    if (s.phase === 'won') K.text('DING!', 480, 250, 50, '#ffd93a', 'center', 'd', 20);
+    if (s.phase === 'stuck') K.text('THE CHAIN STOPPED - fix the gap and push again', 480, 250, 18, '#ff8a3a', 'center', 'd');
+  },
+  ai(s) {},
+});
+function stand(s) { s.d.forEach((o) => { o.fall = 0; o.down = false; o.hit = false; }); s.phase = 'build'; s.rung = 0; }
+function push(s) {
+  stand(s);
+  const first = s.d[0]; if (!first || Math.hypot(first.x - s.start.x, first.y - s.start.y) > 50) { K.sfx('wrong'); return; }
+  s.phase = 'run'; first.down = true; s.quiet = 0; K.sfx('click');
+}
+function run(s, dt) {
+  let moving = false;
+  for (const o of s.d) {
+    if (!o.down || o.fall >= 1) continue;
+    moving = true; o.fall += dt * 7;
+    if (o.fall >= 0.6 && !o.hit) {
+      o.hit = true; K.tone(1400 + Math.random() * 300, 0.03, 'square', 0.02);
+      const tip = { x: o.x + Math.cos(o.a) * SP * 0.6, y: o.y + Math.sin(o.a) * SP * 0.6 };
+      s.d.forEach((p) => { if (!p.down && Math.hypot(p.x - tip.x, p.y - tip.y) < REACH * 0.75) p.down = true; });
+      if (Math.hypot(s.bell.x - tip.x, s.bell.y - tip.y) < 32) { s.rung = 1; s.phase = 'won'; s.timer = 1.8; K.sfx('chime'); K.tone(1320, 1.2, 'sine', 0.08); }
+    }
+  }
+  if (!moving && s.phase === 'run') { s.phase = 'stuck'; K.sfx('wrong'); }
+}
+function demo(s) { let p = { x: s.start.x + 14, y: s.start.y }; for (let i = 0; i < 22; i++) { const a = Math.sin(i / 4) * 0.5; p = { x: p.x + Math.cos(a) * SP, y: p.y + Math.sin(a) * SP }; if (blocked(s, p.x, p.y, 6)) break; s.d.push({ ...p, a, fall: i < 8 ? 1 : 0, down: i < 8, hit: i < 8 }); } }
+</script></body></html>

@@ -2749,7 +2749,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/pyramid-solitaire.png"
 },
 {
 "id": "tripeaks",
@@ -2775,7 +2776,140 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/tripeaks.png"
+},
+{
+"id": "tile-match",
+"n": 143,
+"title": "TILE MATCH",
+"genre": "relax",
+"desc": "A pile of picture tiles stacked in layers. Tap an uncovered tile to move it into your tray; three of the same in the tray pop away. Seven tiles in the tray with no triple and the round is over, so think a few taps ahead. Every pile can be cleared. Undo and shuffle help when you need them. Ten piles, each bigger than the last.",
+"controls": "Click / tap an uncovered tile · UNDO and SHUFFLE buttons (limited)",
+"scoreLabel": "PILES",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Clear 3 piles in Tile Match"
+}
+],
+"file": "games/2d/tile-match.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/tile-match.png"
+},
+{
+"id": "hex-merge",
+"n": 144,
+"title": "HEX MERGE",
+"genre": "relax",
+"desc": "A honeycomb board and a stream of numbered hex tiles. Place each one on an empty cell; when three or more of the same number touch, they melt together into the next number on the spot you placed, and that can set off a chain. Keep a tile in the HOLD slot for later. The board slowly fills; how high can you climb?",
+"controls": "Click / tap an empty cell to place the tile · click HOLD to swap the tile with the held one",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 500,
+"text": "Score 500 in Hex Merge"
+}
+],
+"file": "games/2d/hex-merge.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/hex-merge.png"
+},
+{
+"id": "koi-pond",
+"n": 145,
+"title": "KOI POND",
+"genre": "relax",
+"desc": "A quiet garden pond. Tap the water to drop food and the koi glide over to eat; every fish you feed slowly grows, and a full-grown koi turns gold and brings a little one into the pond. Ripples, drifting lily pads, falling petals, day turning into night. Nothing to lose. Raise five golden koi when you feel like it.",
+"controls": "Click / tap the water to drop food · hold to sprinkle · drag a lily pad to move it",
+"scoreLabel": "GOLDEN KOI",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Raise a golden koi"
+}
+],
+"file": "games/2d/koi-pond.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/koi-pond.png"
+},
+{
+"id": "fireworks-show",
+"n": 146,
+"title": "FIREWORKS SHOW",
+"genre": "relax",
+"desc": "The city is dark and the sky is yours. Choose a shell - peony, ring, heart, willow, crackle, star or smiley - pick a colour (or rainbow), and tap the sky where it should burst. Hold to fire a volley, press FINALE for the big ending. Nothing to win: just make the sky beautiful.",
+"controls": "Click / tap the sky to launch · hold for a volley · pick shells and colours at the bottom · FINALE = everything at once",
+"scoreLabel": "FIREWORKS",
+"tasks": [
+{
+"stat": "score",
+"target": 50,
+"text": "Launch 50 fireworks"
+}
+],
+"file": "games/2d/fireworks-show.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/fireworks-show.png"
+},
+{
+"id": "music-box",
+"n": 147,
+"title": "MUSIC BOX",
+"genre": "relax",
+"desc": "A little brass music box with a pin roll. Tap the roll to place pins and the comb plays them as the drum turns. Change the tempo, switch between music box, marimba, bells and chiptune, start from Twinkle Twinkle, Ode to Joy or Frere Jacques, or let DREAM write you a melody. Keep three tunes in your slots.",
+"controls": "Click / drag on the roll to add or remove pins · PLAY / STOP · tempo and sound on the right · DREAM = a random melody",
+"scoreLabel": "TUNES",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Save a tune in the Music Box"
+}
+],
+"file": "games/2d/music-box.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/music-box.png"
+},
+{
+"id": "domino-topple",
+"n": 148,
+"title": "DOMINO TOPPLE",
+"genre": "relax",
+"desc": "Draw a line of dominoes from the little pusher to the bell, around the walls, with only so many dominoes in the box. Press PUSH and watch them clatter down one after another. If the chain breaks, fix the gap and push again - nothing is lost. Ten rooms, each a little trickier.",
+"controls": "Drag to lay dominoes (start next to the pusher or your last domino) · PUSH to tip the first one · UNDO removes the last ones · RESET stands them back up",
+"scoreLabel": "ROOMS",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Ring the bell in 5 rooms"
+}
+],
+"file": "games/2d/domino-topple.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/domino-topple.png"
 },
 {
 "id": "gravity-flip",

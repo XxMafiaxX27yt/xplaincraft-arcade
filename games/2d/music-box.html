@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Music Box</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"music-box","n":147,"title":"MUSIC BOX","genre":"relax","desc":"A little brass music box with a pin roll. Tap the roll to place pins and the comb plays them as the drum turns. Change the tempo, switch between music box, marimba, bells and chiptune, start from Twinkle Twinkle, Ode to Joy or Frere Jacques, or let DREAM write you a melody. Keep three tunes in your slots.","controls":"Click / drag on the roll to add or remove pins · PLAY / STOP · tempo and sound on the right · DREAM = a random melody","scoreLabel":"TUNES","tasks":[{"stat":"score","target":1,"text":"Save a tune in the Music Box"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const NOTES = [['G5', 783.99], ['F5', 698.46], ['E5', 659.25], ['D5', 587.33], ['C5', 523.25], ['B4', 493.88], ['A4', 440], ['G4', 392], ['F4', 349.23], ['E4', 329.63], ['D4', 293.66], ['C4', 261.63]];
+const ROWS = NOTES.length, STEPS = 32, GX = 70, GY = 70, CW = 20, CH = 28, KEY = 'novex_musicbox';
+const row = (n) => NOTES.findIndex((x) => x[0] === n);
+const SONGS = {
+  'TWINKLE': 'C4 C4 G4 G4 A4 A4 G4 - F4 F4 E4 E4 D4 D4 C4 -',
+  'ODE TO JOY': 'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4 D4 D4 -',
+  'FRERE JACQUES': 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4 - E4 F4 G4 -',
+};
+const INSTR = [['MUSIC BOX', (f, t) => { K.tone(f, 1.1, 'sine', 0.07, 0, t); K.tone(f * 2, 0.5, 'sine', 0.02, 0, t); }], ['MARIMBA', (f, t) => K.tone(f, 0.45, 'triangle', 0.09, 0, t)], ['BELLS', (f, t) => { K.tone(f, 1.6, 'sine', 0.05, 0, t); K.tone(f * 2.76, 0.6, 'sine', 0.02, 0, t); K.tone(f * 5.4, 0.3, 'sine', 0.01, 0, t); }], ['CHIPTUNE', (f, t) => K.tone(f, 0.16, 'square', 0.035, 0, t)]];
+const empty = () => Array.from({ length: STEPS }, () => Array(ROWS).fill(false));
+function song(name) { const g = empty(); SONGS[name].split(' ').forEach((n, i) => { if (n !== '-') g[i * 2][row(n)] = true; }); return g; }
+function dream() { const g = empty(), penta = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5', 'G5'].map(row); let r = K.pick(penta.slice(2, 6)); for (let i = 0; i < STEPS; i += K.pick([1, 2, 2, 2, 4])) { const k = penta.indexOf(r) + K.pick([-2, -1, -1, 0, 1, 1, 2]); r = penta[K.clamp(k, 0, penta.length - 1)]; g[i][r] = true; if (i % 8 === 0) g[i][row('C4')] = true; } return g; }
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[null,null,null]'); } catch (e) { return [null, null, null]; } };
+K.game({
+  bg: '#1a120a', touch: { stick: false, buttons: [] },
+  init(s) { s.g = song('TWINKLE'); s.play = false; s.bpm = 110; s.step = 0; s.acc = 0; s.ins = 0; s.slots = load(); s.saved = 0; s.paint = null; s.played = 0; if (K.attract) s.play = true; },
+  update(s, dt) {
+    const m = K.mouse, hit = (x, y, w, h) => K.inRect(m.x, m.y, { x, y, w, h });
+    if (s.play) {
+      s.acc += dt; const stepT = 60 / s.bpm / 2;
+      while (s.acc >= stepT) { s.acc -= stepT; s.step = (s.step + 1) % STEPS; if (s.step === 0) s.played++; if (!K.attract) s.g[s.step].forEach((on, r) => on && INSTR[s.ins][1](NOTES[r][1], 0)); }
+    }
+    if (m.clicked) {
+      if (hit(760, 70, 180, 44)) { s.play = !s.play; s.acc = 0; K.sfx('click'); }
+      if (hit(760, 124, 40, 34)) s.bpm = Math.max(60, s.bpm - 10); if (hit(900, 124, 40, 34)) s.bpm = Math.min(220, s.bpm + 10);
+      INSTR.forEach((_, i) => { if (hit(760 + (i % 2) * 92, 176 + Math.floor(i / 2) * 40, 88, 34)) { s.ins = i; INSTR[i][1](523.25, 0); } });
+      Object.keys(SONGS).forEach((n, i) => { if (hit(70 + i * 150, 430, 142, 36)) { s.g = song(n); s.step = 0; K.sfx('select'); } });
+      if (hit(520, 430, 110, 36)) { s.g = dream(); s.step = 0; K.sfx('chime'); }
+      if (hit(636, 430, 90, 36)) { s.g = empty(); K.sfx('whoosh'); }
+      for (let i = 0; i < 3; i++) {
+        if (hit(760, 270 + i * 50, 88, 40)) { s.slots[i] = s.g.map((c) => c.map((v) => (v ? 1 : 0))); try { localStorage.setItem(KEY, JSON.stringify(s.slots)); } catch (e) {} s.saved++; K.sfx('win'); }
+        if (hit(852, 270 + i * 50, 88, 40) && s.slots[i]) { s.g = s.slots[i].map((c) => c.map(Boolean)); s.step = 0; K.sfx('select'); }
+      }
+      if (hit(760, 440, 180, 36)) return K.end(s, { score: s.saved, won: null, title: 'SWEET MUSIC', text: `${s.played} times round the roll · ${s.saved} tune${s.saved === 1 ? '' : 's'} saved` });
+    }
+    // pins
+    const c = Math.floor((m.x - GX) / CW), r = Math.floor((m.y - GY) / CH);
+    if (c >= 0 && r >= 0 && c < STEPS && r < ROWS) {
+      if (m.clicked) { s.paint = !s.g[c][r]; }
+      if (m.down && s.paint != null && s.g[c][r] !== s.paint) { s.g[c][r] = s.paint; if (s.paint) INSTR[s.ins][1](NOTES[r][1], 0); }
+    }
+    if (!m.down) s.paint = null;
+  },
+  draw(s) {
+    const c = K.ctx();
+    K.rect(GX - 20, GY - 30, STEPS * CW + 40, ROWS * CH + 60, '#5a3a1a', 16); K.rect(GX - 12, GY - 22, STEPS * CW + 24, ROWS * CH + 44, '#3a2410', 12);
+    // the drum
+    const g = c.createLinearGradient(0, GY, 0, GY + ROWS * CH); g.addColorStop(0, '#6a6a72'); g.addColorStop(0.5, '#d8d8e0'); g.addColorStop(1, '#6a6a72'); c.fillStyle = g; c.fillRect(GX, GY, STEPS * CW, ROWS * CH);
+    for (let i = 0; i <= STEPS; i++) K.line(GX + i * CW, GY, GX + i * CW, GY + ROWS * CH, i % 8 === 0 ? '#00000055' : '#00000018', 1);
+    for (let r = 0; r <= ROWS; r++) K.line(GX, GY + r * CH, GX + STEPS * CW, GY + r * CH, '#00000012', 1);
+    NOTES.forEach(([n], r) => K.text(n, GX - 6, GY + r * CH + CH / 2 + 1, 10, '#e8d0a0', 'right', 'm'));
+    if (s.play || s.step) { K.alpha(0.25); K.rect(GX + s.step * CW, GY, CW, ROWS * CH, '#ffd93a'); K.alpha(1); }
+    s.g.forEach((col, i) => col.forEach((on, r) => { if (on) { const now = s.play && i === s.step; K.glow('#ffd93a', now ? 14 : 0); K.circle(GX + i * CW + CW / 2, GY + r * CH + CH / 2, now ? 7 : 5.5, now ? '#fff3b0' : '#c9a227'); K.noGlow(); } }));
+    // comb
+    for (let r = 0; r < ROWS; r++) K.rect(GX + STEPS * CW + 8, GY + r * CH + 6, 28 - r, CH - 12, '#c9c9d0', 3);
+    K.text('MUSIC BOX', GX, 36, 18, '#ffe7b0', 'left', 'd');
+    K.button(760, 70, 180, 44, s.play ? '■ STOP' : '▶ PLAY', { color: s.play ? '#ff8a3a' : '#3dffa0', size: 15 });
+    K.button(760, 124, 40, 34, '−', { color: '#e8d0a0', size: 16 }); K.text(`${s.bpm} BPM`, 850, 142, 14, '#ffe7b0', 'center', 'd'); K.button(900, 124, 40, 34, '+', { color: '#e8d0a0', size: 16 });
+    INSTR.forEach(([n], i) => { const x = 760 + (i % 2) * 92, y = 176 + Math.floor(i / 2) * 40, on = s.ins === i; K.rect(x, y, 88, 34, on ? '#ffd93a' : '#3a2410', 8); K.text(n, x + 44, y + 18, 9, on ? '#1a120a' : '#ffe7b0', 'center', 'd'); });
+    for (let i = 0; i < 3; i++) { K.button(760, 270 + i * 50, 88, 40, `SAVE ${i + 1}`, { color: '#3dffa0', size: 10 }); K.button(852, 270 + i * 50, 88, 40, s.slots[i] ? `LOAD ${i + 1}` : 'EMPTY', { color: s.slots[i] ? '#22e6ff' : '#5a4a3a', size: 10 }); }
+    Object.keys(SONGS).forEach((n, i) => K.button(70 + i * 150, 430, 142, 36, n, { color: '#e8d0a0', size: 10 }));
+    K.button(520, 430, 110, 36, '✦ DREAM', { color: '#c45cff', size: 11 }); K.button(636, 430, 90, 36, 'CLEAR', { color: '#ff3355', size: 10 });
+    K.button(760, 440, 180, 36, 'FINISH', { color: '#8e88b8', size: 11 });
+  },
+});
+</script></body></html>

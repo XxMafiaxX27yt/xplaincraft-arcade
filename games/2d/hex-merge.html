@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hex Merge</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hex-merge","n":144,"title":"HEX MERGE","genre":"relax","desc":"A honeycomb board and a stream of numbered hex tiles. Place each one on an empty cell; when three or more of the same number touch, they melt together into the next number on the spot you placed, and that can set off a chain. Keep a tile in the HOLD slot for later. The board slowly fills; how high can you climb?","controls":"Click / tap an empty cell to place the tile · click HOLD to swap the tile with the held one","scoreLabel":"POINTS","tasks":[{"stat":"score","target":500,"text":"Score 500 in Hex Merge"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const R = 3, SZ = 40, CX = 430, CY = 280;
+const COL = ['', '#22e6ff', '#3dffa0', '#ffd93a', '#ff8a3a', '#ff3355', '#ff2bd6', '#c45cff', '#4f8bff', '#ffffff', '#ffd93a'];
+const cells = []; for (let q = -R; q <= R; q++) for (let r = Math.max(-R, -q - R); r <= Math.min(R, -q + R); r++) cells.push({ q, r });
+const key = (q, r) => q + ',' + r;
+const pos = (c) => ({ x: CX + SZ * 1.5 * c.q, y: CY + SZ * Math.sqrt(3) * (c.r + c.q / 2) });
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+function newTile(s) { const top = Math.max(1, ...Object.values(s.b)); const r = Math.random(); return r < 0.5 ? 1 : r < 0.8 ? 2 : r < 0.93 ? 3 : Math.min(top, 4); }
+function group(s, q, r, v) {
+  const seen = new Set([key(q, r)]), st = [[q, r]];
+  while (st.length) { const [a, b] = st.pop(); for (const [dq, dr] of NB) { const k = key(a + dq, b + dr); if (!seen.has(k) && s.b[k] === v) { seen.add(k); st.push([a + dq, b + dr]); } } }
+  return [...seen];
+}
+function place(s, c) {
+  const k = key(c.q, c.r); if (s.b[k]) { K.sfx('wrong'); return; }
+  s.b[k] = s.cur; K.sfx('click');
+  let v = s.cur, chain = 0;
+  while (true) {
+    const g = group(s, c.q, c.r, v);
+    if (g.length < 3) break;
+    chain++; g.forEach((x) => { if (x !== k) { delete s.b[x]; const [a, b] = x.split(',').map(Number); const p = pos({ q: a, r: b }); s.fx.push({ x: p.x, y: p.y, c: COL[v], t: 0.5 }); } });
+    v = Math.min(10, v + 1); s.b[k] = v; s.score += v * 10 * g.length * chain;
+    K.tone(300 + v * 60, 0.15, 'triangle', 0.07); if (chain > 1) K.floatText(`CHAIN ×${chain}`, pos(c).x, pos(c).y - 30, '#ffd93a', 18);
+    s.best = Math.max(s.best, v);
+  }
+  s.cur = s.next; s.next = newTile(s);
+  if (cells.every((x) => s.b[key(x.q, x.r)])) { K.sfx('lose'); K.end(s, { score: s.score, won: null, title: 'BOARD FULL', text: `Highest tile: ${s.best}` }); }
+}
+function hex(x, y, sz, col, stroke) { const c = K.ctx(); c.beginPath(); for (let i = 0; i < 6; i++) { const a = (Math.PI / 3) * i; c.lineTo(x + Math.cos(a) * sz, y + Math.sin(a) * sz); } c.closePath(); if (col) { c.fillStyle = col; c.fill(); } if (stroke) { c.strokeStyle = stroke; c.lineWidth = 2; c.stroke(); } }
+K.game({
+  bg: '#120f22', touch: { stick: false, buttons: [] },
+  init(s) { s.b = {}; s.score = 0; s.best = 1; s.fx = []; s.cur = 1; s.next = newTile(s); s.hold = null; },
+  update(s, dt) {
+    const m = K.mouse; s.fx.forEach((f) => (f.t -= dt)); s.fx = s.fx.filter((f) => f.t > 0);
+    if (!m.clicked) return;
+    if (K.inRect(m.x, m.y, { x: 790, y: 300, w: 130, h: 110 })) { const h = s.hold; s.hold = s.cur; s.cur = h || s.next; if (!h) s.next = newTile(s); K.sfx('whoosh'); return; }
+    const c = cells.find((x) => { const p = pos(x); return Math.hypot(m.x - p.x, m.y - p.y) < SZ * 0.9; });
+    if (c) place(s, c);
+  },
+  draw(s) {
+    const m = K.mouse;
+    cells.forEach((c) => {
+      const p = pos(c), v = s.b[key(c.q, c.r)];
+      hex(p.x, p.y, SZ - 3, v ? COL[v] : '#1f1a38', v ? null : '#2c2650');
+      if (v) { K.text(String(v), p.x, p.y + 2, 22, v === 9 ? '#111' : '#05040c', 'center', 'd'); }
+      else if (Math.hypot(m.x - p.x, m.y - p.y) < SZ * 0.9 && !K.attract) { K.alpha(0.4); hex(p.x, p.y, SZ - 3, COL[s.cur]); K.alpha(1); }
+    });
+    s.fx.forEach((f) => { K.alpha(f.t * 2); hex(f.x, f.y, SZ * (1.4 - f.t), null, f.c); }); K.alpha(1);
+    K.text('NOW', 855, 60, 12, '#8e88b8', 'center', 'd'); hex(855, 110, 38, COL[s.cur]); K.text(String(s.cur), 855, 112, 24, '#05040c', 'center', 'd');
+    K.text('NEXT', 855, 186, 12, '#8e88b8', 'center', 'd'); hex(855, 226, 26, COL[s.next]); K.text(String(s.next), 855, 228, 16, '#05040c', 'center', 'd');
+    K.rect(790, 300, 130, 110, '#1f1a38', 12); K.stroke(790, 300, 130, 110, '#c45cff', 2, 12); K.text('HOLD', 855, 318, 12, '#c45cff', 'center', 'd');
+    if (s.hold) { hex(855, 362, 26, COL[s.hold]); K.text(String(s.hold), 855, 364, 16, '#05040c', 'center', 'd'); } else K.text('tap to keep', 855, 364, 11, '#5d5a80', 'center', 'm');
+    K.text(`${s.score}`, 60, 40, 26, '#ffd93a', 'left', 'd'); K.text(`HIGHEST ${s.best}`, 60, 70, 13, '#8e88b8', 'left', 'm');
+    K.wrapText('Three or more of the same number touching merge into the next number.', 120, 460, 200, 13, '#8e88b8', 1.3);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 15) return; const empty = cells.filter((c) => !s.b[key(c.q, c.r)]); let best = empty[0], bs = -1; empty.forEach((c) => { const n = NB.filter(([dq, dr]) => s.b[key(c.q + dq, c.r + dr)] === s.cur).length; if (n > bs) { bs = n; best = c; } }); if (best) place(s, best); },
+});
+</script></body></html>

@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Koi Pond</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"koi-pond","n":145,"title":"KOI POND","genre":"relax","desc":"A quiet garden pond. Tap the water to drop food and the koi glide over to eat; every fish you feed slowly grows, and a full-grown koi turns gold and brings a little one into the pond. Ripples, drifting lily pads, falling petals, day turning into night. Nothing to lose. Raise five golden koi when you feel like it.","controls":"Click / tap the water to drop food · hold to sprinkle · drag a lily pad to move it","scoreLabel":"GOLDEN KOI","tasks":[{"stat":"score","target":1,"text":"Raise a golden koi"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PATTERNS = [['#ff6a3a', '#ffffff'], ['#ffffff', '#ff3355'], ['#ff8a3a', '#111111'], ['#f2f2f2', '#ff6a3a'], ['#ffb43a', '#ffffff']];
+function koi(x, y, size) { const p = K.pick(PATTERNS); return { x, y, a: K.rand(0, 6.28), v: 40, size, food: 0, base: p[0], spot: p[1], gold: false, wig: K.rand(0, 6), tx: null }; }
+K.game({
+  bg: '#0e3a3a', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.fish = [koi(300, 260, 0.6), koi(600, 300, 0.7), koi(480, 200, 0.5)]; s.food = []; s.rip = []; s.golden = 0; s.t = 0; s.sprinkle = 0;
+    s.pads = Array.from({ length: 6 }, () => ({ x: K.rand(80, 880), y: K.rand(80, 460), r: K.rand(26, 44), a: K.rand(0, 6), flower: Math.random() < 0.5 }));
+    s.petals = []; s.drag = null;
+  },
+  update(s, dt) {
+    const m = K.mouse; s.t += dt;
+    // drag lily pads
+    if (m.clicked) { const pd = s.pads.find((p) => Math.hypot(m.x - p.x, m.y - p.y) < p.r); if (pd) s.drag = pd; }
+    if (s.drag) { s.drag.x = K.clamp(m.x, 30, 930); s.drag.y = K.clamp(m.y, 30, 510); if (!m.down) s.drag = null; }
+    else if (m.down) { s.sprinkle -= dt; if (s.sprinkle <= 0 || m.clicked) { s.food.push({ x: m.x + K.rand(-8, 8), y: m.y + K.rand(-8, 8), t: 12 }); s.rip.push({ x: m.x, y: m.y, r: 2 }); s.sprinkle = 0.18; K.tone(K.rand(700, 900), 0.06, 'sine', 0.02); } }
+    s.food.forEach((f) => (f.t -= dt)); s.food = s.food.filter((f) => f.t > 0);
+    s.rip.forEach((r) => (r.r += 40 * dt)); s.rip = s.rip.filter((r) => r.r < 70);
+    for (const k of s.fish) {
+      const f = s.food.reduce((b, x) => (!b || Math.hypot(x.x - k.x, x.y - k.y) < Math.hypot(b.x - k.x, b.y - k.y) ? x : b), null);
+      let tx, ty;
+      if (f && Math.hypot(f.x - k.x, f.y - k.y) < 420) { tx = f.x; ty = f.y; k.v = K.lerp(k.v, 95, dt * 2); }
+      else { if (!k.tx || Math.hypot(k.tx - k.x, k.ty - k.y) < 30) { k.tx = K.rand(80, 880); k.ty = K.rand(80, 460); } tx = k.tx; ty = k.ty; k.v = K.lerp(k.v, 38, dt); }
+      const want = Math.atan2(ty - k.y, tx - k.x); let da = want - k.a; da = Math.atan2(Math.sin(da), Math.cos(da)); k.a += K.clamp(da, -2 * dt, 2 * dt);
+      // keep a little distance from each other
+      s.fish.forEach((o) => { if (o !== k) { const d = Math.hypot(o.x - k.x, o.y - k.y); if (d < 40 * k.size + 10) { k.x -= ((o.x - k.x) / (d || 1)) * 20 * dt; k.y -= ((o.y - k.y) / (d || 1)) * 20 * dt; } } });
+      k.x = K.clamp(k.x + Math.cos(k.a) * k.v * dt, 20, 940); k.y = K.clamp(k.y + Math.sin(k.a) * k.v * dt, 20, 520); k.wig += dt * (3 + k.v / 20);
+      if (f && Math.hypot(f.x - k.x, f.y - k.y) < 14 + k.size * 10) {
+        f.t = 0; k.food++; K.tone(300, 0.05, 'sine', 0.03);
+        if (!k.gold) k.size = Math.min(1.3, k.size + 0.025);
+        if (!k.gold && k.size >= 1.3) { k.gold = true; s.golden++; K.sfx('chime'); K.floatText('GOLDEN KOI!', k.x, k.y - 30, '#ffd93a', 20); if (s.fish.length < 14) s.fish.push(koi(k.x, k.y, 0.45)); if (s.golden >= 5 && !s.told) { s.told = true; K.floatText('Five golden koi. The pond is happy.', 480, 60, '#ffd93a', 18); } }
+      }
+    }
+    if (Math.random() < dt * 0.6) s.petals.push({ x: K.rand(0, 960), y: -10, vx: K.rand(10, 30), vy: K.rand(20, 40), a: K.rand(0, 6), t: 14 });
+    s.petals.forEach((p) => { p.x += p.vx * dt + Math.sin(s.t + p.a) * 10 * dt; p.y += p.vy * dt; p.a += dt; p.t -= dt; }); s.petals = s.petals.filter((p) => p.t > 0 && p.y < 560);
+    s.pads.forEach((p) => { if (p !== s.drag) { p.x += Math.sin(s.t * 0.2 + p.a) * 3 * dt; p.y += Math.cos(s.t * 0.17 + p.a) * 3 * dt; } });
+    if (K.mouse.clicked && K.inRect(m.x, m.y, { x: 840, y: 490, w: 100, h: 36 })) return K.end(s, { score: s.golden, won: s.golden >= 5 ? true : null, title: 'A CALM POND', text: `${s.fish.length} koi · ${s.golden} golden` });
+  },
+  draw(s) {
+    const night = (Math.sin(s.t / 60) + 1) / 2, c = K.ctx();
+    c.fillStyle = K.rgrad(480, 270, 600, [night > 0.6 ? '#0c2440' : '#1a5a5a', night > 0.6 ? '#071528' : '#0e3a3a']); c.fillRect(0, 0, 960, 540);
+    for (let i = 0; i < 14; i++) K.circle((i * 173) % 960, (i * 97) % 540, 30 + (i % 4) * 14, '#ffffff05');
+    s.food.forEach((f) => K.circle(f.x, f.y, 3, '#c8a060'));
+    s.fish.forEach((k) => {
+      c.save(); c.translate(k.x, k.y); c.rotate(k.a); const L = 64 * k.size, W = 22 * k.size, w = Math.sin(k.wig) * 0.35;
+      K.alpha(0.25); c.fillStyle = '#000'; c.beginPath(); c.ellipse(4, 6, L * 0.6, W * 0.55, 0, 0, 6.28); c.fill(); K.alpha(1);
+      c.fillStyle = k.gold ? '#ffd93a' : k.base; c.beginPath(); c.moveTo(-L * 0.55, 0); c.lineTo(-L * 0.95, -W * 0.7 + w * W); c.lineTo(-L * 0.95, W * 0.7 + w * W); c.closePath(); c.fill();
+      c.beginPath(); c.ellipse(0, 0, L * 0.6, W * 0.55, 0, 0, 6.28); c.fill();
+      if (!k.gold) { c.fillStyle = k.spot; c.beginPath(); c.ellipse(L * 0.1, -W * 0.1, L * 0.18, W * 0.3, 0.4, 0, 6.28); c.fill(); c.beginPath(); c.ellipse(-L * 0.25, W * 0.12, L * 0.12, W * 0.22, -0.3, 0, 6.28); c.fill(); }
+      else { K.glow('#ffd93a', 16); c.beginPath(); c.ellipse(0, 0, L * 0.6, W * 0.55, 0, 0, 6.28); c.fill(); K.noGlow(); }
+      c.fillStyle = '#111'; c.beginPath(); c.arc(L * 0.42, -W * 0.25, 1.6 * k.size + 0.5, 0, 6.28); c.arc(L * 0.42, W * 0.25, 1.6 * k.size + 0.5, 0, 6.28); c.fill();
+      c.restore();
+    });
+    s.rip.forEach((r) => { K.alpha(1 - r.r / 70); K.ring(r.x, r.y, r.r, '#bff6ff', 1.5); }); K.alpha(1);
+    s.pads.forEach((p) => { c.fillStyle = '#2f7a3a'; c.beginPath(); c.moveTo(p.x, p.y); c.arc(p.x, p.y, p.r, p.a + 0.3, p.a + 6.0); c.closePath(); c.fill(); c.strokeStyle = '#3f9a4a'; c.lineWidth = 2; c.stroke(); if (p.flower) { K.circle(p.x + 6, p.y - 4, 7, '#ffb3d0'); K.circle(p.x + 6, p.y - 4, 3, '#ffd93a'); } });
+    s.petals.forEach((p) => { c.save(); c.translate(p.x, p.y); c.rotate(p.a); c.fillStyle = '#ffc9dc'; c.beginPath(); c.ellipse(0, 0, 5, 3, 0, 0, 6.28); c.fill(); c.restore(); });
+    if (night > 0.6) { K.alpha((night - 0.6) * 1.5); for (let i = 0; i < 10; i++) { const x = (i * 211 + s.t * 15) % 960, y = 80 + ((i * 89) % 380) + Math.sin(s.t + i) * 10; K.glow('#d8ff8a', 10); K.circle(x, y, 2, '#e8ffa0'); } K.noGlow(); K.alpha(1); }
+    K.text(`🐟 ${s.fish.length}   ✦ GOLDEN ${s.golden}`, 20, 22, 14, '#e8fff4', 'left', 'd');
+    K.button(840, 490, 100, 36, 'LEAVE', { color: '#8e88b8', size: 11 });
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 40 === 0) { const k = K.pick(s.fish); K.vmouse(k.x + Math.cos(k.a) * 60, k.y + Math.sin(k.a) * 60, true); } },
+});
+</script></body></html>

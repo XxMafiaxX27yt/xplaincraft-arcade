@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tile Match</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tile-match","n":143,"title":"TILE MATCH","genre":"relax","desc":"A pile of picture tiles stacked in layers. Tap an uncovered tile to move it into your tray; three of the same in the tray pop away. Seven tiles in the tray with no triple and the round is over, so think a few taps ahead. Every pile can be cleared. Undo and shuffle help when you need them. Ten piles, each bigger than the last.","controls":"Click / tap an uncovered tile · UNDO and SHUFFLE buttons (limited)","scoreLabel":"PILES","tasks":[{"stat":"score","target":3,"text":"Clear 3 piles in Tile Match"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ICONS = ['🍓', '🍋', '🍇', '🍉', '🥝', '🍑', '🌸', '🍀', '🍄', '🐝', '🐞', '🦋', '🐟', '🐸', '🌙', '⭐', '🔔', '🎈', '🍩', '🧁'];
+const TW = 56, TH = 62, OX = 480, OY = 40, TRAY = 7, TX = 480 - (TRAY * 64) / 2, TY = 452;
+// layout: a few layers of tiles on a half-step grid; higher layers sit on top
+function layout(lv) {
+  const P = [], w = 7, h = 5, layers = Math.min(4, 2 + Math.floor(lv / 3));
+  for (let z = 0; z < layers; z++) {
+    const shrink = z, off = z % 2 ? 0.5 : 0;
+    for (let y = shrink; y < h - shrink + (off ? -1 : 0); y++) for (let x = shrink; x < w - shrink + (off ? -1 : 0); x++) if (Math.random() < 0.82 - z * 0.08) P.push({ x: x + off, y: y + off, z });
+  }
+  return P.slice(0, P.length - (P.length % 3));
+}
+const over = (a, b) => b.z > a.z && Math.abs(b.x - a.x) < 1 && Math.abs(b.y - a.y) < 1;
+const free = (s, a) => !s.t.some((b) => !b.gone && b !== a && over(a, b));
+// give symbols in an order the player can follow: take 3 free tiles at a time, they share a symbol
+function deal(s) {
+  for (let tries = 0; tries < 80; tries++) {
+    const P = layout(s.lv); s.t = P.map((p, i) => ({ ...p, id: i, gone: false, f: null }));
+    const kinds = Math.min(ICONS.length, 6 + s.lv); const pool = K.shuffle(ICONS.slice()).slice(0, kinds);
+    let ok = true, n = 0;
+    while (s.t.some((t) => !t.gone)) {
+      const fr = K.shuffle(s.t.filter((t) => !t.gone && free(s, t)));
+      if (fr.length < 3) { ok = false; break; }
+      const f = pool[n++ % kinds]; for (let k = 0; k < 3; k++) { fr[k].f = f; fr[k].gone = true; }
+    }
+    if (!ok) continue;
+    s.t.forEach((t) => (t.gone = false)); break;
+  }
+  s.tray = []; s.hist = []; s.undo = 2; s.shuf = 1; s.clear = 0;
+}
+const scr = (t) => ({ x: OX - 3.5 * TW + t.x * TW - t.z * 4, y: OY + t.y * TH - t.z * 5 });
+function pick(s, t) {
+  s.hist.push(JSON.stringify({ t: s.t, tray: s.tray })); if (s.hist.length > 30) s.hist.shift();
+  t.gone = true;
+  const at = s.tray.map((x) => x.f).lastIndexOf(t.f); s.tray.splice(at >= 0 ? at + 1 : s.tray.length, 0, { f: t.f, id: t.id, pop: 0 });
+  K.tone(500, 0.06, 'triangle', 0.05);
+  const same = s.tray.filter((x) => x.f === t.f);
+  if (same.length >= 3) { s.tray = s.tray.filter((x) => x.f !== t.f); s.score += 30; K.sfx('coin'); K.burst(480, TY + 30, '#ffd93a', 14); }
+  if (s.t.every((x) => x.gone) && !s.tray.length) { s.piles++; s.clear = 1.8; K.sfx('win'); return; }
+  if (s.tray.length >= TRAY) { K.sfx('lose'); K.shake(10); K.end(s, { score: s.piles, won: s.piles > 0, stats: { won: s.piles > 0 ? 1 : 0 }, title: 'TRAY FULL', text: `${s.piles} pile${s.piles === 1 ? '' : 's'} cleared · ${s.t.filter((x) => !x.gone).length} tiles were left` }); }
+}
+K.game({
+  bg: '#1d2a20', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.piles = 0; s.score = 0; deal(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.clear > 0) { s.clear -= dt; if (s.clear <= 0) { s.lv++; if (s.lv >= 10) return K.end(s, { score: s.piles, won: true, stats: { won: 1 }, title: 'ALL TEN PILES', text: `${s.score} points` }); deal(s); } return; }
+    if (!m.clicked) return;
+    if (K.inRect(m.x, m.y, { x: 30, y: 452, w: 120, h: 44 }) && s.undo > 0 && s.hist.length) { const h = JSON.parse(s.hist.pop()); s.t = h.t; s.tray = h.tray; s.undo--; K.sfx('whoosh'); return; }
+    if (K.inRect(m.x, m.y, { x: 810, y: 452, w: 120, h: 44 }) && s.shuf > 0) { const left = s.t.filter((t) => !t.gone), fs = K.shuffle(left.map((t) => t.f)); left.forEach((t, i) => (t.f = fs[i])); s.shuf--; K.sfx('whoosh'); return; }
+    const hit = s.t.filter((t) => !t.gone).sort((a, b) => b.z - a.z).find((t) => { const p = scr(t); return K.inRect(m.x, m.y, { x: p.x, y: p.y, w: TW - 2, h: TH - 2 }); });
+    if (!hit) return;
+    if (!free(s, hit)) { K.sfx('wrong'); return; }
+    pick(s, hit);
+  },
+  draw(s) {
+    s.t.filter((t) => !t.gone).sort((a, b) => a.z - b.z || a.y - b.y).forEach((t) => {
+      const p = scr(t), f = free(s, t);
+      K.rect(p.x + 3, p.y + 5, TW - 2, TH - 2, '#0b120d', 9);
+      K.rect(p.x, p.y, TW - 2, TH - 2, f ? '#fbf6e6' : '#a9a493', 9); K.rect(p.x, p.y + TH - 10, TW - 2, 8, f ? '#e1d6b4' : '#8c8778', 6);
+      K.alpha(f ? 1 : 0.55); K.text(t.f, p.x + TW / 2 - 1, p.y + TH / 2 - 3, 30, '#fff'); K.alpha(1);
+    });
+    K.rect(TX - 10, TY - 8, TRAY * 64 + 20, 80, '#0f1a12', 14); K.stroke(TX - 10, TY - 8, TRAY * 64 + 20, 80, s.tray.length >= 5 ? '#ff3355' : '#3dffa0', 2, 14);
+    for (let i = 0; i < TRAY; i++) { K.rect(TX + i * 64 + 4, TY + 2, 56, 60, '#1a2a1e', 8); const x = s.tray[i]; if (x) { K.rect(TX + i * 64 + 4, TY + 2, 56, 60, '#fbf6e6', 8); K.text(x.f, TX + i * 64 + 32, TY + 30, 30, '#fff'); } }
+    K.button(30, 452, 120, 44, `↶ UNDO ×${s.undo}`, { color: s.undo ? '#22e6ff' : '#555', size: 11 });
+    K.button(810, 452, 120, 44, `⇄ SHUFFLE ×${s.shuf}`, { color: s.shuf ? '#ffd93a' : '#555', size: 11 });
+    K.text(`PILE ${s.lv + 1} / 10`, 20, 20, 14, '#d8ffe8', 'left', 'd'); K.text(`${s.score}`, 940, 20, 16, '#ffd93a', 'right', 'd');
+    if (s.clear > 0) K.text('PILE CLEARED!', 480, 240, 40, '#3dffa0', 'center', 'd', 18);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 20 || s.clear > 0) return; const fr = s.t.filter((t) => !t.gone && free(s, t)); const want = s.tray.length ? fr.find((t) => t.f === s.tray[0].f) : null; const t = want || fr[0]; if (t) pick(s, t); },
+});
+</script></body></html>
