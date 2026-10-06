@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hostile UI</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"hostile-ui","n":186,"title":"HOSTILE UI","genre":"mystery","desc":"A very old computer that does not want to be used. Eight simple jobs - click OK, unsubscribe, close the pop-ups, set the volume, agree to the terms, sign in, log out - and the buttons, boxes, sliders and menus fight back every step of the way. 30 seconds per job, three tries.","controls":"Mouse / tap for everything · scroll wheel or drag to scroll · type on the sign-in screen (phone: tap to open your keyboard)","scoreLabel":"POINTS","tasks":[{"stat":"score","target":800,"text":"Finish every job in Hostile UI"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const m = K.mouse, hit = (b) => K.inRect(m.x, m.y, b);
+const NAVY = '#0a1a6a', GREY = '#c4c4c4';
+function win(x, y, w, h, title) {
+  K.rect(x + 6, y + 6, w, h, '#0004'); K.rect(x, y, w, h, GREY); K.stroke(x, y, w, h, '#fff', 2); K.line(x + w, y, x + w, y + h, '#555', 2); K.line(x, y + h, x + w, y + h, '#555', 2);
+  K.ctx().fillStyle = K.grad(x, 0, x + w, 0, [NAVY, '#3a6ac8']); K.ctx().fillRect(x + 3, y + 3, w - 6, 22); K.text(title, x + 10, y + 15, 12, '#fff', 'left', 'u');
+  K.rect(x + w - 22, y + 6, 16, 15, GREY); K.text('×', x + w - 14, y + 13, 13, '#222', 'center', 'u');
+}
+function btn(b, label, opt = {}) { const h = hit(b) && !K.isTouch; K.rect(b.x, b.y, b.w, b.h, h ? '#d8d8d8' : GREY); K.stroke(b.x, b.y, b.w, b.h, '#fff', 2); K.line(b.x + b.w, b.y, b.x + b.w, b.y + b.h, '#444', 2); K.line(b.x, b.y + b.h, b.x + b.w, b.y + b.h, '#444', 2); K.text(label, b.x + b.w / 2, b.y + b.h / 2 + 1, opt.size || 14, opt.color || '#111', 'center', 'u'); }
+const awayFrom = (x0, y0, w, h, area, min) => { for (let i = 0; i < 40; i++) { const x = K.rand(area.x, area.x + area.w - w), y = K.rand(area.y, area.y + area.h - h); if (Math.hypot(x + w / 2 - x0, y + h / 2 - y0) > min) return { x, y }; } return { x: area.x, y: area.y }; };
+const ADS = ['YOU ARE VISITOR #1,000,000!', 'Your PC has 99 viruses', 'FREE RAM - download now', 'Hot new screensavers', 'Win a toaster (real)', 'Click here for more pop-ups', 'Your free trial has expired', 'Update available (37 GB)'];
+const TERMS = 'The user agrees to agree. All clicks belong to the computer. The computer may keep your cursor for up to 30 days. Scrolling is a privilege and may be taken back at any time. By reading this sentence you have accepted the next sentence. The next sentence is longer than it looks. You agree not to blame the buttons. Buttons have feelings. The OK button is not ok. Any resemblance to a working computer is coincidental. Refunds are paid in pop-ups. Section 9 replaces section 8 which never existed. You may not use this computer for computing. The scroll bar will try to go back up. That is its right. Keep scrolling. Nearly there. Not quite. Almost. You made it to the end, which means you read it all, which nobody has ever done.'.split('. ');
+const MENU = { root: ['Programs ▸', 'Documents ▸', 'Settings ▸', 'Help', 'Shut down'], 'Programs ▸': ['Paint', 'Calculator', 'Games ▸'], 'Games ▸': ['Solitaire', 'Minesweeper'], 'Documents ▸': ['taxes_FINAL_final.doc', 'homework.txt'], 'Settings ▸': ['Display', 'Sound', 'Account ▸', 'Privacy'], 'Account ▸': ['Profile', 'Password', 'Sign-out options ▸'], 'Sign-out options ▸': ['Log in', 'Log sideways', 'Log out'] };
+const NOPE = { 'Shut down': 'nice try.', Help: 'there is no help.', 'Log in': 'you are already in. that is the problem.', 'Log sideways': 'you logged sideways. nothing happened.' };
+const LV = [
+  { task: 'Click OK to continue.', init(L) { L.b = { x: 430, y: 300, w: 100, h: 34 }; L.dodge = 0; L.cd = 0; },
+    update(L, dt) { if (m.clicked && hit(L.b)) return true; L.cd -= dt; const cx = L.b.x + 50, cy = L.b.y + 17; if (L.dodge < 10 && L.cd <= 0 && Math.hypot(m.x - cx, m.y - cy) < 80) { Object.assign(L.b, awayFrom(m.x, m.y, 100, 34, { x: 260, y: 200, w: 440, h: 170 }, 170)); L.dodge++; L.cd = 0.32; K.sfx('whoosh'); } },
+    draw(L) { win(240, 150, 480, 240, 'System message'); K.text('ⓘ  Click OK to continue.', 270, 190, 15, '#111', 'left', 'u'); btn(L.b, L.dodge >= 10 ? 'ok fine.' : 'OK'); } },
+  { task: 'Uncheck every box to unsubscribe.', init(L) { L.on = Array(9).fill(true); L.n = 0; L.labels = ['Daily news', 'Cat facts', 'Tips & tricks', 'Weekly digest', 'Spam', 'More spam', 'Offers', 'Surveys', 'News about news']; },
+    box: (i) => ({ x: 290 + (i % 3) * 130, y: 200 + Math.floor(i / 3) * 56, w: 124, h: 26 }),
+    update(L) { if (!m.clicked) return; for (let i = 0; i < 9; i++) if (hit(this.box(i))) { const x = i % 3, y = Math.floor(i / 3); [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([a, b]) => { const X = x + a, Y = y + b; if (X >= 0 && X < 3 && Y >= 0 && Y < 3) L.on[Y * 3 + X] = !L.on[Y * 3 + X]; }); L.n++; K.sfx('click'); } return L.on.every((v) => !v); },
+    draw(L) { win(250, 130, 460, 300, 'Email preferences'); K.text('Uncheck everything to stop the emails:', 275, 172, 14, '#111', 'left', 'u'); for (let i = 0; i < 9; i++) { const b = this.box(i); K.rect(b.x, b.y + 3, 20, 20, '#fff'); K.stroke(b.x, b.y + 3, 20, 20, '#555', 2); if (L.on[i]) K.text('✔', b.x + 10, b.y + 13, 16, '#111', 'center', 'u'); K.text(L.labels[i], b.x + 26, b.y + 13, 12, '#111', 'left', 'u'); } if (L.n >= 4) K.text('(unchecking one box re-checks its neighbours. why.)', 480, 400, 12, '#7a1a1a', 'center', 'u'); } },
+  { task: 'Close all the pop-ups.', init(L) { L.p = []; for (let i = 0; i < 3; i++) this.add(L); L.fake = 0; },
+    add(L) { L.p.push({ ...awayFrom(-999, -999, 260, 140, { x: 40, y: 40, w: 880, h: 420 }, 0), txt: K.pick(ADS) }); },
+    update(L) { if (!m.clicked) return; for (let i = L.p.length - 1; i >= 0; i--) { const p = L.p[i]; if (!K.inRect(m.x, m.y, { x: p.x, y: p.y, w: 260, h: 140 })) continue;
+      if (K.inRect(m.x, m.y, { x: p.x + 222, y: p.y + 4, w: 34, h: 26 })) { L.fake++; if (L.p.length < 10) { this.add(L); this.add(L); } K.sfx('wrong'); }
+      else if (K.inRect(m.x, m.y, { x: p.x + 70, y: p.y + 108, w: 120, h: 24 })) { L.p.splice(i, 1); K.sfx('pop'); }
+      else { L.p.splice(i, 1); L.p.push(p); } break; } return !L.p.length; },
+    draw(L) { win(300, 200, 360, 120, 'My Computer'); K.text('so many windows...', 480, 270, 14, '#555', 'center', 'u');
+      L.p.forEach((p) => { K.rect(p.x + 5, p.y + 5, 260, 140, '#0005'); K.rect(p.x, p.y, 260, 140, '#ffe84a'); K.stroke(p.x, p.y, 260, 140, '#c43a2a', 3); K.rect(p.x + 224, p.y + 6, 30, 22, '#e82a2a', 3); K.text('X', p.x + 239, p.y + 18, 16, '#fff', 'center', 'd'); K.wrapText(p.txt, p.x + 112, p.y + 50, 200, 17, '#c42a2a', 1.2, 'center', 'd'); K.text('no thanks', p.x + 130, p.y + 120, 11, '#666', 'center', 'u'); K.line(p.x + 103, p.y + 127, p.x + 157, p.y + 127, '#666', 1); });
+      if (L.fake >= 2) K.text('the X is not your friend', 480, 524, 13, '#ffffffcc', 'center', 'u'); } },
+  { task: 'Set the volume to exactly 50.', init(L) { L.v = 87; L.drag = false; L.msg = ''; },
+    update(L) {
+      if (m.clicked && K.inRect(m.x, m.y, { x: 290, y: 270, w: 380, h: 50 })) { L.drag = true; L.sx = m.x; L.sv = L.v; L.sens = K.pick([0.45, 0.7, 1.6, 2.3]); }
+      if (L.drag && m.down) { const v = K.clamp(Math.round(L.sv - ((m.x - L.sx) / 3.6) * L.sens), 0, 100); if (v !== L.v) K.tone(200 + v * 6, 0.03, 'square', 0.01 + v * 0.0004); L.v = v; } else L.drag = false;
+      if (m.clicked && hit({ x: 430, y: 350, w: 100, h: 34 })) { if (L.v === 50) return true; L.msg = `the volume is ${L.v}. that is not 50.`; K.sfx('wrong'); }
+    },
+    draw(L) { win(250, 170, 460, 240, 'Volume'); K.text('🔈', 290, 230, 22); K.text('🔊', 670, 230, 22); K.text(`${L.v}`, 480, 232, 30, '#111', 'center', 'd');
+      K.rect(300, 292, 360, 6, '#666', 3); const kx = 300 + (L.v / 100) * 360; K.rect(kx - 9, 280, 18, 30, L.drag ? '#e8e8e8' : GREY); K.stroke(kx - 9, 280, 18, 30, '#333', 2);
+      btn({ x: 430, y: 350, w: 100, h: 34 }, 'APPLY'); if (L.msg) K.text(L.msg, 480, 396, 12, '#7a1a1a', 'center', 'u'); } },
+  { task: 'Click the button 10 times.', init(L) { L.n = 0; L.b = { x: 420, y: 250, w: 120, h: 44 }; },
+    update(L) { if (m.clicked && hit(L.b)) { L.n++; K.tone(400 + L.n * 60, 0.06, 'square', 0.03); const sc = Math.pow(0.82, L.n); L.b.w = 120 * sc + 14; L.b.h = 44 * sc + 8; Object.assign(L.b, awayFrom(m.x, m.y, L.b.w, L.b.h, { x: 40, y: 50, w: 880, h: 430 }, 220)); } return L.n >= 10; },
+    draw(L) { K.text(`clicks: ${L.n} / 10`, 480, 30, 16, '#fff', 'center', 'd'); btn(L.b, L.n < 6 ? 'CLICK ME' : 'pls', { size: Math.max(8, 14 * Math.pow(0.85, L.n)) }); } },
+  { task: 'Read and agree to the terms.', init(L) { L.sc = 0; L.read = false; L.chk = false; L.cf = null; L.msg = ''; L.ly = null; L.lines = []; TERMS.forEach((t) => { const w = t.split(' '); let line = ''; w.forEach((x) => { if ((line + ' ' + x).length > 46) { L.lines.push(line); line = x; } else line = line ? line + ' ' + x : x; }); L.lines.push(line + '.'); L.lines.push(''); }); L.max = L.lines.length * 18 - 200; },
+    update(L, dt) {
+      if (L.cf) { const c = L.cf; c.cd -= dt; const yb = { x: c.yes ? 500 : 360, y: 300, w: 100, h: 32 }, nb = { x: c.yes ? 360 : 500, y: 300, w: 100, h: 32 };
+        if (m.clicked && hit(yb)) return true; if (m.clicked && hit(nb)) { L.cf = null; L.chk = false; L.msg = 'fine. read it again.'; return; }
+        if (c.hops < 2 && c.cd <= 0 && Math.hypot(m.x - yb.x - 50, m.y - yb.y - 16) < 70) { c.yes = !c.yes; c.hops++; c.cd = 0.5; K.sfx('whoosh'); } return; }
+      const box = { x: 270, y: 120, w: 420, h: 200 }, bar = { x: 672, y: 120, w: 18, h: 200 };
+      let held = false;
+      if (m.wheel) { L.sc += m.wheel * 64; held = true; }
+      if (m.down && hit(bar)) { L.sc = ((m.y - bar.y) / bar.h) * L.max; held = true; }
+      else if (m.down && hit(box)) { if (L.ly != null) L.sc -= (m.y - L.ly) * 1.6; L.ly = m.y; held = true; } else L.ly = null;
+      if (!held) L.sc -= 70 * dt;
+      L.sc = K.clamp(L.sc, 0, L.max); if (L.sc >= L.max - 6) L.read = true;
+      if (m.clicked && hit({ x: 268, y: 330, w: 260, h: 24 })) { if (L.read) { L.chk = !L.chk; K.sfx('click'); } else { L.msg = 'you have not read them yet'; K.sfx('wrong'); } }
+      if (m.clicked && hit({ x: 590, y: 372, w: 100, h: 32 })) { if (L.chk) { L.cf = { yes: false, hops: 0, cd: 0 }; L.msg = ''; } else { L.msg = 'tick the box first'; K.sfx('wrong'); } }
+    },
+    draw(L) { win(250, 84, 460, 340, 'Terms and Conditions');
+      const c = K.ctx(); K.rect(270, 120, 400, 200, '#fff'); c.save(); c.beginPath(); c.rect(270, 120, 400, 200); c.clip(); L.lines.forEach((t, i) => K.text(t, 278, 132 + i * 18 - L.sc, 12, '#222', 'left', 'u')); c.restore();
+      K.rect(672, 120, 18, 200, '#a8a8a8'); K.rect(672, 120 + (L.sc / L.max) * 170, 18, 30, GREY); K.stroke(672, 120 + (L.sc / L.max) * 170, 18, 30, '#444', 1);
+      K.rect(270, 333, 18, 18, L.read ? '#fff' : '#ddd'); K.stroke(270, 333, 18, 18, '#555', 2); if (L.chk) K.text('✔', 279, 342, 15, '#111', 'center', 'u'); K.text('I have read and agree to the terms', 296, 342, 12, L.read ? '#111' : '#888', 'left', 'u');
+      btn({ x: 590, y: 372, w: 100, h: 32 }, 'AGREE'); if (L.msg) K.text(L.msg, 272, 388, 12, '#7a1a1a', 'left', 'u');
+      if (L.cf) { win(330, 230, 300, 120, 'Confirm'); K.text('Are you sure?', 480, 275, 15, '#111', 'center', 'u'); btn({ x: L.cf.yes ? 500 : 360, y: 300, w: 100, h: 32 }, 'YES'); btn({ x: L.cf.yes ? 360 : 500, y: 300, w: 100, h: 32 }, 'NO'); } } },
+  { task: 'Sign in: type HELLO and press Enter.', init(L) { L.f = ''; L.t = 2.4; L.shk = 0; },
+    update(L, dt) { L.t -= dt; L.shk -= dt; if (L.t <= 0) { L.t = 2.4; if (L.f.length < 12) { const i = K.irand(0, L.f.length); L.f = L.f.slice(0, i) + String.fromCharCode(65 + K.irand(0, 25)) + L.f.slice(i); K.tone(900, 0.04, 'square', 0.02); } }
+      const k = K.keyboard(255, 330, 450, {}, { h: 40 }); if (!k) return; if (k === 'BACK') L.f = L.f.slice(0, -1); else if (k === 'ENTER') { if (L.f === 'HELLO') return true; L.shk = 0.3; K.sfx('wrong'); } else if (L.f.length < 12) { L.f += k; K.sfx('tick'); } },
+    draw(L) { win(280, 140, 400, 170, 'Sign in'); K.text('Username:', 300, 190, 13, '#111', 'left', 'u'); const sx = L.shk > 0 ? Math.sin(K.time() * 70) * 6 : 0;
+      K.rect(300 + sx, 205, 360, 36, '#fff'); K.stroke(300 + sx, 205, 360, 36, '#555', 2); K.text(L.f + (Math.sin(K.time() * 6) > 0 ? '|' : ''), 310 + sx, 224, 20, '#111', 'left', 'd');
+      K.text('autocorrect is ON and cannot be turned off', 480, 290, 11, '#7a1a1a', 'center', 'u'); K.keyboard(255, 330, 450, {}, { h: 40 }); } },
+  { task: 'Log out.', init(L) { L.open = []; L.msg = ''; L.idle = 0; },
+    opn(L, key, x, y) { const items = key === 'root' ? MENU.root.slice() : K.shuffle(MENU[key].slice()); const h = items.length * 26 + 6; L.open.push({ key, items, x, y: K.clamp(y, 40, 496 - h), w: 186, h }); L.idle = 0; },
+    update(L, dt) {
+      if (L.open.length) { L.idle += dt; if (L.idle > 5) { L.open = []; L.msg = 'the menu fell asleep'; } }
+      if (!m.clicked) return;
+      if (hit({ x: 6, y: 504, w: 96, h: 30 })) { if (L.open.length) L.open = []; else { this.opn(L, 'root', 6, 496 - MENU.root.length * 26 - 6); K.sfx('click'); } return; }
+      for (let d = L.open.length - 1; d >= 0; d--) { const o = L.open[d]; if (!hit(o)) continue; const i = Math.floor((m.y - o.y - 3) / 26); const it = o.items[i]; if (!it) return; L.open.length = d + 1;
+        if (it.endsWith('▸')) { this.opn(L, it, o.x + o.w - 4, o.y + 3 + i * 26); K.sfx('click'); return; }
+        if (it === 'Log out') return true; L.open = []; L.msg = NOPE[it] || `${it} opened. that is not logging out.`; K.sfx('wrong'); return; }
+      L.open = [];
+    },
+    draw(L) { K.text('🗑', 60, 70, 34); K.text('Recycle Bin', 60, 106, 11, '#fff', 'center', 'u'); K.text('🖥', 60, 160, 34); K.text('My Computer', 60, 196, 11, '#fff', 'center', 'u');
+      L.open.forEach((o) => { K.rect(o.x, o.y, o.w, o.h, GREY); K.stroke(o.x, o.y, o.w, o.h, '#fff', 2); K.line(o.x + o.w, o.y, o.x + o.w, o.y + o.h, '#444', 2); o.items.forEach((it, i) => { const y = o.y + 3 + i * 26, h = K.inRect(m.x, m.y, { x: o.x, y, w: o.w, h: 26 }); if (h) K.rect(o.x + 3, y, o.w - 6, 26, NAVY); K.text(it, o.x + 14, y + 13, 13, h ? '#fff' : '#111', 'left', 'u'); }); });
+      if (L.msg) K.text(L.msg, 480, 250, 16, '#fff', 'center', 'u'); } },
+];
+function start(s) { s.L = {}; LV[s.lv].init(s.L); s.t = 30; }
+K.game({
+  bg: '#1a7a7a', typing: true, touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.lives = 3; s.score = 0; s.ok = 0; start(s); },
+  update(s, dt) {
+    if (s.ok > 0) { s.ok -= dt; if (s.ok <= 0) { s.lv++; if (s.lv >= LV.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'LOGGED OUT', text: `All ${LV.length} jobs done. ${s.score} points. The computer is sulking.` }); start(s); } return; }
+    if (s.fail > 0) { s.fail -= dt; if (s.fail <= 0) start(s); return; }
+    s.t -= dt;
+    if (LV[s.lv].update(s.L, dt)) { s.score += 100 + Math.ceil(s.t); s.ok = 1.1; K.sfx('win'); return; }
+    if (s.t <= 0) { s.lives--; K.sfx('lose'); K.shake(10); if (s.lives <= 0) return K.end(s, { score: s.score, won: false, title: 'FATAL ERROR', text: `The computer won. ${s.lv} of ${LV.length} jobs done.` }); s.fail = 1.4; }
+  },
+  draw(s) {
+    for (let i = 0; i < 6; i++) K.text(['🗂', '📁', '💾'][i % 3], 900, 60 + i * 70, 26);
+    LV[s.lv].draw(s.L);
+    // taskbar
+    K.rect(0, 500, 960, 40, GREY); K.line(0, 500, 960, 500, '#fff', 2); K.rect(6, 504, 96, 30, s.lv === 7 && s.L.open?.length ? '#a8a8a8' : GREY); K.stroke(6, 504, 96, 30, '#fff', 2); K.text('⊞ Start', 54, 519, 14, '#111', 'center', 'd');
+    K.rect(820, 506, 132, 26, '#b0b0b0'); K.text(`${Math.max(0, Math.ceil(s.t))}s`, 886, 519, 14, s.t < 8 ? '#a01010' : '#111', 'center', 'd');
+    K.text(`JOB ${s.lv + 1}/${LV.length}: ${LV[s.lv].task}`, 120, 519, 13, '#111', 'left', 'u');
+    for (let i = 0; i < 3; i++) K.text(i < s.lives ? '♥' : '♡', 770 + i * 16, 519, 14, '#a01010');
+    if (s.ok > 0) { K.alpha(0.85); K.rect(330, 220, 300, 80, '#0a5a1a'); K.alpha(1); K.text('✔ DONE', 480, 260, 26, '#fff', 'center', 'd'); }
+    if (s.fail > 0) { K.rect(0, 0, 960, 500, '#0a1aa0'); K.text(':(', 120, 140, 80, '#fff', 'left', 'u'); K.text('Your job ran out of time. Try again.', 120, 240, 22, '#fff', 'left', 'u'); }
+  },
+  ai(s, dt) {
+    s.aw = (s.aw || 0) - dt; if (s.aw > 0 || s.ok > 0 || s.fail > 0) return; s.aw = 0.35; const L = s.L;
+    if (s.lv === 0) K.vmouse(L.b.x + 50, L.b.y + 17, L.dodge >= 10);
+    else if (s.lv === 1) { const i = [0, 2, 4, 6, 8].find((j) => !L.done?.[j]); if (i == null) return; (L.done = L.done || {})[i] = 1; const b = LV[1].box(i); K.vmouse(b.x + 10, b.y + 12, true); }
+    else if (s.lv === 2) { const p = L.p[L.p.length - 1]; if (p) K.vmouse(p.x + 130, p.y + 120, true); }
+    else if (s.lv === 4) K.vmouse(L.b.x + L.b.w / 2, L.b.y + L.b.h / 2, true);
+    else K.vmouse(K.rand(200, 760), K.rand(120, 460), false);
+  },
+});
+</script></body></html>

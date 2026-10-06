@@ -1,0 +1,114 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cat Chaos</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"cat-chaos","n":189,"title":"CAT CHAOS","genre":"mystery","desc":"You are a cat. There are things on the shelves. They should be on the floor. Jump up onto the furniture and push or swat everything off the edge - vases, mugs, the fishbowl, the trophy. But when you hear the door, freeze: if your human walks in and catches you moving, that is a spray of water. Three sprays and you are banned to the garden.","controls":"A / D or ← → to walk · W / Space (JUMP) to jump · S / ↓ to drop down · E (SWAT) to swat things off","scoreLabel":"POINTS","tasks":[{"stat":"score","target":600,"text":"Break 600 points of stuff in Cat Chaos"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const FLOOR = 480, GRAV = 1700, JUMP = 720;
+const PLAT = [{ x1: 80, x2: 300, y: 410, n: 'sofa' }, { x1: 330, x2: 400, y: 380, n: 'table' }, { x1: 440, x2: 560, y: 380 }, { x1: 440, x2: 560, y: 290 }, { x1: 440, x2: 560, y: 200 },
+  { x1: 610, x2: 760, y: 400, n: 'tv' }, { x1: 640, x2: 790, y: 250 }, { x1: 800, x2: 950, y: 330, n: 'counter' }, { x1: 210, x2: 330, y: 255, n: 'sill' }];
+const KIND = [['🏺', 40], ['🪴', 25], ['🖼️', 20], ['☕', 15], ['📚', 10], ['🏆', 50], ['🕰️', 35], ['🥛', 20], ['🍽️', 30], ['🌵', 20], ['💡', 30], ['🎁', 25], ['📱', 45], ['🧸', 10]];
+function stock(s, n) {
+  for (let k = 0; k < n * 6 && n > 0; k++) {
+    const p = K.pick(PLAT.slice(1)), x = K.rand(p.x1 + 16, p.x2 - 16);
+    if (s.items.some((o) => !o.gone && Math.abs(o.x - x) < 30 && Math.abs(o.y - p.y) < 5)) continue;
+    const [e, v] = K.pick(KIND); s.items.push({ e, v, x, y: p.y, vx: 0, vy: 0, top: p.y, gone: false }); n--;
+  }
+  if (!s.items.some((o) => !o.gone && o.e === '🐠')) { const p = PLAT[7]; s.items.push({ e: '🐠', v: 60, x: 900, y: p.y, vx: 0, vy: 0, top: p.y, gone: false, bowl: true }); }
+}
+const surf = (x, y0, y1) => { let best = FLOOR; for (const p of PLAT) if (x > p.x1 && x < p.x2 && p.y >= y0 - 1 && p.y <= y1 && p.y < best) best = p.y; return best; };
+K.game({
+  bg: '#2a2030', touch: { buttons: [['Space', 'JUMP'], ['KeyE', 'SWAT']] },
+  init(s) { s.cat = { x: 160, y: FLOOR, vx: 0, vy: 0, ground: true, face: 1, swat: 0, drop: 0, stun: 0 }; s.items = []; stock(s, 12); s.score = 0; s.time = 120; s.lives = 3; s.own = { st: 'away', t: 9 }; s.combo = 0; s.comboT = 0; s.moved = 0; },
+  update(s, dt) {
+    s.time -= dt; s.comboT -= dt; if (s.comboT <= 0) s.combo = 0;
+    if (s.time <= 0) return K.end(s, { score: s.score, won: s.score >= 600, stats: { won: s.score >= 600 ? 1 : 0 }, title: 'NAP TIME', text: `${s.score} points of things on the floor. Purrfect.` });
+    const c = s.cat, o = s.own, d = K.dir();
+    // you
+    let acted = false;
+    if (c.stun > 0) c.stun -= dt;
+    else {
+      c.vx = d.x * 250; if (d.x) { c.face = d.x; acted = true; }
+      if (K.tap('Space', 'KeyW', 'ArrowUp') && c.ground) { c.vy = -JUMP; c.ground = false; K.tone(500, 0.08, 'sine', 0.03, 300); acted = true; }
+      if (K.tap('KeyS', 'ArrowDown') && c.ground && c.y < FLOOR) { c.drop = 0.18; c.ground = false; acted = true; }
+      if (K.tap('KeyE', 'KeyJ', 'ShiftLeft') && c.swat <= 0) { c.swat = 0.3; acted = true; K.noise(0.08, 0.04, 2500); for (const it of s.items) if (!it.gone && Math.abs(it.y - c.y) < 34 && (it.x - c.x) * c.face > -6 && Math.abs(it.x - c.x) < 54) { it.vx = c.face * K.rand(260, 340); it.vy = -120; } }
+    }
+    c.swat -= dt; c.drop -= dt;
+    const oy = c.y; c.vy += GRAV * dt; c.x = K.clamp(c.x + c.vx * dt, 20, 940); c.y += c.vy * dt;
+    if (c.vy >= 0) { const sy = c.drop > 0 ? FLOOR : surf(c.x, oy, c.y); if (c.y >= sy) { c.y = sy; c.vy = 0; c.ground = true; } else c.ground = false; }
+    else c.ground = false;
+    if (c.ground && c.y < FLOOR && !PLAT.some((p) => p.y === c.y && c.x > p.x1 - 6 && c.x < p.x2 + 6)) c.ground = false;
+    // things: pushed by walking into them, then slide, fall, smash
+    for (const it of s.items) {
+      if (it.gone) continue;
+      if (Math.abs(it.x - c.x) < 26 && Math.abs(it.y - c.y) < 20 && c.vx && Math.sign(it.x - c.x) === Math.sign(c.vx)) it.vx = c.vx * 0.9;
+      const prevY = it.y; it.vy += GRAV * dt; it.x += it.vx * dt; it.y += it.vy * dt; it.vx *= Math.pow(0.08, dt);
+      if (it.x < 14 || it.x > 946) { it.x = K.clamp(it.x, 14, 946); it.vx *= -0.4; }
+      if (it.vy >= 0) { const sy = surf(it.x, prevY, it.y); if (it.y >= sy) {
+        if (sy === FLOOR && it.top < FLOOR - 30) {
+          it.gone = true; s.combo++; s.comboT = 2.5; const pts = it.v * Math.min(4, s.combo); s.score += pts;
+          K.burst(it.x, FLOOR - 10, ['#e8e0d0', '#9ad8ff', '#ffd93a'], 18, 260); K.noise(0.25, 0.12, it.v > 30 ? 3500 : 1600); K.shake(5);
+          K.floatText(`${it.bowl ? 'SPLASH' : 'CRASH'} +${pts}${s.combo > 1 ? ' ×' + Math.min(4, s.combo) : ''}`, it.x, FLOOR - 50, '#ffd93a', 18);
+          if (it.bowl) s.fish = { x: it.x, t: 3 };
+        } else { it.y = sy; it.vy = 0; it.top = sy; }
+      } }
+    }
+    if (s.fish) { s.fish.t -= dt; if (s.fish.t <= 0) s.fish = null; }
+    // your human
+    o.t -= dt;
+    if (o.st === 'away' && o.t <= 0) { o.st = 'warn'; o.t = 2.2; K.sfx('step'); K.tone(140, 0.4, 'square', 0.03); }
+    else if (o.st === 'warn') { if (Math.random() < dt * 6) K.sfx('step'); if (o.t <= 0) { o.st = 'look'; o.t = 2.8; K.sfx('creak'); } }
+    else if (o.st === 'look') {
+      if (acted || Math.abs(c.vy) > 50) { o.st = 'caught'; o.t = 1.6; s.lives--; c.stun = 1.6; K.sfx('splash'); K.flash('#9ad8ff', 0.3); K.shake(8); }
+      else if (o.t <= 0) { o.st = 'away'; o.t = Math.max(6, K.rand(12, 17) - (120 - s.time) * 0.05); K.sfx('knock'); if (s.items.filter((q) => !q.gone).length < 7) stock(s, 5); }
+    } else if (o.st === 'caught' && o.t <= 0) {
+      if (s.lives <= 0) return K.end(s, { score: s.score, won: false, title: 'BANNED TO THE GARDEN', text: `Three sprays. ${s.score} points of chaos before they caught on.` });
+      o.st = 'away'; o.t = K.rand(10, 14); if (s.items.filter((q) => !q.gone).length < 7) stock(s, 5);
+    }
+  },
+  draw(s) {
+    const c = s.cat, o = s.own, ctx = K.ctx();
+    // wallpaper, window, door, floor
+    for (let x = 0; x < 960; x += 48) K.rect(x, 0, 24, FLOOR, '#2e2436');
+    K.rect(225, 110, 100, 140, '#3a5a8a'); K.rect(270, 110, 6, 140, '#4a3a2a'); K.rect(225, 175, 100, 6, '#4a3a2a'); K.circle(300, 140, 12, '#e8e8f0');
+    K.rect(10, 290, 60, 190, '#5a3a24', 4); K.circle(58, 390, 4, '#c8a050');
+    if (o.st === 'look' || o.st === 'caught') { K.rect(10, 290, 60, 190, '#1a1018'); K.rect(18, 300, 46, 180, '#c86a4a', 14); K.circle(41, 290, 22, '#e8b890'); K.circle(34, 288, 4, '#111'); K.circle(48, 288, 4, '#111'); if (o.st === 'caught') { K.text('BAD CAT!', 120, 270, 20, '#fff', 'center', 'd', 8); K.rect(64, 340, 30, 12, '#4a8ac8', 3); } }
+    if (o.st === 'warn') { K.text('👣 someone is coming...', 160, 270, 16, '#ffd93a', 'left', 'd', 8); if (Math.sin(K.time() * 30) > 0) K.circle(58, 390, 5, '#ffe080'); }
+    K.rect(0, FLOOR, 960, 60, '#5a4030'); for (let x = 0; x < 960; x += 80) K.line(x, FLOOR, x, 540, '#4a3424', 2);
+    // furniture
+    K.rect(80, 410, 220, 70, '#8a3a4a', 10); K.rect(70, 350, 30, 130, '#7a2e3c', 8); K.rect(280, 350, 30, 130, '#7a2e3c', 8); K.rect(90, 340, 200, 70, '#9a4a5a', 12);
+    K.rect(330, 380, 70, 10, '#6a4a2e'); K.rect(358, 390, 14, 90, '#5a3a24');
+    K.rect(430, 190, 140, 290, '#4a3020'); [380, 290, 200].forEach((y) => K.rect(436, y, 128, 8, '#6a4a2e')); K.rect(436, 388, 128, 92, '#3a2416');
+    K.rect(610, 400, 150, 80, '#3a3a4a', 4); K.rect(640, 330, 90, 60, '#111', 4); K.rect(646, 336, 78, 48, '#1a2a3a'); K.rect(680, 390, 10, 10, '#222');
+    K.rect(640, 250, 150, 8, '#6a4a2e'); K.rect(800, 330, 160, 150, '#5a5a6a'); K.rect(800, 322, 160, 10, '#8a8a9a');
+    K.rect(210, 250, 120, 6, '#d8d0c0');
+    // things
+    s.items.forEach((it) => { if (it.gone) return; if (it.bowl) { K.alpha(0.5); K.circle(it.x, it.y - 16, 17, '#9ad8ff'); K.alpha(1); K.ring(it.x, it.y - 16, 17, '#c8e8ff', 2); K.text('🐠', it.x + Math.sin(K.time() * 2) * 5, it.y - 15, 16); } else K.text(it.e, it.x, it.y - 13, 26); });
+    if (s.fish) K.text('🐠', s.fish.x + Math.sin(K.time() * 20) * 6, FLOOR - 8 - Math.abs(Math.sin(K.time() * 9)) * 18, 18);
+    // the cat
+    const bob = c.ground && c.vx ? Math.abs(Math.sin(K.time() * 16)) * 2 : 0, f = c.face, y = c.y - bob;
+    ctx.save(); ctx.translate(c.x, y); ctx.scale(f, 1);
+    K.rect(-18, -22, 34, 16, '#e8923a', 8); K.circle(16, -24, 11, '#e8923a'); K.poly([[9, -32], [12, -42], [17, -33]], '#e8923a'); K.poly([[17, -33], [23, -42], [25, -30]], '#e8923a');
+    const tail = Math.sin(K.time() * 4) * 0.4; ctx.strokeStyle = '#e8923a'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-17, -16); ctx.quadraticCurveTo(-32, -26, -28 + tail * 10, -40); ctx.stroke();
+    K.rect(-14, -8, 5, 8, '#d8822a'); K.rect(8, -8, 5, 8, '#d8822a');
+    if (c.swat > 0.1) K.rect(20, -22, 16, 6, '#e8923a', 3);
+    K.circle(19, -26, 2, o.st === 'look' ? '#3dffa0' : '#111'); for (let i = 0; i < 4; i++) K.rect(-15 + i * 8, -20, 3, 12, '#c8722a');
+    ctx.restore();
+    if (c.stun > 0) K.text('💦', c.x, c.y - 52, 20);
+    // HUD
+    K.text(`${s.score}`, 940, 28, 22, '#ffd93a', 'right', 'd'); K.text(`${Math.max(0, Math.ceil(s.time))}s`, 940, 54, 14, '#e8e0f0', 'right', 'd');
+    for (let i = 0; i < 3; i++) K.text(i < s.lives ? '🐾' : '·', 30 + i * 28, 28, 20, '#fff');
+    if (s.combo > 1 && s.comboT > 0) K.text(`COMBO ×${Math.min(4, s.combo)}`, 480, 40, 22, '#ff8a3a', 'center', 'd', 10);
+    if (o.st === 'look') K.text('FREEZE!', 480, 120, 34, '#ff3355', 'center', 'd', 14);
+    if (s.time > 115 && !K.attract) K.text('knock everything off · freeze when your human comes in', 480, 520, 15, '#e8d8c8', 'center', 'u');
+  },
+  ai(s) {
+    ['ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false)); const c = s.cat;
+    if (s.own.st === 'warn' || s.own.st === 'look') return;
+    const it = s.items.filter((q) => !q.gone && q.y < FLOOR).sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.y - c.y) - Math.abs(b.x - c.x) - Math.abs(b.y - c.y))[0]; if (!it) return;
+    if (it.y < c.y - 10) { if (c.ground && Math.abs(it.x - c.x) < 90) K.vtap('Space'); }
+    else if (it.y > c.y + 10 && c.ground) K.vtap('ArrowDown');
+    const dx = it.x - c.x; if (Math.abs(dx) > 30) K.vhold(dx > 0 ? 'ArrowRight' : 'ArrowLeft'); else { if (c.face !== Math.sign(dx || 1)) K.vhold(dx > 0 ? 'ArrowRight' : 'ArrowLeft'); else if (Math.random() < 0.2) K.vtap('KeyE'); }
+  },
+});
+</script></body></html>

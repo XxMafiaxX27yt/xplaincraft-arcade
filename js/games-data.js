@@ -4195,5 +4195,137 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/two-hands.png"
+},
+{
+"id": "goose-chaos",
+"n": 185,
+"title": "GOOSE CHAOS",
+"genre": "mystery",
+"desc": "It is a lovely day in the garden, and you are a horrible goose. Work through today's to-do list: steal his keys, his sandwich, his hat, sink his radio, trip him over his own rake, honk while he reads. He chases you if he sees you with his things - but he cannot follow you into the pond. HONK makes him jump and drop whatever he is holding.",
+"controls": "WASD / arrows / stick to waddle · Space (GRAB) to pick up or drop · E (HONK) to honk · drop things on your nest or in the pond",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 500,
+"text": "Finish a whole to-do list in Goose Chaos"
+}
+],
+"file": "games/2d/goose-chaos.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/goose-chaos.png"
+},
+{
+"id": "hostile-ui",
+"n": 186,
+"title": "HOSTILE UI",
+"genre": "mystery",
+"desc": "A very old computer that does not want to be used. Eight simple jobs - click OK, unsubscribe, close the pop-ups, set the volume, agree to the terms, sign in, log out - and the buttons, boxes, sliders and menus fight back every step of the way. 30 seconds per job, three tries.",
+"controls": "Mouse / tap for everything · scroll wheel or drag to scroll · type on the sign-in screen (phone: tap to open your keyboard)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 800,
+"text": "Finish every job in Hostile UI"
+}
+],
+"file": "games/2d/hostile-ui.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/hostile-ui.png"
+},
+{
+"id": "clone-army",
+"n": 187,
+"title": "CLONE ARMY",
+"genre": "mystery",
+"desc": "Every time you die, your body stays behind, frozen solid - and a fresh clone of you walks out of the start door. Use the bodies: fill spike pits so the next you can walk across, stack them to reach high ledges, leave one lying on a pressure plate to hold a door open. Each level only has so many bodies. Eight levels.",
+"controls": "A / D or ← → to move · W / ↑ / Space to jump · X (CLONE) to drop dead on the spot · R to restart the level",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 800,
+"text": "Solve all 8 levels of Clone Army"
+}
+],
+"file": "games/2d/clone-army.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/clone-army.png"
+},
+{
+"id": "tilt-room",
+"n": 188,
+"title": "TILT ROOM",
+"genre": "mystery",
+"desc": "You cannot move the ball. You can only turn the whole room - and down is always down. Spin the maze so the marble rolls where you want it, all the way to the hole. Gems wait in the dead ends, and later rooms have red walls that send you back to the start. As many rooms as you can in 150 seconds.",
+"controls": "← / → or A / D (or the stick) to turn the room · gravity always pulls down the screen",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 200,
+"text": "Score 200 in Tilt Room"
+}
+],
+"file": "games/2d/tilt-room.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/tilt-room.png"
+},
+{
+"id": "cat-chaos",
+"n": 189,
+"title": "CAT CHAOS",
+"genre": "mystery",
+"desc": "You are a cat. There are things on the shelves. They should be on the floor. Jump up onto the furniture and push or swat everything off the edge - vases, mugs, the fishbowl, the trophy. But when you hear the door, freeze: if your human walks in and catches you moving, that is a spray of water. Three sprays and you are banned to the garden.",
+"controls": "A / D or ← → to walk · W / Space (JUMP) to jump · S / ↓ to drop down · E (SWAT) to swat things off",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 600,
+"text": "Break 600 points of stuff in Cat Chaos"
+}
+],
+"file": "games/2d/cat-chaos.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/cat-chaos.png"
+},
+{
+"id": "walls-move",
+"n": 190,
+"title": "WALLS MOVE",
+"genre": "mystery",
+"desc": "The maze dances. On every beat the RED walls drop into the floor and the BLUE walls shoot up - next beat, the other way round. Find the way to the exit on the rhythm, and never be standing on a coloured tile when its wall comes up. Glowing outlines warn you just before. The beat gets faster every level.",
+"controls": "Arrows / WASD / stick to move one tile (hold to keep moving) · coloured tiles are walls on alternate beats",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 500,
+"text": "Score 500 in Walls Move"
+}
+],
+"file": "games/2d/walls-move.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/walls-move.png"
 }
 ];

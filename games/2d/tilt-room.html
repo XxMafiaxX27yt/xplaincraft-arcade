@@ -1,0 +1,80 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tilt Room</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"tilt-room","n":188,"title":"TILT ROOM","genre":"mystery","desc":"You cannot move the ball. You can only turn the whole room - and down is always down. Spin the maze so the marble rolls where you want it, all the way to the hole. Gems wait in the dead ends, and later rooms have red walls that send you back to the start. As many rooms as you can in 150 seconds.","controls":"← / → or A / D (or the stick) to turn the room · gravity always pulls down the screen","scoreLabel":"POINTS","tasks":[{"stat":"score","target":200,"text":"Score 200 in Tilt Room"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const CX = 480, CY = 274, SIZE = 372, G = 900;
+function maze(s) {
+  const n = Math.min(10, 4 + s.room), W = 2 * n + 1, g = Array.from({ length: W }, () => Array(W).fill(1));
+  const seen = new Set(['0,0']), st = [[0, 0]]; g[1][1] = 0;
+  while (st.length) { const [x, y] = st[st.length - 1], nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [x + a, y + b]).filter(([a, b]) => a >= 0 && b >= 0 && a < n && b < n && !seen.has(a + ',' + b));
+    if (!nb.length) { st.pop(); continue; } const [a, b] = K.pick(nb); seen.add(a + ',' + b); g[2 * b + 1][2 * a + 1] = 0; g[y + b + 1][x + a + 1] = 0; st.push([a, b]); }
+  // farthest cell = the hole; dead ends get gems
+  const dist = { '0,0': 0 }, q = [[0, 0]]; while (q.length) { const [x, y] = q.shift(); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([a, b]) => { const X = x + a, Y = y + b; if (X >= 0 && Y >= 0 && X < n && Y < n && !g[2 * y + 1 + b][2 * x + 1 + a] && dist[X + ',' + Y] == null) { dist[X + ',' + Y] = dist[x + ',' + y] + 1; q.push([X, Y]); } }); }
+  const far = Object.entries(dist).sort((p, r) => r[1] - p[1])[0][0].split(',').map(Number);
+  const ends = Object.keys(dist).map((k) => k.split(',').map(Number)).filter(([x, y]) => (x || y) && !(x === far[0] && y === far[1]) && [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => !g[2 * y + 1 + b][2 * x + 1 + a]).length === 1);
+  s.g = g; s.W = W; s.T = SIZE / W; s.hole = far; s.gems = K.shuffle(ends).slice(0, Math.min(3, ends.length)).map(([x, y]) => ({ x, y }));
+  // red walls: interior wall tiles that are not needed (touching one resets the ball)
+  // (only walls away from the way to the hole, so a room is never unfair)
+  const path = new Set(); let cur = far; while (cur) { path.add(cur + ''); const dc = dist[cur + '']; cur = dc ? [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [cur[0] + a, cur[1] + b]).find(([x, y]) => dist[x + ',' + y] === dc - 1 && !g[cur[1] * 2 + 1 + (y - cur[1])][cur[0] * 2 + 1 + (x - cur[0])]) : null; }
+  const touches = (x, y) => (x % 2 ? [[(x - 1) / 2, y / 2 - 1], [(x - 1) / 2, y / 2]] : [[x / 2 - 1, (y - 1) / 2], [x / 2, (y - 1) / 2]]).some((q) => path.has(q + ''));
+  s.red = new Set(); if (s.room >= 2) { const walls = []; for (let y = 2; y < W - 2; y++) for (let x = 2; x < W - 2; x++) if (g[y][x] && (x + y) % 2 === 1 && !touches(x, y)) walls.push(x + ',' + y); K.shuffle(walls).slice(0, Math.min(10, (s.room - 1) * 2)).forEach((w) => s.red.add(w)); }
+  reset(s); s.flash = 1;
+}
+function reset(s) { s.b = { x: 1.5 * s.T, y: 1.5 * s.T, vx: 0, vy: 0 }; }
+K.game({
+  bg: '#140a1e',
+  init(s) { s.room = 0; s.score = 0; s.time = 150; s.a = 0; s.av = 0; maze(s); },
+  update(s, dt) {
+    s.time -= dt; s.flash = Math.max(0, (s.flash || 0) - dt * 2);
+    if (s.time <= 0) return K.end(s, { score: s.score, won: null, stats: { won: s.room >= 5 ? 1 : 0 }, title: 'TIME', text: `${s.room} rooms solved · ${s.score} points` });
+    const d = K.dir().x; s.av = K.lerp(s.av, d * 2.6, Math.min(1, dt * 10)); s.a += s.av * dt;
+    const T = s.T, b = s.b, r = T * 0.3, gx = Math.sin(s.a) * G, gy = Math.cos(s.a) * G;
+    for (let t = dt; t > 0; t -= 1 / 240) {
+      const h = Math.min(t, 1 / 240);
+      b.vx += gx * h; b.vy += gy * h; const sp = Math.hypot(b.vx, b.vy), cap = T * 14; if (sp > cap) { b.vx *= cap / sp; b.vy *= cap / sp; }
+      b.x += b.vx * h; b.y += b.vy * h;
+      const tx = Math.floor(b.x / T), ty = Math.floor(b.y / T);
+      for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
+        if (!s.g[y]?.[x]) continue;
+        const px = K.clamp(b.x, x * T, x * T + T), py = K.clamp(b.y, y * T, y * T + T), dx = b.x - px, dy = b.y - py, dd = Math.hypot(dx, dy);
+        if (dd < r && dd > 0) {
+          if (s.red.has(x + ',' + y)) { K.sfx('hit'); K.shake(6); K.flash('#ff3355', 0.15); reset(s); return; }
+          const nx = dx / dd, ny = dy / dd; b.x = px + nx * r; b.y = py + ny * r; const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.25 * vn * nx; b.vy -= 1.25 * vn * ny; if (vn < -120) K.tone(220 + Math.random() * 60, 0.03, 'sine', Math.min(0.05, -vn / 8000)); }
+        }
+      }
+    }
+    s.gems = s.gems.filter((q) => { if (Math.hypot((q.x * 2 + 1.5) * T - b.x, (q.y * 2 + 1.5) * T - b.y) < T * 0.7) { s.score += 10; K.sfx('coin'); return false; } return true; });
+    if (Math.hypot((s.hole[0] * 2 + 1.5) * T - b.x, (s.hole[1] * 2 + 1.5) * T - b.y) < T * 0.45) { s.room++; s.score += 50; K.sfx('win'); K.burst(CX, CY, ['#ffd93a', '#c45cff'], 30); maze(s); }
+  },
+  draw(s) {
+    const c = K.ctx(), T = s.T;
+    c.save(); c.translate(CX, CY); c.rotate(s.a); c.translate(-SIZE / 2, -SIZE / 2);
+    K.rect(-10, -10, SIZE + 20, SIZE + 20, '#2a1a3a', 14);
+    for (let y = 0; y < s.W; y++) for (let x = 0; x < s.W; x++) {
+      if (s.g[y][x]) { const red = s.red.has(x + ',' + y); K.rect(x * T, y * T, T + 0.5, T + 0.5, red ? '#c42a4a' : '#5a3a8a'); if (red) { K.glow('#ff3355', 8); K.rect(x * T + 2, y * T + 2, T - 4, T - 4, '#ff3355'); K.noGlow(); } }
+      else K.rect(x * T, y * T, T + 0.5, T + 0.5, (x + y) % 2 ? '#1e1230' : '#22163a');
+    }
+    const hx = (s.hole[0] * 2 + 1.5) * T, hy = (s.hole[1] * 2 + 1.5) * T; K.circle(hx, hy, T * 0.42, '#000'); K.ring(hx, hy, T * 0.42, '#ffd93a', 2);
+    s.gems.forEach((q) => { const x = (q.x * 2 + 1.5) * T, y = (q.y * 2 + 1.5) * T, k = T * 0.22; K.glow('#22e6ff', 10); K.poly([[x, y - k], [x + k, y], [x, y + k], [x - k, y]], '#22e6ff'); K.noGlow(); });
+    const b = s.b; K.glow('#ffffff', 12); K.circle(b.x, b.y, T * 0.3, '#e8e0ff'); K.noGlow(); K.circle(b.x - T * 0.08, b.y - T * 0.08, T * 0.09, '#fff');
+    c.restore();
+    // gravity always points down the screen
+    K.text('↓', 900, 290, 40, '#c45cff44'); K.text('gravity', 900, 330, 11, '#c45cff66', 'center', 'u');
+    K.text(`ROOM ${s.room + 1}`, 30, 30, 18, '#e8e0ff', 'left', 'd'); K.text(`${s.score}`, 30, 56, 16, '#ffd93a', 'left', 'd');
+    K.text(`${Math.max(0, Math.ceil(s.time))}s`, 930, 30, 18, s.time < 15 ? '#ff3355' : '#e8e0ff', 'right', 'd');
+    if (s.room === 0 && s.time > 140 && !K.attract) K.text('turn the room with ← →  ·  roll the ball into the hole', 480, 524, 15, '#c8b8e8', 'center', 'u');
+    if (s.flash > 0) { K.alpha(s.flash * 0.6); K.rect(0, 0, 960, 540, '#c45cff'); K.alpha(1); }
+  },
+  ai(s) {
+    ['ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false));
+    const T = s.T, n = (s.W - 1) / 2, cx = Math.floor(s.b.x / T / 2), cy = Math.floor(s.b.y / T / 2), key = (x, y) => x + ',' + y;
+    const prev = { [key(cx, cy)]: null }, q = [[cx, cy]];
+    while (q.length) { const [x, y] = q.shift(); if (x === s.hole[0] && y === s.hole[1]) break; [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([a, b]) => { const X = x + a, Y = y + b; if (X >= 0 && Y >= 0 && X < n && Y < n && !s.g[2 * y + 1 + b][2 * x + 1 + a] && !(key(X, Y) in prev)) { prev[key(X, Y)] = [x, y]; q.push([X, Y]); } }); }
+    let cur = [s.hole[0], s.hole[1]], nxt = cur; while (prev[key(...cur)] && key(...prev[key(...cur)]) !== key(cx, cy)) cur = prev[key(...cur)]; nxt = cur;
+    const tx = (nxt[0] * 2 + 1.5) * T, ty = (nxt[1] * 2 + 1.5) * T, want = Math.atan2(tx - s.b.x, ty - s.b.y);
+    let diff = Math.atan2(Math.sin(want - s.a), Math.cos(want - s.a)); if (Math.abs(diff) > 0.08) K.vhold(diff > 0 ? 'ArrowRight' : 'ArrowLeft');
+  },
+});
+</script></body></html>

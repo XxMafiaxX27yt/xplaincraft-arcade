@@ -1,0 +1,104 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Walls Move</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"walls-move","n":190,"title":"WALLS MOVE","genre":"mystery","desc":"The maze dances. On every beat the RED walls drop into the floor and the BLUE walls shoot up - next beat, the other way round. Find the way to the exit on the rhythm, and never be standing on a coloured tile when its wall comes up. Glowing outlines warn you just before. The beat gets faster every level.","controls":"Arrows / WASD / stick to move one tile (hold to keep moving) · coloured tiles are walls on alternate beats","scoreLabel":"POINTS","tasks":[{"stat":"score","target":500,"text":"Score 500 in Walls Move"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 19, H = 11, TS = 48, OX = 24, OY = 10;
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// tile: 0 floor, 1 wall, 2 red (up on beat 0), 3 blue (up on beat 1)
+const open = (t, ph) => t === 0 || (t === 2 && ph === 1) || (t === 3 && ph === 0);
+// M = most tiles a player has to cover in one beat (fewer when the beat is fast)
+function solve(g, sx, sy, ph0, ex, ey, M) {
+  const key = (x, y, p) => (y * W + x) * 2 + p, seen = new Map([[key(sx, sy, ph0), null]]), q = [[sx, sy, ph0]];
+  while (q.length) {
+    const [x, y, ph] = q.shift();
+    const dist = new Map([[y * W + x, null]]), iq = [[x, y, 0]];
+    while (iq.length) {
+      const [a, b, n] = iq.shift();
+      if (a === ex && b === ey) { const segs = []; let pc = [a, b]; let path = []; let c = a + b * W; while (c != null) { path.unshift([c % W, Math.floor(c / W)]); c = dist.get(c); } segs.unshift(path); let st = seen.get(key(x, y, ph)); while (st) { segs.unshift(st.path); st = seen.get(key(st.x, st.y, st.ph)); } return segs; }
+      if (n === M) continue;
+      for (const [dx, dy] of D4) { const A = a + dx, B = b + dy; if (A < 0 || B < 0 || A >= W || B >= H || !open(g[B][A], ph) || dist.has(B * W + A)) continue; dist.set(B * W + A, b * W + a); iq.push([A, B, n + 1]); }
+    }
+    for (const c of dist.keys()) { const a = c % W, b = Math.floor(c / W); if (g[b][a] !== 0 || seen.has(key(a, b, 1 - ph))) continue; const path = []; let k = c; while (k != null) { path.unshift([k % W, Math.floor(k / W)]); k = dist.get(k); } seen.set(key(a, b, 1 - ph), { x, y, ph, path }); q.push([a, b, 1 - ph]); }
+  }
+  return null;
+}
+function level(s) {
+  s.P = Math.max(0.55, 0.86 - s.lv * 0.04); s.M = K.clamp(Math.floor((s.P - 0.1) / 0.13), 3, 4);
+  for (let tries = 0; tries < 200; tries++) {
+    const g = Array.from({ length: H }, () => Array(W).fill(1)), cw = (W - 1) / 2, ch = (H - 1) / 2, seen = new Set(['0,0']), st = [[0, 0]]; g[1][1] = 0;
+    while (st.length) { const [x, y] = st[st.length - 1], nb = D4.map(([a, b]) => [x + a, y + b]).filter(([a, b]) => a >= 0 && b >= 0 && a < cw && b < ch && !seen.has(a + ',' + b)); if (!nb.length) { st.pop(); continue; } const [a, b] = K.pick(nb); seen.add(a + ',' + b); g[2 * b + 1][2 * a + 1] = 0; g[y + b + 1][x + a + 1] = 0; st.push([a, b]); }
+    // knock a few holes for loops, then colour some connectors + rooms
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if ((x + y) % 2 === 1 && g[y][x] === 1 && Math.random() < 0.18) g[y][x] = 0;
+    const amount = Math.min(0.5, 0.26 + s.lv * 0.03);
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { if ((x === 1 && y === 1) || (x === W - 2 && y === H - 2)) continue; if (((x + y) % 2 === 1 || (x % 2 && y % 2 && Math.random() < 0.3)) && Math.random() < amount) g[y][x] = Math.random() < 0.5 ? 2 : 3; }
+    const sol = solve(g, 1, 1, 0, W - 2, H - 2, s.M);
+    if (!sol || sol.length < 3 + Math.min(3, s.lv)) continue;
+    // is there a lazy way through that never needs the beat? then it is too easy
+    const flat = g.map((r) => r.map((t) => (t === 0 ? 0 : 1)));
+    if (solve(flat, 1, 1, 0, W - 2, H - 2, 99)) continue;
+    s.g = g; s.sol = sol; break;
+  }
+  s.p = { x: 1, y: 1, fx: 1, fy: 1, mt: 0 }; s.safe = { x: 1, y: 1 };
+  s.notes = []; const floor = []; for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (s.g[y][x] === 0 && (x > 2 || y > 2) && !(x === W - 2 && y === H - 2)) floor.push([x, y]); K.shuffle(floor).slice(0, 5).forEach(([x, y]) => s.notes.push({ x, y }));
+  s.ph = 0; s.bt = 0; s.ai = null;
+}
+K.game({
+  bg: '#0a0614',
+  init(s) { s.lv = 0; s.score = 0; s.lives = 3; s.beats = 0; level(s); },
+  update(s, dt) {
+    if (s.clear > 0) { s.clear -= dt; if (s.clear <= 0) { s.lv++; level(s); } return; }
+    s.bt += dt;
+    const p = s.p;
+    if (s.bt >= s.P) {
+      s.bt -= s.P; s.ph = 1 - s.ph; s.beats++;
+      K.tone(55, 0.14, 'sine', 0.2, -25); if (s.beats % 2) K.noise(0.05, 0.04, 8000); K.tone([110, 147, 131, 165][s.beats % 4] * (s.ph ? 1 : 1.5), s.P * 0.8, 'triangle', 0.03);
+      if (!open(s.g[p.y][p.x], s.ph)) { s.lives--; K.sfx('hit'); K.shake(14); K.flash('#ff3355', 0.25); K.burst(OX + p.x * TS + TS / 2, OY + p.y * TS + TS / 2, s.g[p.y][p.x] === 2 ? '#ff3355' : '#3a8aff', 22);
+        if (s.lives <= 0) return K.end(s, { score: s.score, won: null, stats: { won: s.lv >= 5 ? 1 : 0 }, title: 'SQUASHED', text: `Level ${s.lv + 1}. ${s.score} points. The walls kept dancing without you.` });
+        p.x = s.safe.x; p.y = s.safe.y; p.fx = p.x; p.fy = p.y; }
+      else if (s.g[p.y][p.x] === 0) s.safe = { x: p.x, y: p.y };
+    }
+    // one tile per step, hold to keep going
+    p.mt -= dt; p.fx = K.lerp(p.fx, p.x, Math.min(1, dt * 22)); p.fy = K.lerp(p.fy, p.y, Math.min(1, dt * 22));
+    const d = K.dir(); let mx = 0, my = 0; if (d.x) mx = d.x; else if (d.y) my = d.y;
+    const tx = (K.tap('ArrowRight', 'KeyD') ? 1 : 0) - (K.tap('ArrowLeft', 'KeyA') ? 1 : 0), ty = (K.tap('ArrowDown', 'KeyS') ? 1 : 0) - (K.tap('ArrowUp', 'KeyW') ? 1 : 0), tapNew = !!(tx || ty);
+    if (tapNew) { mx = tx; my = tx ? 0 : ty; }
+    if ((mx || my) && (p.mt <= 0 || tapNew)) { const nx = p.x + mx, ny = p.y + my; if (s.g[ny]?.[nx] != null && open(s.g[ny][nx], s.ph)) { p.x = nx; p.y = ny; p.mt = 0.1; K.tone(880, 0.02, 'square', 0.015); } else p.mt = 0.12; }
+    s.notes = s.notes.filter((n) => { if (n.x === p.x && n.y === p.y) { s.score += 10; K.sfx('coin'); return false; } return true; });
+    if (p.x === W - 2 && p.y === H - 2) { s.score += 100 + s.lives * 10; s.clear = 1.2; K.sfx('win'); }
+  },
+  draw(s) {
+    const warn = s.bt / s.P > 0.6, pulse = 1 - s.bt / s.P;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = s.g[y][x], X = OX + x * TS, Y = OY + y * TS;
+      if (t === 1) { K.rect(X, Y, TS, TS, '#2a1a4a'); K.rect(X + 3, Y + 3, TS - 6, TS - 6, '#3a2668', 4); continue; }
+      K.rect(X, Y, TS, TS, (x + y) % 2 ? '#120a22' : '#160c2a');
+      if (t >= 2) {
+        const col = t === 2 ? '#ff3355' : '#3a8aff', up = !open(t, s.ph), rising = warn && open(t, s.ph) && !open(t, 1 - s.ph);
+        if (up) { K.glow(col, 14); K.rect(X + 3, Y + 3, TS - 6, TS - 6, col, 5); K.noGlow(); K.rect(X + 10, Y + 10, TS - 20, TS - 20, '#ffffff33', 3); }
+        else { K.stroke(X + 6, Y + 6, TS - 12, TS - 12, col + (rising ? 'ff' : '55'), rising ? 3 : 1.5, 5); if (rising) { K.alpha(0.25 + 0.25 * Math.sin(K.time() * 40)); K.rect(X + 6, Y + 6, TS - 12, TS - 12, col, 5); K.alpha(1); } }
+      }
+    }
+    s.notes.forEach((n) => K.text('♪', OX + n.x * TS + TS / 2, OY + n.y * TS + TS / 2 + Math.sin(K.time() * 4 + n.x) * 3, 24, '#ffd93a'));
+    const ex = OX + (W - 2) * TS, ey = OY + (H - 2) * TS; K.glow('#3dffa0', 18); K.rect(ex + 6, ey + 6, TS - 12, TS - 12, '#1a6a4a', 6); K.noGlow(); K.text('EXIT', ex + TS / 2, ey + TS / 2, 10, '#3dffa0', 'center', 'd');
+    const p = s.p, px = OX + p.fx * TS + TS / 2, py = OY + p.fy * TS + TS / 2, sc = 1 + pulse * pulse * 0.18;
+    K.ring(px, py, 16 + (1 - pulse) * 14, '#ffffff' + Math.floor(pulse * 99).toString().padStart(2, '0'), 2);
+    K.glow('#ffd93a', 16); K.circle(px, py, 15 * sc, '#ffd93a'); K.noGlow(); K.circle(px - 5, py - 3, 2.5, '#2a1a10'); K.circle(px + 5, py - 3, 2.5, '#2a1a10');
+    K.text(`LEVEL ${s.lv + 1}`, 34, 22, 13, '#e8e0ff', 'left', 'd'); K.text(`${s.score}`, 480, 22, 14, '#ffd93a', 'center', 'd');
+    for (let i = 0; i < 3; i++) K.text(i < s.lives ? '♥' : '♡', 870 + i * 20, 22, 16, '#ff3355');
+    K.rect(OX, 532, 912 * (s.bt / s.P), 4, s.ph ? '#3a8aff' : '#ff3355');
+    if (s.clear > 0) K.text('CLEAR!', 480, 270, 44, '#3dffa0', 'center', 'd', 18);
+    if (s.lv === 0 && s.beats < 6 && !K.attract) K.text('red and blue walls swap on every beat - get off a coloured tile before its wall comes up', 480, 516, 13, '#e8e0ff', 'center', 'u');
+  },
+  // the bot follows the solver's route, one beat-segment at a time
+  ai(s) {
+    ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].forEach((k) => K.vhold(k, false));
+    if (s.clear > 0) return; const p = s.p;
+    if (!s.ai || s.ai.ph !== s.ph) { const sol = solve(s.g, p.x, p.y, s.ph, W - 2, H - 2, s.M); s.ai = { ph: s.ph, seg: sol ? sol[0] : [], i: 1 }; }
+    const t = s.ai.seg[s.ai.i]; if (!t) return; if (t[0] === p.x && t[1] === p.y) { s.ai.i++; return; }
+    if (p.mt > 0 || s.bt < s.P * 0.05) return;
+    K.vtap(t[0] > p.x ? 'ArrowRight' : t[0] < p.x ? 'ArrowLeft' : t[1] > p.y ? 'ArrowDown' : 'ArrowUp');
+  },
+});
+</script></body></html>

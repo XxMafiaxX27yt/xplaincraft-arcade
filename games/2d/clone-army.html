@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clone Army</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"clone-army","n":187,"title":"CLONE ARMY","genre":"mystery","desc":"Every time you die, your body stays behind, frozen solid - and a fresh clone of you walks out of the start door. Use the bodies: fill spike pits so the next you can walk across, stack them to reach high ledges, leave one lying on a pressure plate to hold a door open. Each level only has so many bodies. Eight levels.","controls":"A / D or ← → to move · W / ↑ / Space to jump · X (CLONE) to drop dead on the spot · R to restart the level","scoreLabel":"POINTS","tasks":[{"stat":"score","target":800,"text":"Solve all 8 levels of Clone Army"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 40, COLS = 24, ROWS = 13, OY = 20, GRAV = 1500, JUMP = 560, RUN = 220, PW = 24, PH = 34;
+// levels are built from a box with a floor; a = plate that opens door A, b opens door B
+const LEVELS = [
+  { name: 'Fill the pit', bodies: 3, hint: 'Spikes. Too wide to jump. But your body would make a fine stepping stone...', build(g) { for (let c = 9; c <= 14; c++) g[12][c] = '^'; }, s: [2, 11], e: [21, 11],
+    sol: [['>', 8], ['j'], ['w'], ['>', 8], ['j'], ['j'], ['>', 21]] },
+  { name: 'Up there', bodies: 3, hint: 'Too high to jump. Press X to drop dead - then stand on yourself.', build(g) { box(g, 18, 8, 22, 11, '#'); }, s: [2, 11], e: [21, 7],
+    sol: [['>', 17], ['x'], ['w'], ['>', 16], ['j'], ['x'], ['w'], ['>', 16], ['j'], ['j'], ['>', 21]] },
+  { name: 'Hold it', bodies: 2, hint: 'The plate opens the door - but only while something is lying on it.', build(g) { g[11][7] = 'a'; box(g, 18, 1, 18, 7, '#'); box(g, 18, 8, 18, 11, 'A'); }, s: [2, 11], e: [21, 11],
+    sol: [['>', 7], ['x'], ['w'], ['>', 6], ['j'], ['>', 21]] },
+  { name: 'Up and over', bodies: 3, hint: 'The plate is up on the shelf.', build(g) { box(g, 9, 9, 11, 11, '#'); g[8][10] = 'a'; box(g, 18, 1, 18, 7, '#'); box(g, 18, 8, 18, 11, 'A'); }, s: [2, 11], e: [21, 11],
+    sol: [['>', 8], ['x'], ['w'], ['>', 7], ['j'], ['j'], ['<', 10], ['x'], ['w'], ['>', 7], ['j'], ['j'], ['j'], ['>', 21]] },
+  { name: 'Low ceiling', bodies: 5, hint: 'No room to jump in here.', build(g) { box(g, 6, 1, 17, 10, '#'); for (let c = 9; c <= 12; c++) g[12][c] = '^'; }, s: [2, 11], e: [21, 11],
+    sol: [['>', 9], ['w'], ['>', 10], ['w'], ['>', 11], ['w'], ['>', 12], ['w'], ['>', 21]] },
+  { name: 'Two doors', bodies: 3, hint: 'Two plates, two doors.', build(g) { for (let c = 5; c <= 7; c++) g[12][c] = '^'; g[11][11] = 'a'; g[11][13] = 'b'; box(g, 17, 1, 17, 6, '#'); box(g, 17, 7, 17, 11, 'A'); box(g, 19, 1, 19, 6, '#'); box(g, 19, 7, 19, 11, 'B'); }, s: [2, 11], e: [21, 11],
+    sol: [['>', 4], ['j'], ['>', 11], ['x'], ['w'], ['>', 4], ['j'], ['>', 10], ['j'], ['<', 13], ['x'], ['w'], ['>', 4], ['j'], ['>', 10], ['j'], ['j'], ['>', 21]] },
+  { name: 'The tower', bodies: 3, hint: 'One step at a time.', build(g) { box(g, 10, 9, 12, 11, '#'); box(g, 13, 6, 22, 11, '#'); }, s: [2, 11], e: [20, 5],
+    sol: [['>', 9], ['x'], ['w'], ['>', 8], ['j'], ['j'], ['>', 12], ['x'], ['w'], ['>', 8], ['j'], ['j'], ['j'], ['j'], ['>', 20]] },
+  { name: 'Everything', bodies: 7, hint: 'You know all the tricks now.', build(g) { for (let c = 5; c <= 9; c++) g[12][c] = '^'; box(g, 13, 9, 14, 11, '#'); g[8][14] = 'a'; box(g, 19, 1, 19, 7, '#'); box(g, 19, 8, 19, 11, 'A'); }, s: [1, 11], e: [21, 11],
+    sol: [['>', 4], ['j'], ['w'], ['>', 4], ['j'], ['j'], ['>', 12], ['x'], ['w'], ['>', 4], ['j'], ['j'], ['j'], ['>', 14], ['x'], ['w'], ['>', 4], ['j'], ['j'], ['j'], ['j'], ['>', 21]] },
+];
+function box(g, c0, r0, c1, r1, ch) { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) g[r][c] = ch; }
+function load(s) {
+  s.jt = 0;
+  const L = LEVELS[s.lv], g = Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => (r === 0 || r === 12 || c === 0 || c === 23 ? '#' : '.')));
+  L.build(g); g[L.e[1]][L.e[0]] = 'E'; s.g = g; s.corpses = []; s.bodies = L.bodies; s.used = 0; s.step = 0; s.stepT = 0; spawn(s); s.hintT = 6;
+}
+function spawn(s) { const L = LEVELS[s.lv]; s.p = { x: L.s[0] * T + T / 2, y: (L.s[1] + 1) * T, vx: 0, vy: 0, ground: false, coyote: 0, buf: 0, face: 1, dead: 0 }; }
+const corpseAt = (s, c, r) => s.corpses.some((q) => q.c === c && q.r === r);
+const pressed = (s, ch) => { for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (s.g[r][c] === ch) { if (corpseAt(s, c, r)) return true; const p = s.p; if (!p.dead && p.x + PW / 2 > c * T + 4 && p.x - PW / 2 < c * T + T - 4 && p.y > r * T + T - 6 && p.y <= r * T + T + 1) return true; } return false; };
+function solid(s, c, r) { if (c < 0 || c >= COLS || r < 0) return true; if (r >= ROWS) return false; const ch = s.g[r][c]; if (ch === '#' || corpseAt(s, c, r)) return true; if (ch === 'A') return !s.openA; if (ch === 'B') return !s.openB; return false; }
+function hits(s, x, y) { const c0 = Math.floor((x - PW / 2) / T), c1 = Math.floor((x + PW / 2 - 0.01) / T), r0 = Math.floor((y - PH) / T), r1 = Math.floor((y - 0.01) / T); for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (solid(s, c, r)) return true; return false; }
+function die(s, c, r) {
+  const p = s.p; if (p.dead) return; p.dead = 0.6; K.sfx('hit'); K.burst(p.x, p.y - 17 + OY, '#22e6ff', 18);
+  if (s.used >= s.bodies) { s.msg = 'no bodies left · R to restart'; s.msgT = 2; return; }
+  if (c == null) { c = Math.floor(p.x / T); r = Math.floor((p.y - PH / 2) / T); }
+  while (r > 0 && (solid(s, c, r) || s.g[r][c] === 'E')) r--;
+  while (r + 1 < ROWS && !solid(s, c, r + 1) && s.g[r + 1][c] !== 'E') r++;
+  s.corpses.push({ c, r, n: ++s.used, t: 0 }); K.tone(140, 0.25, 'sine', 0.06, -60);
+}
+K.game({
+  bg: '#0d1018', touch: { buttons: [['Space', 'JUMP'], ['KeyX', 'CLONE'], ['KeyR', 'RESET']] },
+  init(s) { s.lv = 0; s.score = 0; s.time = 420; s.msgT = 0; load(s); },
+  update(s, dt) {
+    s.time -= dt; s.hintT -= dt; s.msgT -= dt;
+    if (s.time <= 0) return K.end(s, { score: s.score, won: false, title: 'TIME UP', text: `${s.lv} of ${LEVELS.length} levels solved.` });
+    if (s.won > 0) { s.won -= dt; if (s.won <= 0) { s.lv++; if (s.lv >= LEVELS.length) return K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'THE ARMY MARCHES ON', text: `All ${LEVELS.length} levels. ${s.score} points. Somewhere, a lot of statues of you.` }); load(s); } return; }
+    if (K.tap('KeyR')) { load(s); K.sfx('select'); return; }
+    s.openA = pressed(s, 'a'); s.openB = pressed(s, 'b');
+    const p = s.p;
+    if (p.dead) { p.dead -= dt; if (p.dead <= 0) spawn(s); return; }
+    const d = K.dir().x; if (d) p.face = d;
+    if (K.tap('Space', 'KeyW', 'ArrowUp')) p.buf = 0.12;
+    if (K.tap('KeyX', 'KeyK')) return die(s);
+    const held = K.down('Space', 'KeyW', 'ArrowUp');
+    for (let t = dt; t > 0; t -= 1 / 120) {
+      const h = Math.min(t, 1 / 120);
+      p.buf -= h; p.coyote -= h;
+      if (p.buf > 0 && p.coyote > 0) { p.vy = -JUMP; p.buf = 0; p.coyote = 0; K.sfx('jump'); }
+      if (!held && p.vy < -200) p.vy = -200;
+      p.vy = Math.min(900, p.vy + GRAV * h);
+      const nx = p.x + d * RUN * h; if (!hits(s, nx, p.y)) p.x = nx;
+      const ny = p.y + p.vy * h; p.ground = false;
+      if (!hits(s, p.x, ny)) p.y = ny;
+      else { if (p.vy > 0) { p.y = Math.floor(ny / T) * T; p.ground = true; p.coyote = 0.08; } else p.y = Math.ceil((ny - PH) / T) * T + PH; p.vy = 0; }
+      if (p.ground) p.coyote = 0.08;
+    }
+    // spikes, the exit, falling out
+    const c0 = Math.floor((p.x - PW / 2) / T), c1 = Math.floor((p.x + PW / 2 - 0.01) / T), r0 = Math.floor((p.y - PH) / T), r1 = Math.min(ROWS - 1, Math.floor((p.y - 0.01) / T));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      if (s.g[r][c] === '^' && !corpseAt(s, c, r) && p.y > r * T + 18 && p.x + PW / 2 > c * T + 5 && p.x - PW / 2 < c * T + T - 5) { const m = Math.floor(p.x / T); return die(s, s.g[r][m] === '^' && !corpseAt(s, m, r) ? m : c, r); }
+      if (s.g[r][c] === 'E') { const left = s.bodies - s.used; s.score += 100 + left * 15; s.won = 1.2; K.sfx('win'); K.burst(p.x, p.y + OY - 17, '#3dffa0', 30); return; }
+    }
+    if (p.y > ROWS * T + 60) { p.dead = 0.6; K.sfx('lose'); }
+    s.corpses.forEach((q) => (q.t += dt));
+  },
+  draw(s) {
+    const c = K.ctx(); c.save(); c.translate(0, OY);
+    K.alpha(0.5); for (let x = 0; x <= 960; x += T) K.line(x, 0, x, ROWS * T, '#1c2236', 1); for (let y = 0; y <= ROWS * T; y += T) K.line(0, y, 960, y, '#1c2236', 1); K.alpha(1);
+    for (let i = 0; i < 6; i++) { K.rect(80 + i * 150, 60, 6, 300, '#151a2a'); K.circle(83 + i * 150, 60, 8, '#1c2338'); }
+    for (let r = 0; r < ROWS; r++) for (let cc = 0; cc < COLS; cc++) {
+      const ch = s.g[r][cc], x = cc * T, y = r * T;
+      if (ch === '#') { K.rect(x, y, T, T, '#2a3048'); K.rect(x + 2, y + 2, T - 4, T - 4, '#323a58'); if (r > 0 && s.g[r - 1][cc] !== '#') K.rect(x, y, T, 4, '#5a6a9a'); }
+      else if (ch === '^') { for (let i = 0; i < 3; i++) K.poly([[x + 2 + i * 12, y + T], [x + 8 + i * 12, y + 16], [x + 14 + i * 12, y + T]], '#ff3355'); }
+      else if (ch === 'a' || ch === 'b') { const on = ch === 'a' ? s.openA : s.openB; K.rect(x + 4, y + T - (on ? 4 : 8), T - 8, on ? 4 : 8, ch === 'a' ? '#ffd93a' : '#c45cff', 2); }
+      else if (ch === 'A' || ch === 'B') { const on = ch === 'A' ? s.openA : s.openB, col = ch === 'A' ? '#ffd93a' : '#c45cff'; if (on) { K.alpha(0.18); K.rect(x + 4, y, T - 8, T, col); K.alpha(1); } else { K.rect(x + 4, y, T - 8, T, '#1a1a28'); for (let i = 0; i < 3; i++) K.rect(x + 8 + i * 10, y, 4, T, col); } }
+      else if (ch === 'E') { K.glow('#3dffa0', 16); K.rect(x + 6, y + 2, T - 12, T - 2, '#1a6a4a', 6); K.noGlow(); K.circle(x + T - 12, y + 22, 2, '#3dffa0'); K.text('EXIT', x + T / 2, y - 8, 10, '#3dffa0', 'center', 'd'); }
+    }
+    const L = LEVELS[s.lv]; K.rect(L.s[0] * T + 6, L.s[1] * T + 2, T - 12, T - 2, '#22406a', 6); K.stroke(L.s[0] * T + 6, L.s[1] * T + 2, T - 12, T - 2, '#22e6ff', 2, 6);
+    s.corpses.forEach((q) => { const x = q.c * T, y = q.r * T, k = Math.min(1, q.t * 4); K.rect(x + 1, y + 1, T - 2, T - 2, k < 1 ? '#5ac8e8' : '#6a7488', 6); K.rect(x + 5, y + 5, T - 10, 10, '#8a94a8', 3); K.text('×', x + 14, y + 22, 14, '#2a3040'); K.text('×', x + 26, y + 22, 14, '#2a3040'); K.text(q.n, x + T / 2, y + 33, 10, '#2a3040', 'center', 'd'); });
+    const p = s.p;
+    if (!p.dead) { const sq = p.ground ? 0 : Math.min(4, Math.abs(p.vy) / 120); K.glow('#22e6ff', 12); K.rect(p.x - PW / 2 + sq / 2, p.y - PH - sq, PW - sq, PH + sq, '#22e6ff', 7); K.noGlow(); K.rect(p.x - 8 + p.face * 3, p.y - PH + 8, 16, 8, '#0d1018', 3); K.circle(p.x - 3 + p.face * 5, p.y - PH + 12, 2, '#fff'); }
+    c.restore();
+    K.rect(0, 0, 960, 20, '#0d1018'); K.text(`LEVEL ${s.lv + 1}/${LEVELS.length} · ${L.name}`, 10, 11, 12, '#c8d0f0', 'left', 'd');
+    K.text('BODIES', 560, 11, 11, '#8a94b8', 'right', 'd'); for (let i = 0; i < s.bodies; i++) K.rect(568 + i * 16, 4, 12, 13, i < s.bodies - s.used ? '#22e6ff' : '#3a4058', 3);
+    K.text(`${Math.max(0, Math.ceil(s.time))}s · ${s.score}`, 950, 11, 12, '#c8d0f0', 'right', 'd');
+    if (s.hintT > 0 && !K.attract) { K.alpha(Math.min(1, s.hintT)); K.text(L.hint, 480, 70, 16, '#ffd93a', 'center', 'u'); K.alpha(1); }
+    if (s.msgT > 0) K.text(s.msg, 480, 100, 16, '#ff8a8a', 'center', 'u');
+    if (s.won > 0) K.text('SOLVED', 480, 250, 40, '#3dffa0', 'center', 'd', 20);
+  },
+  // the bot plays each level's written solution (this is also how the levels were checked)
+  ai(s, dt) {
+    ['ArrowLeft', 'ArrowRight', 'Space'].forEach((k) => K.vhold(k, false));
+    const L = LEVELS[s.lv], st = L.sol[s.step], p = s.p; if (!st || s.won > 0) return;
+    s.stepT += dt; const next = () => { s.step++; s.stepT = 0; };
+    if (s.stepT > 8) { K.vtap('KeyR'); return; }
+    const x = st[1] * T + T / 2;
+    if (st[0] === '>') { if (p.dead) return next(); if (p.x < x - 3) K.vhold('ArrowRight'); else if (p.ground) next(); }
+    else if (st[0] === '<') { if (p.x > x + 3) K.vhold('ArrowLeft'); else if (p.ground) next(); }
+    else if (st[0] === 'j') { if (!s.jt) { if (p.ground) { K.vtap('Space'); K.vhold('Space'); s.jt = 1; s.stepT = 0; } return; } K.vhold('Space', s.stepT < 0.4); K.vhold('ArrowRight'); if ((p.ground && s.stepT > 0.15) || p.dead) { s.jt = 0; next(); } }
+    else if (st[0] === 'x') { K.vtap('KeyX'); next(); }
+    else if (st[0] === 'w') { if (!p.dead && s.stepT > 0.1) next(); }
+  },
+});
+if (location.search.includes('levelcheck')) window.LEVELS = LEVELS;
+</script></body></html>
