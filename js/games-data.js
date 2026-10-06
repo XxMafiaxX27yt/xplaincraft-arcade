@@ -2616,6 +2616,168 @@ export const GAME_LIST = [
 "cover": "games/covers/pond-party.png"
 },
 {
+"id": "mandala-draw",
+"n": 136,
+"title": "MANDALA DRAW",
+"genre": "relax",
+"desc": "Draw one line and watch it bloom into a mandala. Everything you draw is copied around the centre 4, 6, 8, 12 or 16 times, mirrored if you like: the rainbow pen, shapes, the paint bucket, any colour from the gradient strips. No timer, no score to chase. Save your favourites to the gallery.",
+"controls": "Draw with the mouse / finger · tools and colours under the canvas · symmetry, mirror and guides on the right · SAVE keeps it in the gallery",
+"scoreLabel": "SAVED",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Save a mandala"
+}
+],
+"file": "games/2d/mandala-draw.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mandala-draw.png"
+},
+{
+"id": "pixel-art",
+"n": 137,
+"title": "PIXEL ART MAKER",
+"genre": "relax",
+"desc": "A calm pixel studio. Pick a 16, 24 or 32 grid and paint square by square: pen, eraser, paint bucket, colour picker, mirror left-right and up-down, any colour from the rainbow and shade strips or the 16-colour palette. Undo as much as you like, keep your best ones in the gallery and download them as PNG pictures.",
+"controls": "Click / drag to paint · tools on the right · right-click = pick a colour · Z = undo · M = mirror",
+"scoreLabel": "SAVED",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Save a pixel picture"
+}
+],
+"file": "games/2d/pixel-art.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/pixel-art.png"
+},
+{
+"id": "color-by-number",
+"n": 138,
+"title": "COLOR BY NUMBER",
+"genre": "relax",
+"desc": "A grey grid full of little numbers. Pick a colour, paint every square with its number, and a picture slowly appears: a fox, a rocket, a sunflower, an octopus and twenty more. The squares for your colour light up so you never hunt for long. Drag to paint many at once. No timer.",
+"controls": "Pick a colour at the bottom · click / drag the squares with that number · H = hint",
+"scoreLabel": "PICTURES",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Finish a colour-by-number picture"
+},
+{
+"stat": "score",
+"target": 3,
+"text": "Finish 3 pictures in one sitting"
+}
+],
+"file": "games/2d/color-by-number.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/color-by-number.png"
+},
+{
+"id": "spider-solitaire",
+"n": 139,
+"title": "SPIDER SOLITAIRE",
+"genre": "relax",
+"desc": "Two decks, ten columns. Build runs down from King to Ace; a complete run of one suit lifts off the table. Move single cards onto anything one higher, but only same-suit runs move together. When you are stuck, deal ten more cards from the stock. Play with 1 suit (calm), 2 suits or all 4 (hard). Undo and hints any time.",
+"controls": "Click a card (and the cards on it) to pick it up, then a column · click a picked run again to auto-move · STOCK deals a new row · U = undo · H = hint",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Spider Solitaire"
+}
+],
+"file": "games/2d/spider-solitaire.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/spider-solitaire.png"
+},
+{
+"id": "freecell",
+"n": 140,
+"title": "FREECELL",
+"genre": "relax",
+"desc": "The thinking person's solitaire: every card is dealt face up, so it is all skill. Build down in alternating colours, park cards in the four free cells, and send each suit home from Ace to King. Move a whole run at once when you have room for it. Almost every deal can be won. Undo as much as you like; safe cards fly home on their own.",
+"controls": "Click a card (or a run) then where it goes · click a picked card again to send it to the best place · U = undo",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of FreeCell"
+}
+],
+"file": "games/2d/freecell.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/freecell.png"
+},
+{
+"id": "pyramid-solitaire",
+"n": 141,
+"title": "PYRAMID SOLITAIRE",
+"genre": "relax",
+"desc": "Twenty-eight cards in a pyramid. Take away two uncovered cards that add up to 13 (Jack 11, Queen 12, a King on its own). Turn over the stock for help, and go through it three times. Clear the whole pyramid to win the round; the next pyramid keeps your score.",
+"controls": "Click two cards that make 13 (a King alone) · click the stock to turn a card · U = undo",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Clear a pyramid"
+}
+],
+"file": "games/2d/pyramid-solitaire.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "tripeaks",
+"n": 142,
+"title": "TRIPEAKS",
+"genre": "relax",
+"desc": "Three mountain peaks of cards. Take any open card that is one higher or one lower than the card on the pile (King and Ace connect), build long streaks for bonus points, and flip the stock when you run dry. Clear all three peaks to win the round; three rounds a game.",
+"controls": "Click an open card one higher or lower than the pile · click the stock for a new pile card",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Clear all three peaks"
+},
+{
+"stat": "score",
+"target": 2000,
+"text": "Score 2000 in TriPeaks"
+}
+],
+"file": "games/2d/tripeaks.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "gravity-flip",
 "n": 1,
 "title": "GRAVITY FLIP",

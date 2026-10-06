@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pyramid Solitaire</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pyramid-solitaire","n":141,"title":"PYRAMID SOLITAIRE","genre":"relax","desc":"Twenty-eight cards in a pyramid. Take away two uncovered cards that add up to 13 (Jack 11, Queen 12, a King on its own). Turn over the stock for help, and go through it three times. Clear the whole pyramid to win the round; the next pyramid keeps your score.","controls":"Click two cards that make 13 (a King alone) · click the stock to turn a card · U = undo","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Clear a pyramid"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/cards.js"></script>
+<script>
+const CW = 64, CH = 90, PX = 480, PY = 22, DX = 70, DY = 46;
+const val = (c) => c.r + 1;
+function round(s) {
+  const d = CARDS.deck(1);
+  s.pyr = []; let n = 0;
+  for (let r = 0; r < 7; r++) for (let k = 0; k <= r; k++) { const c = d[n++]; c.up = true; s.pyr.push({ c, r, k, gone: false }); }
+  s.stock = d.slice(n); s.waste = []; s.passes = 0; s.sel = null; s.hist = []; s.clear = 0;
+}
+const idx = (r, k) => (r * (r + 1)) / 2 + k;
+const free = (s, p) => p.r === 6 || (s.pyr[idx(p.r + 1, p.k)].gone && s.pyr[idx(p.r + 1, p.k + 1)].gone);
+const pos = (p) => ({ x: PX - (p.r * DX) / 2 + p.k * DX - CW / 2, y: PY + p.r * DY });
+const snap = (s) => JSON.stringify({ pyr: s.pyr, stock: s.stock, waste: s.waste, passes: s.passes, score: s.score });
+function remove(s, ref) { if (ref.p) ref.p.gone = true; else s.waste.pop(); }
+function anyMove(s) {
+  const open = s.pyr.filter((p) => !p.gone && free(s, p)).map((p) => p.c); const w = s.waste[s.waste.length - 1]; if (w) open.push(w);
+  if (open.some((c) => c.r === 12)) return true;
+  for (let i = 0; i < open.length; i++) for (let j = i + 1; j < open.length; j++) if (val(open[i]) + val(open[j]) === 13) return true;
+  return s.stock.length > 0 || s.passes < 2;
+}
+K.game({
+  bg: '#1a1240', touch: { stick: false, buttons: [] },
+  init(s) { s.score = 0; s.rounds = 0; round(s); s.msgT = 0; },
+  update(s, dt) {
+    const m = K.mouse; s.msgT -= dt;
+    if (s.clear > 0) { s.clear -= dt; if (s.clear <= 0) round(s); return; }
+    if (K.tap('KeyU') || (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 480, w: 100, h: 40 }))) { const h = s.hist.pop(); if (h) { Object.assign(s, JSON.parse(h)); s.sel = null; K.sfx('whoosh'); } return; }
+    if (!m.clicked) return;
+    // stock
+    if (K.inRect(m.x, m.y, { x: 760, y: 420, w: CW, h: CH })) {
+      s.hist.push(snap(s));
+      if (s.stock.length) { s.waste.push(s.stock.pop()); K.sfx('click'); }
+      else if (s.passes < 2 && s.waste.length) { s.stock = s.waste.reverse(); s.waste = []; s.passes++; K.sfx('whoosh'); }
+      else { s.hist.pop(); K.sfx('wrong'); }
+      s.sel = null; check(s); return;
+    }
+    let ref = null;
+    const w = s.waste[s.waste.length - 1];
+    if (w && K.inRect(m.x, m.y, { x: 850, y: 420, w: CW, h: CH })) ref = { c: w, waste: true };
+    if (!ref) { const p = s.pyr.filter((q) => !q.gone).reverse().find((q) => { const o = pos(q); return K.inRect(m.x, m.y, { x: o.x, y: o.y, w: CW, h: CH }); }); if (p && free(s, p)) ref = { c: p.c, p }; else if (p) { K.sfx('wrong'); return; } }
+    if (!ref) { s.sel = null; return; }
+    if (ref.c.r === 12) { s.hist.push(snap(s)); remove(s, ref); s.score += 15; s.sel = null; K.sfx('coin'); return check(s); }
+    if (!s.sel) { s.sel = ref; K.sfx('tick'); return; }
+    if (s.sel.c === ref.c) { s.sel = null; return; }
+    if (val(s.sel.c) + val(ref.c) === 13) { s.hist.push(snap(s)); remove(s, s.sel); remove(s, ref); s.score += 10; s.sel = null; K.sfx('coin'); return check(s); }
+    s.sel = ref; K.sfx('tick');
+  },
+  draw(s) {
+    s.pyr.forEach((p) => { if (p.gone) return; const o = pos(p), f = free(s, p); CARDS.draw(p.c, o.x, o.y, CW, CH, { dim: !f, hl: s.sel && s.sel.p === p ? '#22e6ff' : null }); });
+    if (s.stock.length) CARDS.draw({ up: false }, 760, 420, CW, CH); else CARDS.slot(760, 420, CW, CH, s.passes < 2 ? '↻' : '✕');
+    const w = s.waste[s.waste.length - 1]; if (w) CARDS.draw(w, 850, 420, CW, CH, { hl: s.sel && s.sel.waste ? '#22e6ff' : null }); else CARDS.slot(850, 420, CW, CH);
+    K.text(`STOCK ${s.stock.length} · PASSES LEFT ${2 - s.passes}`, 838, 528, 11, '#c9c3ff', 'center', 'm');
+    K.text(`SCORE ${s.score}`, 70, 30, 18, '#ffd93a', 'center', 'd'); K.text(`PYRAMID ${s.rounds + 1}`, 70, 54, 12, '#8e88b8', 'center', 'm');
+    K.wrapText('Pairs that make 13. A=1, J=11, Q=12, a King goes alone.', 110, 110, 190, 13, '#8e88b8', 1.3);
+    K.button(20, 480, 100, 40, '↶ UNDO', { color: '#22e6ff', size: 11 });
+    if (s.clear > 0) K.text('PYRAMID CLEARED!', 480, 270, 40, '#3dffa0', 'center', 'd', 18);
+    if (s.msgT > 0) K.text(s.msg, 480, 400, 16, '#ffd93a', 'center', 'd');
+  },
+  ai(s) {
+    s.aw = (s.aw || 0) + 1; if (s.aw % 25) return;
+    const open = s.pyr.filter((p) => !p.gone && free(s, p));
+    const k = open.find((p) => p.c.r === 12); if (k) { k.gone = true; return check(s); }
+    for (const a of open) for (const b of open) if (a !== b && val(a.c) + val(b.c) === 13) { a.gone = b.gone = true; return check(s); }
+    if (s.stock.length) s.waste.push(s.stock.pop());
+  },
+});
+function check(s) {
+  if (s.pyr.every((p) => p.gone)) { s.rounds++; s.score += 100 + s.stock.length * 5; s.clear = 2; K.sfx('win'); return; }
+  if (!anyMove(s)) K.end(s, { score: s.score, won: s.rounds > 0, stats: { won: s.rounds > 0 ? 1 : 0 }, title: s.rounds ? `${s.rounds} PYRAMID${s.rounds > 1 ? 'S' : ''} CLEARED` : 'NO MORE PAIRS', text: `${s.pyr.filter((p) => !p.gone).length} cards were left in the pyramid.` });
+}
+</script></body></html>

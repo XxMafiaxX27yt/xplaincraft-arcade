@@ -2,6 +2,7 @@
 //
 //   const pad = DRAW.pad({ x, y, w, h });       a pad at (x, y) in game units, the toolbar sits under it (2 rows, 76 px)
 //   DRAW.pad({ ..., tools: false })             pen only, no toolbar (set pad.col / pad.size yourself)
+//   pad.sym = 8; pad.mirror = true             mandala mode: every new stroke / shape / fill is copied around the centre
 //   pad.update(canDraw)     tools + drawing input (call every frame while it is your turn)
 //   pad.take()              operations drawn since the last take() -> send them to the others
 //   pad.apply(ops)          operations from someone else
@@ -76,14 +77,20 @@
     c.putImageData(img, 0, 0);
   }
 
+  // the copies of a symmetric item: rotations around the centre (and mirror images)
+  const copies = (sy) => { if (!sy) return [[0, 1]]; const out = []; for (let k = 0; k < sy[0]; k++) { out.push([(k / sy[0]) * Math.PI * 2, 1]); if (sy[1]) out.push([(k / sy[0]) * Math.PI * 2, -1]); } return out; };
+  function withSym(c, w, h, sy, fn) {
+    if (!sy) return fn();
+    for (const [a, m] of copies(sy)) { c.save(); c.translate(w / 2, h / 2); c.rotate(a); c.scale(m, 1); c.translate(-w / 2, -h / 2); fn(); c.restore(); }
+  }
   function raster(w, h) {
     const cv = document.createElement('canvas'); cv.width = w * R; cv.height = h * R;
     const c = cv.getContext('2d', { willReadFrequently: true }); c.setTransform(R, 0, 0, R, 0, 0);
     const wipe = () => { c.fillStyle = PAPER; c.fillRect(0, 0, w, h); };
     const paint = (it, from = 0) => {
-      if (it.k === 'p') for (let i = from; i < it.pts.length; i += 2) seg(c, it, i);
-      else if (it.k === 's') drawShape(c, it);
-      else if (it.k === 'b') bucket(cv, c, it.x, it.y, it.c);
+      if (it.k === 'p') withSym(c, w, h, it.sy, () => { for (let i = from; i < it.pts.length; i += 2) seg(c, it, i); });
+      else if (it.k === 's') withSym(c, w, h, it.sy, () => drawShape(c, it));
+      else if (it.k === 'b') for (const [a, m] of copies(it.sy)) { const dx = (it.x - w / 2) * m, dy = it.y - h / 2; bucket(cv, c, w / 2 + dx * Math.cos(a) - dy * Math.sin(a), h / 2 + dx * Math.sin(a) + dy * Math.cos(a), it.c); }
     };
     const redraw = (items) => { wipe(); items.forEach((it) => paint(it)); };
     wipe();
@@ -91,7 +98,8 @@
   }
 
   function pad(o) {
-    const P = { x: o.x, y: o.y, w: o.w, h: o.h, items: [], out: [], tool: 'pen', size: 7, hue: 0, shade: 0.5, col: '#111111', filled: false, onStroke: null };
+    const P = { x: o.x, y: o.y, w: o.w, h: o.h, items: [], out: [], tool: 'pen', size: 7, hue: 0, shade: 0.5, col: '#111111', filled: false, onStroke: null, sym: o.sym || 1, mirror: !!o.mirror };
+    const symOf = () => (P.sym > 1 || P.mirror ? [P.sym, P.mirror ? 1 : 0] : undefined);
     const ras = raster(o.w, o.h);
     let cur = null, drag = null, picking = null;
     const TB = { y1: o.y + o.h + 8, y2: o.y + o.h + 48 };
@@ -114,7 +122,7 @@
       return { r1, fill, undo, clear, sizes, quick, hue, shade, swatch };
     };
     const push = (op) => P.out.push(op);
-    const add = (it, send) => { P.items.push(it); ras.paint(it); if (send) push(it.k === 'p' ? { o: 'n', k: 'p', c: it.c, w: it.w, rb: it.rb, pts: it.pts.slice() } : { o: 'i', it }); };
+    const add = (it, send) => { const sy = symOf(); if (sy) it.sy = sy; P.items.push(it); ras.paint(it); if (send) push(it.k === 'p' ? { o: 'n', k: 'p', c: it.c, w: it.w, rb: it.rb, sy: it.sy, pts: it.pts.slice() } : { o: 'i', it }); };
 
     P.update = (can) => {
       const m = K.mouse;
@@ -178,7 +186,7 @@
     P.take = () => { const o = P.out; P.out = []; return o; };
     P.apply = (ops) => {
       for (const op of ops || []) {
-        if (op.o === 'n') { const it = { k: 'p', c: op.c, w: op.w, pts: op.pts.slice() }; if (op.rb != null) it.rb = op.rb; P.items.push(it); ras.paint(it); }
+        if (op.o === 'n') { const it = { k: 'p', c: op.c, w: op.w, pts: op.pts.slice() }; if (op.rb != null) it.rb = op.rb; if (op.sy) it.sy = op.sy; P.items.push(it); ras.paint(it); }
         else if (op.o === 'p') { const it = P.items[P.items.length - 1]; if (it && it.k === 'p') { const n = it.pts.length; it.pts.push(...op.pts); ras.paint(it, n); } }
         else if (op.o === 'i') { P.items.push(op.it); ras.paint(op.it); }
         else if (op.o === 'u') { P.items.pop(); ras.redraw(P.items); }
@@ -193,7 +201,7 @@
       K.stroke(P.x, P.y, P.w, P.h, '#ffffff22', 2, 6);
       if (drag && drag.ex != null) {
         c.save(); c.translate(P.x, P.y); c.globalAlpha = 0.7;
-        drawShape(c, { sh: P.tool, c: P.col, w: P.size, f: P.filled, a: [drag.x, drag.y, drag.ex, drag.ey] });
+        withSym(c, P.w, P.h, symOf(), () => drawShape(c, { sh: P.tool, c: P.col, w: P.size, f: P.filled, a: [drag.x, drag.y, drag.ex, drag.ey] }));
         c.restore();
       }
       if (!toolbar || o.tools === false) return;

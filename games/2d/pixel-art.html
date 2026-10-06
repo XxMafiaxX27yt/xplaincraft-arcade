@@ -1,0 +1,125 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pixel Art Maker</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pixel-art","n":137,"title":"PIXEL ART MAKER","genre":"relax","desc":"A calm pixel studio. Pick a 16, 24 or 32 grid and paint square by square: pen, eraser, paint bucket, colour picker, mirror left-right and up-down, any colour from the rainbow and shade strips or the 16-colour palette. Undo as much as you like, keep your best ones in the gallery and download them as PNG pictures.","controls":"Click / drag to paint · tools on the right · right-click = pick a colour · Z = undo · M = mirror","scoreLabel":"SAVED","tasks":[{"stat":"score","target":1,"text":"Save a pixel picture"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GX = 30, GY = 52, GS = 440, KEY = 'novex_pixelart';
+const PALETTE = ['#000000', '#ffffff', '#7a7a8a', '#3a3a48', '#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '#1f8a4a', '#22e6ff', '#4f8bff', '#2a3a9a', '#c45cff', '#ff9bc8', '#8a5a2a', '#f1c9a5'];
+const TOOLS = [['pen', '✎ PEN'], ['erase', '▱ ERASE'], ['fill', '🪣 FILL'], ['pick', '◉ PICK']];
+const hsl = (h, s, l) => `hsl(${Math.round(h)},${s}%,${Math.round(l)}%)`;
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } };
+const keep = (g) => { try { localStorage.setItem(KEY, JSON.stringify(g)); return true; } catch (e) { return false; } };
+// right panel layout
+const L = {
+  tool: (i) => ({ x: 500 + (i % 2) * 112, y: 52 + Math.floor(i / 2) * 42, w: 106, h: 36 }),
+  mirX: { x: 500, y: 140, w: 106, h: 34 }, mirY: { x: 612, y: 140, w: 106, h: 34 },
+  pal: (i) => ({ x: 500 + (i % 8) * 27, y: 186 + Math.floor(i / 8) * 27, w: 24, h: 24 }),
+  hue: { x: 500, y: 246, w: 218, h: 20 }, shade: { x: 500, y: 272, w: 218, h: 20 },
+  undo: { x: 500, y: 304, w: 70, h: 34 }, clear: { x: 574, y: 304, w: 70, h: 34 }, grid: { x: 648, y: 304, w: 70, h: 34 },
+  size: (i) => ({ x: 500 + i * 74, y: 346, w: 70, h: 30 }),
+  save: { x: 500, y: 388, w: 106, h: 38 }, png: { x: 612, y: 388, w: 106, h: 38 }, fin: { x: 500, y: 434, w: 218, h: 34 },
+};
+function grid(s, n) { s.n = n; s.g = Array(n * n).fill(null); s.hist = []; }
+K.game({
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) { grid(s, 24); s.tool = 'pen'; s.col = '#ff3355'; s.hue = 350; s.shade = 0.5; s.mx = true; s.my = false; s.showGrid = true; s.saved = 0; s.gallery = load(); s.msg = ''; s.msgT = 0; if (K.attract) demo(s); },
+  update(s, dt) {
+    const m = K.mouse, hit = (r) => K.inRect(m.x, m.y, r);
+    s.msgT -= dt;
+    if (K.tap('KeyZ')) undo(s);
+    if (K.tap('KeyM')) s.mx = !s.mx;
+    if (m.clicked) {
+      TOOLS.forEach(([t], i) => { if (hit(L.tool(i))) { s.tool = t; K.sfx('click'); } });
+      if (hit(L.mirX)) { s.mx = !s.mx; K.sfx('click'); }
+      if (hit(L.mirY)) { s.my = !s.my; K.sfx('click'); }
+      PALETTE.forEach((c, i) => { if (hit(L.pal(i))) { s.col = c; if (s.tool === 'erase' || s.tool === 'pick') s.tool = 'pen'; K.sfx('click'); } });
+      if (hit(L.hue) || hit(L.shade)) s.picking = hit(L.hue) ? 'hue' : 'shade';
+      if (hit(L.undo)) undo(s);
+      if (hit(L.clear)) { snap(s); s.g.fill(null); K.sfx('whoosh'); }
+      if (hit(L.grid)) s.showGrid = !s.showGrid;
+      [16, 24, 32].forEach((n, i) => { if (hit(L.size(i)) && n !== s.n) { grid(s, n); K.sfx('select'); } });
+      if (hit(L.save)) save(s);
+      if (hit(L.png)) png(s);
+      if (hit(L.fin)) return K.end(s, { score: s.saved, won: null, title: 'NICE PIXELS', text: s.saved ? `${s.saved} picture${s.saved === 1 ? '' : 's'} saved.` : 'Come back and finish it any time.' });
+      s.gallery.forEach((g, i) => { if (hit({ x: 760 + (i % 2) * 96, y: 70 + Math.floor(i / 2) * 96, w: 88, h: 88 })) { s.n = g.n; s.g = g.px.slice(); s.hist = []; K.sfx('select'); } });
+    }
+    if (s.picking) {
+      const r = s.picking === 'hue' ? L.hue : L.shade, v = K.clamp((m.x - r.x) / r.w, 0, 1);
+      if (s.picking === 'hue') s.hue = v * 360; else s.shade = v;
+      s.col = s.shade > 0.95 ? '#ffffff' : hsl(s.hue, 90, 6 + s.shade * 86); if (s.tool === 'erase' || s.tool === 'pick') s.tool = 'pen';
+      if (!m.down) s.picking = null;
+      return;
+    }
+    // painting
+    const cs = GS / s.n, cx = Math.floor((m.x - GX) / cs), cy = Math.floor((m.y - GY) / cs), inside = cx >= 0 && cy >= 0 && cx < s.n && cy < s.n;
+    if (!inside) { if (!m.down) s.stroke = false; return; }
+    const i = cy * s.n + cx;
+    if (m.right) { if (s.g[i]) { s.col = s.g[i]; K.sfx('tick'); } return; }
+    if (s.tool === 'pick' && m.clicked) { if (s.g[i]) { s.col = s.g[i]; s.tool = 'pen'; K.sfx('tick'); } return; }
+    if (s.tool === 'fill' && m.clicked) { snap(s); mirrored(s, cx, cy).forEach(([x, y]) => flood(s, x, y, s.col)); K.sfx('pop'); return; }
+    if ((s.tool === 'pen' || s.tool === 'erase') && m.down) {
+      if (!s.stroke) { snap(s); s.stroke = true; }
+      const v = s.tool === 'erase' ? null : s.col;
+      mirrored(s, cx, cy).forEach(([x, y]) => (s.g[y * s.n + x] = v));
+    }
+    if (!m.down) s.stroke = false;
+  },
+  draw(s) {
+    const cs = GS / s.n, c = K.ctx();
+    // checkerboard = transparent
+    for (let y = 0; y < s.n; y++) for (let x = 0; x < s.n; x++) { const v = s.g[y * s.n + x]; K.rect(GX + x * cs, GY + y * cs, cs + 0.5, cs + 0.5, v || ((x + y) % 2 ? '#2a2640' : '#221e36')); }
+    if (s.showGrid) { c.strokeStyle = '#ffffff12'; c.lineWidth = 1; c.beginPath(); for (let k = 0; k <= s.n; k++) { c.moveTo(GX + k * cs, GY); c.lineTo(GX + k * cs, GY + GS); c.moveTo(GX, GY + k * cs); c.lineTo(GX + GS, GY + k * cs); } c.stroke(); }
+    if (s.mx) K.line(GX + GS / 2, GY - 6, GX + GS / 2, GY + GS + 6, '#22e6ff66', 2);
+    if (s.my) K.line(GX - 6, GY + GS / 2, GX + GS + 6, GY + GS / 2, '#22e6ff66', 2);
+    K.stroke(GX, GY, GS, GS, '#8b5cf6', 2);
+    K.text(`PIXEL ART MAKER · ${s.n}×${s.n}`, GX, 28, 15, '#fff', 'left', 'd');
+    if (s.msgT > 0) K.text(s.msg, GX + GS, 28, 13, '#3dffa0', 'right', 'd');
+    // tools
+    TOOLS.forEach(([t, l], i) => { const r = L.tool(i), on = s.tool === t; K.rect(r.x, r.y, r.w, r.h, on ? '#22e6ff' : '#24203f', 8); K.text(l, r.x + r.w / 2, r.y + r.h / 2 + 1, 12, on ? '#05040c' : '#fff', 'center', 'd'); });
+    [[L.mirX, s.mx, '⇋ MIRROR X'], [L.mirY, s.my, '⇵ MIRROR Y']].forEach(([r, on, l]) => { K.rect(r.x, r.y, r.w, r.h, on ? '#c45cff' : '#24203f', 8); K.text(l, r.x + r.w / 2, r.y + r.h / 2 + 1, 11, on ? '#05040c' : '#fff', 'center', 'd'); });
+    PALETTE.forEach((col, i) => { const r = L.pal(i); K.rect(r.x, r.y, r.w, r.h, col, 4); if (s.col === col) K.stroke(r.x - 2, r.y - 2, r.w + 4, r.h + 4, '#fff', 2, 5); });
+    const g = c.createLinearGradient(L.hue.x, 0, L.hue.x + L.hue.w, 0); for (let i = 0; i <= 12; i++) g.addColorStop(i / 12, hsl(i * 30, 90, 55)); c.fillStyle = g; c.beginPath(); c.roundRect(L.hue.x, L.hue.y, L.hue.w, L.hue.h, 5); c.fill();
+    K.rect(L.hue.x + (s.hue / 360) * L.hue.w - 2, L.hue.y - 2, 4, L.hue.h + 4, '#fff');
+    const g2 = c.createLinearGradient(L.shade.x, 0, L.shade.x + L.shade.w, 0); g2.addColorStop(0, hsl(s.hue, 90, 6)); g2.addColorStop(0.5, hsl(s.hue, 90, 50)); g2.addColorStop(0.95, hsl(s.hue, 90, 90)); g2.addColorStop(1, '#fff'); c.fillStyle = g2; c.beginPath(); c.roundRect(L.shade.x, L.shade.y, L.shade.w, L.shade.h, 5); c.fill();
+    K.rect(L.shade.x + s.shade * L.shade.w - 2, L.shade.y - 2, 4, L.shade.h + 4, '#fff');
+    K.rect(726, 246, 20, 46, s.tool === 'erase' ? '#221e36' : s.col, 4); K.stroke(726, 246, 20, 46, '#fff', 2, 4);
+    [[L.undo, '↶ UNDO'], [L.clear, 'CLEAR'], [L.grid, s.showGrid ? 'GRID ✓' : 'GRID']].forEach(([r, l]) => { K.rect(r.x, r.y, r.w, r.h, '#24203f', 8); K.text(l, r.x + r.w / 2, r.y + r.h / 2 + 1, 11, '#fff', 'center', 'd'); });
+    [16, 24, 32].forEach((n, i) => { const r = L.size(i), on = s.n === n; K.rect(r.x, r.y, r.w, r.h, on ? '#ffd93a' : '#24203f', 8); K.text(`${n}×${n}`, r.x + r.w / 2, r.y + r.h / 2 + 1, 11, on ? '#05040c' : '#fff', 'center', 'd'); });
+    K.button(L.save.x, L.save.y, L.save.w, L.save.h, '★ SAVE', { color: '#3dffa0', size: 12 });
+    K.button(L.png.x, L.png.y, L.png.w, L.png.h, '⬇ PNG', { color: '#22e6ff', size: 12 });
+    K.button(L.fin.x, L.fin.y, L.fin.w, L.fin.h, 'FINISH', { color: '#8e88b8', size: 11 });
+    // preview + gallery
+    K.text('PREVIEW', 806, 28, 11, '#8e88b8', 'center', 'd');
+    const ps = 1.5; for (let y = 0; y < s.n; y++) for (let x = 0; x < s.n; x++) { const v = s.g[y * s.n + x]; if (v) K.rect(882 + x * ps, 16 + y * ps, ps, ps, v); }
+    K.text('GALLERY', 852, 62, 11, '#8e88b8', 'center', 'd');
+    s.gallery.forEach((gg, i) => { const X = 760 + (i % 2) * 96, Y = 70 + Math.floor(i / 2) * 96, sz = 88 / gg.n; K.rect(X, Y, 88, 88, '#221e36'); gg.px.forEach((v, k) => v && K.rect(X + (k % gg.n) * sz, Y + Math.floor(k / gg.n) * sz, sz + 0.3, sz + 0.3, v)); K.stroke(X, Y, 88, 88, '#ffffff33', 1); });
+    if (!s.gallery.length) K.wrapText('Saved pictures appear here. Click one to edit it.', 852, 90, 180, 12, '#5d5a80', 1.3);
+  },
+});
+function mirrored(s, x, y) { const out = [[x, y]]; if (s.mx) out.push([s.n - 1 - x, y]); if (s.my) out.push([x, s.n - 1 - y]); if (s.mx && s.my) out.push([s.n - 1 - x, s.n - 1 - y]); return out; }
+function snap(s) { s.hist.push(s.g.slice()); if (s.hist.length > 80) s.hist.shift(); }
+function undo(s) { if (s.hist.length) { s.g = s.hist.pop(); K.sfx('whoosh'); } }
+function flood(s, x0, y0, col) {
+  const n = s.n, from = s.g[y0 * n + x0]; if (from === col) return;
+  const st = [[x0, y0]];
+  while (st.length) { const [x, y] = st.pop(); if (x < 0 || y < 0 || x >= n || y >= n || s.g[y * n + x] !== from) continue; s.g[y * n + x] = col; st.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]); }
+}
+function save(s) {
+  if (!s.g.some(Boolean)) { s.msg = 'PAINT SOMETHING FIRST'; s.msgT = 1.5; K.sfx('wrong'); return; }
+  s.gallery.unshift({ n: s.n, px: s.g.slice() }); s.gallery = s.gallery.slice(0, 6); s.saved++;
+  s.msg = keep(s.gallery) ? 'SAVED ★' : 'SAVED (this visit only)'; s.msgT = 1.8; K.sfx('win');
+}
+function png(s) {
+  const k = Math.max(8, Math.floor(512 / s.n)), cv = document.createElement('canvas'); cv.width = cv.height = s.n * k;
+  const c = cv.getContext('2d'); s.g.forEach((v, i) => { if (v) { c.fillStyle = v; c.fillRect((i % s.n) * k, Math.floor(i / s.n) * k, k, k); } });
+  const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = `novex-pixel-art-${Date.now()}.png`; document.body.appendChild(a); a.click(); a.remove();
+  s.msg = 'PNG DOWNLOADED'; s.msgT = 1.6; K.sfx('coin');
+}
+// cover: a little mushroom
+function demo(s) {
+  const art = ['........RRRR........', '......RRRRRRRR......', '.....RRWWRRRRRR.....', '....RRWWWWRRWWRR....', '...RRRRWWRRRWWWRR...', '...RRRRRRRRRRWWRR...', '..RRWWRRRRRRRRRRRR..', '..RWWWWRRRRWWRRRRR..', '..RRWWRRRRWWWWRRRR..', '...RRRRRRRRWWRRRR...', '.....SSSSSSSSSS.....', '......SSKSSKSS......', '......SSKSSKSS......', '......SSSSSSSS......', '.......SSSSSS.......', '....GGGGGGGGGGGG....'];
+  const col = { R: '#ff3355', W: '#ffffff', S: '#f1c9a5', K: '#222', G: '#3dffa0' };
+  grid(s, 24); art.forEach((row, y) => [...row].forEach((ch, x) => { if (col[ch]) s.g[(y + 4) * 24 + x + 2] = col[ch]; }));
+}
+</script></body></html>

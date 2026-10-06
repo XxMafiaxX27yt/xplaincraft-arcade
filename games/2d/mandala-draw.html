@@ -1,0 +1,74 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mandala Draw</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mandala-draw","n":136,"title":"MANDALA DRAW","genre":"relax","desc":"Draw one line and watch it bloom into a mandala. Everything you draw is copied around the centre 4, 6, 8, 12 or 16 times, mirrored if you like: the rainbow pen, shapes, the paint bucket, any colour from the gradient strips. No timer, no score to chase. Save your favourites to the gallery.","controls":"Draw with the mouse / finger · tools and colours under the canvas · symmetry, mirror and guides on the right · SAVE keeps it in the gallery","scoreLabel":"SAVED","tasks":[{"stat":"score","target":1,"text":"Save a mandala"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/draw.js"></script>
+<script>
+const PX = 160, PY = 12, PW = 640, PH = 400, SYMS = [4, 6, 8, 12, 16], KEY = 'novex_mandalas';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } };
+const store = (list) => { try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch (e) { return false; } };
+const btn = (i) => ({ x: 818, y: 40 + i * 46, w: 128, h: 38 });
+K.game({
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.pad = DRAW.pad({ x: PX, y: PY, w: PW, h: PH, sym: 8, mirror: true });
+    s.pad.tool = 'rainbow'; s.guides = true; s.saved = 0; s.gallery = load(); s.msg = ''; s.msgT = 0;
+    if (K.attract) demo(s);
+  },
+  update(s, dt) {
+    const m = K.mouse, P = s.pad;
+    s.msgT -= dt;
+    if (m.clicked) {
+      const hit = (r) => K.inRect(m.x, m.y, r);
+      SYMS.forEach((n, i) => { if (hit(btn(i))) { P.sym = n; K.sfx('click'); } });
+      if (hit(btn(5))) { P.mirror = !P.mirror; K.sfx('click'); }
+      if (hit(btn(6))) { s.guides = !s.guides; K.sfx('click'); }
+      if (hit(btn(7.4))) save(s);
+      if (hit(btn(8.4))) { P.clear(); K.sfx('whoosh'); }
+      if (hit(btn(9.6))) return K.end(s, { score: s.saved, won: null, title: 'BEAUTIFUL', text: s.saved ? `${s.saved} mandala${s.saved === 1 ? '' : 's'} saved to the gallery.` : 'A calm few minutes.' });
+      s.gallery.forEach((g, i) => { if (hit({ x: 12, y: 40 + i * 98, w: 136, h: 85 })) { P.load(g); K.sfx('select'); s.msg = 'LOADED FROM THE GALLERY'; s.msgT = 1.5; } });
+    }
+    P.update(true); P.take();
+  },
+  draw(s) {
+    const P = s.pad, c = K.ctx();
+    P.draw(true);
+    if (s.guides) {
+      c.save(); c.beginPath(); c.rect(PX, PY, PW, PH); c.clip(); c.strokeStyle = '#0000001c'; c.lineWidth = 1;
+      const cx = PX + PW / 2, cy = PY + PH / 2;
+      for (let k = 0; k < P.sym * (P.mirror ? 2 : 1); k++) { const a = (k / (P.sym * (P.mirror ? 2 : 1))) * Math.PI * 2; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * 500, cy + Math.sin(a) * 500); c.stroke(); }
+      [60, 120, 180].forEach((r) => { c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke(); });
+      c.restore();
+    }
+    // right: symmetry
+    K.text('SYMMETRY', 882, 22, 12, '#8e88b8', 'center', 'd');
+    SYMS.forEach((n, i) => { const r = btn(i), on = P.sym === n; K.rect(r.x, r.y, r.w, r.h, on ? '#c45cff' : '#24203f', 8); K.text(`✱ ${n}`, r.x + r.w / 2, r.y + r.h / 2 + 1, 15, on ? '#05040c' : '#fff', 'center', 'd'); });
+    const mr = btn(5); K.rect(mr.x, mr.y, mr.w, mr.h, P.mirror ? '#22e6ff' : '#24203f', 8); K.text(P.mirror ? '⇋ MIRROR ON' : '⇋ MIRROR OFF', mr.x + mr.w / 2, mr.y + mr.h / 2 + 1, 12, P.mirror ? '#05040c' : '#fff', 'center', 'd');
+    const gr = btn(6); K.rect(gr.x, gr.y, gr.w, gr.h, s.guides ? '#3a3570' : '#24203f', 8); K.text(s.guides ? 'GUIDES ON' : 'GUIDES OFF', gr.x + gr.w / 2, gr.y + gr.h / 2 + 1, 12, '#fff', 'center', 'd');
+    K.button(btn(7.4).x, btn(7.4).y, 128, 38, '★ SAVE', { color: '#3dffa0', size: 13 });
+    K.button(btn(8.4).x, btn(8.4).y, 128, 38, 'NEW', { color: '#ffd93a', size: 13 });
+    K.button(btn(9.6).x, btn(9.6).y, 128, 38, 'FINISH', { color: '#8e88b8', size: 12 });
+    // left: gallery
+    K.text('GALLERY', 80, 22, 12, '#8e88b8', 'center', 'd');
+    s.gallery.forEach((g, i) => { DRAW.show(g, 12, 40 + i * 98, 136, 85, PW, PH); K.stroke(12, 40 + i * 98, 136, 85, '#ffffff33', 2, 4); });
+    if (!s.gallery.length) K.wrapText('Save a mandala and it appears here. Click one to keep drawing on it.', 80, 60, 130, 12, '#5d5a80', 1.3);
+    if (s.msgT > 0) K.text(s.msg, PX + PW / 2, PY + 20, 14, '#3dffa0', 'center', 'd');
+  },
+});
+function save(s) {
+  if (!s.pad.items.length) { s.msg = 'DRAW SOMETHING FIRST'; s.msgT = 1.5; K.sfx('wrong'); return; }
+  s.gallery.unshift(JSON.parse(JSON.stringify(s.pad.items))); s.gallery = s.gallery.slice(0, 4);
+  s.saved++; K.sfx('win'); s.msg = store(s.gallery) ? 'SAVED TO THE GALLERY ★' : 'SAVED (for this visit only)'; s.msgT = 2;
+}
+// the cover / attract screen: a ready-made mandala
+function demo(s) {
+  const ops = [];
+  for (let k = 0; k < 9; k++) {
+    const r0 = 30 + k * 18, pts = [], a0 = K.rand(0, 1);
+    for (let i = 0; i <= 26; i++) { const t = i / 26, r = r0 + Math.sin(t * Math.PI) * K.rand(20, 60), a = a0 + t * 0.7; pts.push(Math.round(PW / 2 + Math.cos(a) * r), Math.round(PH / 2 + Math.sin(a) * r)); }
+    ops.push({ o: 'n', k: 'p', c: `hsl(${k * 40},90%,55%)`, w: 3 + (k % 3) * 3, rb: k % 3 === 0 ? k * 40 : undefined, sy: [8, 1], pts });
+  }
+  ops.push({ o: 'i', it: { k: 's', sh: 'star', c: '#ffd93a', w: 4, f: true, a: [PW / 2 - 26, PH / 2 - 26, PW / 2 + 26, PH / 2 + 26] } });
+  s.pad.apply(ops);
+}
+</script></body></html>

@@ -1,0 +1,110 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spider Solitaire</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"spider-solitaire","n":139,"title":"SPIDER SOLITAIRE","genre":"relax","desc":"Two decks, ten columns. Build runs down from King to Ace; a complete run of one suit lifts off the table. Move single cards onto anything one higher, but only same-suit runs move together. When you are stuck, deal ten more cards from the stock. Play with 1 suit (calm), 2 suits or all 4 (hard). Undo and hints any time.","controls":"Click a card (and the cards on it) to pick it up, then a column · click a picked run again to auto-move · STOCK deals a new row · U = undo · H = hint","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Spider Solitaire"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/cards.js"></script>
+<script>
+const CW = 80, CH = 112, GAP = 8, X0 = (960 - 10 * (CW + GAP) + GAP) / 2, TY = 128;
+const colX = (i) => X0 + i * (CW + GAP);
+function deal(s, suits) {
+  s.suits = suits; const d = CARDS.deck(2, [[0], [0, 1], [0, 1, 2, 3]][[1, 2, 4].indexOf(suits)]);
+  s.cols = Array.from({ length: 10 }, (_, i) => d.splice(0, i < 4 ? 6 : 5));
+  s.cols.forEach((col) => (col[col.length - 1].up = true));
+  s.stock = d; s.done = 0; s.score = 500; s.moves = 0; s.sel = null; s.hist = []; s.hint = null; s.phase = 'play';
+}
+// the run that starts at card k of column i: same suit, going down by one
+const runFrom = (col, k) => { for (let j = k; j < col.length - 1; j++) if (!col[j].up || col[j + 1].s !== col[j].s || col[j + 1].r !== col[j].r - 1) return false; return col[k].up; };
+const canDrop = (s, run, i) => { const col = s.cols[i], top = col[col.length - 1]; return !top || top.r === run[0].r + 1; };
+const snap = (s) => JSON.stringify({ cols: s.cols, stock: s.stock, done: s.done, score: s.score });
+function save(s) { s.hist.push(snap(s)); if (s.hist.length > 200) s.hist.shift(); }
+function flipTops(s) { s.cols.forEach((col) => { const t = col[col.length - 1]; if (t && !t.up) t.up = true; }); }
+function clearRuns(s) {
+  s.cols.forEach((col) => {
+    if (col.length < 13) return;
+    const k = col.length - 13;
+    if (col[k].r === 12 && runFrom(col, k) && col[col.length - 1].r === 0) { col.splice(k, 13); s.done++; s.score += 100; K.sfx('win'); K.floatText('RUN COMPLETE +100', 480, 100, '#3dffa0', 22); }
+  });
+  flipTops(s);
+  if (s.done >= 8) { s.phase = 'won'; K.end(s, { score: s.score, won: true, stats: { won: 1 }, title: 'ALL EIGHT RUNS', text: `${s.suits} suit${s.suits > 1 ? 's' : ''} · ${s.moves} moves` }); }
+}
+function move(s, from, k, to) {
+  save(s);
+  const run = s.cols[from].splice(k); s.cols[to].push(...run); s.moves++; s.score = Math.max(0, s.score - 1);
+  K.sfx('click'); s.sel = null; s.hint = null; clearRuns(s);
+}
+function bestTarget(s, from, k) {
+  const run = s.cols[from].slice(k); let best = -1, bestV = -1;
+  for (let i = 0; i < 10; i++) {
+    if (i === from || !canDrop(s, run, i)) continue;
+    const top = s.cols[i][s.cols[i].length - 1], v = !top ? 1 : top.s === run[0].s ? 3 : 2;
+    if (v > bestV) { bestV = v; best = i; }
+  }
+  return best;
+}
+function hint(s) {
+  for (let from = 0; from < 10; from++) { const col = s.cols[from]; for (let k = 0; k < col.length; k++) if (runFrom(col, k)) { const t = bestTarget(s, from, k); if (t >= 0 && (s.cols[t].length || k > 0)) { const top = s.cols[t][s.cols[t].length - 1]; if (!top || k === 0 || col[k - 1].r !== col[k].r + 1 || !col[k - 1].up || top.s === col[k].s) return { from, k, to: t }; } break; } }
+  return null;
+}
+function dealRow(s) {
+  if (!s.stock.length) return;
+  if (s.cols.some((c) => !c.length)) { s.msg = 'FILL EVERY EMPTY COLUMN FIRST'; s.msgT = 1.6; K.sfx('wrong'); return; }
+  save(s); s.cols.forEach((col) => { const c = s.stock.pop(); c.up = true; col.push(c); }); K.sfx('whoosh'); s.sel = null; clearRuns(s);
+}
+// which card is under the pointer: [column, card index]
+function at(s, x, y) {
+  for (let i = 0; i < 10; i++) {
+    if (x < colX(i) || x > colX(i) + CW) continue;
+    const col = s.cols[i], ys = layout(col);
+    for (let k = col.length - 1; k >= 0; k--) if (y >= ys[k] && y <= ys[k] + (k === col.length - 1 ? CH : ys[k + 1] - ys[k])) return [i, k];
+    return [i, -1];
+  }
+  return null;
+}
+function layout(col) {
+  const down = col.filter((c) => !c.up).length, up = col.length - down;
+  const room = 520 - TY - CH, dn = Math.min(12, room / Math.max(1, col.length)), un = Math.min(28, (room - down * dn) / Math.max(1, up - 1));
+  let y = TY; return col.map((c) => { const v = y; y += c.up ? un : dn; return v; });
+}
+K.game({
+  bg: '#0d3a26', touch: { stick: false, buttons: [] },
+  init(s) { s.phase = 'pick'; s.msgT = 0; if (K.attract) deal(s, 1); },
+  update(s, dt) {
+    const m = K.mouse;
+    s.msgT -= dt;
+    if (s.phase === 'pick') { [1, 2, 4].forEach((n, i) => { if ((m.clicked && K.inRect(m.x, m.y, { x: 330, y: 190 + i * 70, w: 300, h: 54 })) || K.tap('Digit' + (i + 1))) { deal(s, n); K.sfx('select'); } }); return; }
+    if (s.phase !== 'play') return;
+    if (K.tap('KeyU') || (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 20, w: 90, h: 38 }))) { const h = s.hist.pop(); if (h) { Object.assign(s, JSON.parse(h)); s.sel = null; K.sfx('whoosh'); } return; }
+    if (K.tap('KeyH') || (m.clicked && K.inRect(m.x, m.y, { x: 116, y: 20, w: 90, h: 38 }))) { s.hint = hint(s); s.hintT = 2; if (!s.hint) { s.msg = s.stock.length ? 'NO MOVES - DEAL FROM THE STOCK' : 'NO MOVES LEFT'; s.msgT = 2; } K.sfx('chime'); return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 830, y: 14, w: 110, h: 80 })) return dealRow(s);
+    if (m.clicked && K.inRect(m.x, m.y, { x: 212, y: 20, w: 90, h: 38 })) return K.end(s, { score: s.score, won: false, title: 'GAME OVER', text: `${s.done} of 8 runs complete` });
+    s.hintT = (s.hintT || 0) - dt;
+    if (!m.clicked) return;
+    const h = at(s, m.x, m.y);
+    if (!h) { s.sel = null; return; }
+    const [i, k] = h;
+    if (s.sel) {
+      if (s.sel.from === i && k >= s.sel.k) { const t = bestTarget(s, i, s.sel.k); if (t >= 0) move(s, i, s.sel.k, t); else { s.sel = null; K.sfx('wrong'); } return; }
+      const run = s.cols[s.sel.from].slice(s.sel.k);
+      if (canDrop(s, run, i)) return move(s, s.sel.from, s.sel.k, i);
+    }
+    if (k >= 0 && runFrom(s.cols[i], k)) { s.sel = { from: i, k }; K.sfx('tick'); } else { s.sel = null; if (k >= 0) K.sfx('wrong'); }
+  },
+  draw(s) {
+    if (s.phase === 'pick') { K.text('SPIDER SOLITAIRE', 480, 120, 40, '#fff', 'center', 'd', 14); ['1 SUIT · CALM', '2 SUITS · MEDIUM', '4 SUITS · HARD'].forEach((t, i) => K.button(330, 190 + i * 70, 300, 54, `${i + 1}  ${t}`, { color: ['#3dffa0', '#ffd93a', '#ff3355'][i], size: 15 })); return; }
+    K.button(20, 20, 90, 38, '↶ UNDO', { color: '#22e6ff', size: 11 }); K.button(116, 20, 90, 38, 'HINT', { color: '#ffd93a', size: 11 }); K.button(212, 20, 90, 38, 'GIVE UP', { color: '#8e88b8', size: 10 });
+    K.text(`SCORE ${s.score}  ·  RUNS ${s.done}/8  ·  MOVES ${s.moves}`, 480, 40, 14, '#d8ffe8', 'center', 'd');
+    for (let i = 0; i < Math.ceil(s.stock.length / 10); i++) CARDS.draw({ up: false }, 850 - i * 8, 18, 64, 88);
+    if (s.stock.length) K.text(`${s.stock.length / 10} DEALS`, 882, 116, 10, '#d8ffe8', 'center', 'm');
+    for (let i = 0; i < s.done; i++) CARDS.draw({ s: 0, r: 12, up: true }, 330 + i * 14, 66, 44, 56);
+    s.cols.forEach((col, i) => {
+      const ys = layout(col);
+      if (!col.length) CARDS.slot(colX(i), TY, CW, CH);
+      col.forEach((c, k) => {
+        const sel = s.sel && s.sel.from === i && k >= s.sel.k, hn = s.hint && s.hintT > 0 && ((s.hint.from === i && k >= s.hint.k) || (s.hint.to === i && k === col.length - 1));
+        CARDS.draw(c, colX(i), ys[k] - (sel ? 6 : 0), CW, CH, { hl: sel ? '#22e6ff' : hn ? '#ffd93a' : null });
+      });
+    });
+    if (s.msgT > 0) K.text(s.msg, 480, 100, 15, '#ffd93a', 'center', 'd');
+  },
+});
+</script></body></html>

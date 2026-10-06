@@ -1,0 +1,94 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FreeCell</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"freecell","n":140,"title":"FREECELL","genre":"relax","desc":"The thinking person's solitaire: every card is dealt face up, so it is all skill. Build down in alternating colours, park cards in the four free cells, and send each suit home from Ace to King. Move a whole run at once when you have room for it. Almost every deal can be won. Undo as much as you like; safe cards fly home on their own.","controls":"Click a card (or a run) then where it goes · click a picked card again to send it to the best place · U = undo","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of FreeCell"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/cards.js"></script>
+<script>
+const CW = 82, CH = 114, GAP = 16, X0 = (960 - 8 * (CW + GAP) + GAP) / 2, TOPY = 16, TY = 150;
+const colX = (i) => X0 + i * (CW + GAP);
+const cellX = (i) => X0 + i * (CW + GAP), foundX = (i) => X0 + (i + 4) * (CW + GAP);
+function deal(s) {
+  const d = CARDS.deck(1); d.forEach((c) => (c.up = true));
+  s.cols = Array.from({ length: 8 }, () => []); d.forEach((c, i) => s.cols[i % 8].push(c));
+  s.cells = [null, null, null, null]; s.found = [[], [], [], []]; s.sel = null; s.hist = []; s.moves = 0; s.time = 0; s.phase = 'play';
+}
+const alt = (a, b) => CARDS.red(a) !== CARDS.red(b) && a.r === b.r + 1; // b can go on a
+const runFrom = (col, k) => { for (let j = k; j < col.length - 1; j++) if (!alt(col[j], col[j + 1])) return false; return true; };
+const maxMove = (s, toEmpty) => (s.cells.filter((c) => !c).length + 1) * 2 ** Math.max(0, s.cols.filter((c) => !c.length).length - (toEmpty ? 1 : 0));
+const canFound = (s, c) => { const f = s.found[c.s], t = f[f.length - 1]; return t ? c.r === t.r + 1 : c.r === 0; };
+const snap = (s) => JSON.stringify({ cols: s.cols, cells: s.cells, found: s.found });
+function save(s) { s.hist.push(snap(s)); if (s.hist.length > 300) s.hist.shift(); }
+// take the selection out of where it is
+function takeSel(s) { const p = s.sel; if (p.where === 'cell') { const c = s.cells[p.i]; s.cells[p.i] = null; return [c]; } return s.cols[p.i].splice(p.k); }
+const selCards = (s) => (s.sel.where === 'cell' ? [s.cells[s.sel.i]] : s.cols[s.sel.i].slice(s.sel.k));
+function tryMove(s, dest) {
+  const cards = selCards(s);
+  if (dest.where === 'found') { if (cards.length !== 1 || !canFound(s, cards[0])) return false; save(s); s.found[cards[0].s].push(takeSel(s)[0]); }
+  else if (dest.where === 'cell') { if (cards.length !== 1 || s.cells[dest.i]) return false; save(s); s.cells[dest.i] = takeSel(s)[0]; }
+  else { const col = s.cols[dest.i], top = col[col.length - 1]; if (s.sel.where === 'col' && s.sel.i === dest.i) return false; if (top ? !alt(top, cards[0]) : false) return false; if (cards.length > maxMove(s, !top)) { s.msg = `ROOM TO MOVE ${maxMove(s, !top)} CARD${maxMove(s, !top) > 1 ? 'S' : ''}`; s.msgT = 1.5; return false; } save(s); col.push(...takeSel(s)); }
+  s.moves++; s.sel = null; K.sfx('click'); autoHome(s); return true;
+}
+// a card is safe to send home when both cards of the other colour one rank lower are already home
+function autoHome(s) {
+  let moved = true;
+  while (moved) {
+    moved = false;
+    const safe = (c) => canFound(s, c) && (c.r <= 1 || [0, 1, 2, 3].filter((x) => CARDS.red({ s: x }) !== CARDS.red(c)).every((x) => s.found[x].length >= c.r));
+    for (let i = 0; i < 4; i++) { const c = s.cells[i]; if (c && safe(c)) { s.found[c.s].push(c); s.cells[i] = null; moved = true; } }
+    for (const col of s.cols) { const c = col[col.length - 1]; if (c && safe(c)) { s.found[c.s].push(col.pop()); moved = true; } }
+  }
+  if (s.found.every((f) => f.length === 13) && s.phase === 'play') { s.phase = 'won'; K.sfx('win'); K.end(s, { score: Math.max(100, 1500 - s.moves * 5 - Math.floor(s.time)), won: true, stats: { won: 1 }, title: 'FREECELL SOLVED', text: `${s.moves} moves · ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')}` }); }
+}
+function layout(col) { const n = Math.min(30, (520 - TY - CH) / Math.max(1, col.length - 1)); return col.map((_, k) => TY + k * n); }
+function hit(s, x, y) {
+  for (let i = 0; i < 4; i++) { if (K.inRect(x, y, { x: cellX(i), y: TOPY, w: CW, h: CH })) return { where: 'cell', i }; if (K.inRect(x, y, { x: foundX(i), y: TOPY, w: CW, h: CH })) return { where: 'found', i }; }
+  for (let i = 0; i < 8; i++) {
+    if (x < colX(i) || x > colX(i) + CW || y < TY) continue;
+    const col = s.cols[i], ys = layout(col);
+    for (let k = col.length - 1; k >= 0; k--) if (y >= ys[k] && y <= ys[k] + (k === col.length - 1 ? CH : ys[k + 1] - ys[k])) return { where: 'col', i, k };
+    return { where: 'col', i, k: -1 };
+  }
+  return null;
+}
+function autoTarget(s) {
+  const cards = selCards(s);
+  if (cards.length === 1 && canFound(s, cards[0])) return { where: 'found', i: cards[0].s };
+  for (let i = 0; i < 8; i++) { const col = s.cols[i], top = col[col.length - 1]; if (top && alt(top, cards[0]) && !(s.sel.where === 'col' && s.sel.i === i) && cards.length <= maxMove(s, false)) return { where: 'col', i }; }
+  for (let i = 0; i < 8; i++) if (!s.cols[i].length && cards.length <= maxMove(s, true) && !(s.sel.where === 'col' && s.sel.k === 0)) return { where: 'col', i };
+  if (cards.length === 1) { const f = s.cells.indexOf(null); if (f >= 0 && s.sel.where !== 'cell') return { where: 'cell', i: f }; }
+  return null;
+}
+K.game({
+  bg: '#0d3a26', touch: { stick: false, buttons: [] },
+  init(s) { deal(s); s.msgT = 0; },
+  update(s, dt) {
+    const m = K.mouse; s.time += dt; s.msgT -= dt;
+    if (s.phase !== 'play') return;
+    if (K.tap('KeyU') || (m.clicked && K.inRect(m.x, m.y, { x: 20, y: 490, w: 100, h: 38 }))) { const h = s.hist.pop(); if (h) { Object.assign(s, JSON.parse(h)); s.sel = null; K.sfx('whoosh'); } return; }
+    if (m.clicked && K.inRect(m.x, m.y, { x: 840, y: 490, w: 100, h: 38 })) return K.end(s, { score: s.found.reduce((a, f) => a + f.length, 0) * 10, won: false, title: 'GAME OVER', text: `${s.found.reduce((a, f) => a + f.length, 0)} of 52 cards home` });
+    if (!m.clicked) return;
+    const h = hit(s, m.x, m.y);
+    if (!h) { s.sel = null; return; }
+    if (s.sel) {
+      const same = (s.sel.where === h.where && s.sel.i === h.i && (h.where !== 'col' || h.k >= s.sel.k));
+      if (same) { const t = autoTarget(s); if (t) tryMove(s, t); else { s.sel = null; K.sfx('wrong'); } return; }
+      if (tryMove(s, h)) return;
+    }
+    if (h.where === 'cell' && s.cells[h.i]) { s.sel = { where: 'cell', i: h.i }; K.sfx('tick'); }
+    else if (h.where === 'col' && h.k >= 0 && runFrom(s.cols[h.i], h.k)) { s.sel = { where: 'col', i: h.i, k: h.k }; K.sfx('tick'); }
+    else { if (s.sel) K.sfx('wrong'); s.sel = null; }
+  },
+  draw(s) {
+    for (let i = 0; i < 4; i++) {
+      CARDS.slot(cellX(i), TOPY, CW, CH, 'FREE'); if (s.cells[i]) CARDS.draw(s.cells[i], cellX(i), TOPY, CW, CH, { hl: s.sel && s.sel.where === 'cell' && s.sel.i === i ? '#22e6ff' : null });
+      CARDS.slot(foundX(i), TOPY, CW, CH, CARDS.SUITS[i]); const f = s.found[i]; if (f.length) CARDS.draw(f[f.length - 1], foundX(i), TOPY, CW, CH);
+    }
+    s.cols.forEach((col, i) => { const ys = layout(col); if (!col.length) CARDS.slot(colX(i), TY, CW, CH); col.forEach((c, k) => CARDS.draw(c, colX(i), ys[k], CW, CH, { hl: s.sel && s.sel.where === 'col' && s.sel.i === i && k >= s.sel.k ? '#22e6ff' : null })); });
+    K.button(20, 490, 100, 38, '↶ UNDO', { color: '#22e6ff', size: 11 });
+    K.button(840, 490, 100, 38, 'GIVE UP', { color: '#8e88b8', size: 10 });
+    K.text(`MOVES ${s.moves}  ·  ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')}  ·  you can move ${maxMove(s, false)} cards at once`, 480, 510, 13, '#d8ffe8', 'center', 'm');
+    if (s.msgT > 0) K.text(s.msg, 480, 140, 15, '#ffd93a', 'center', 'd');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 30) return; for (let i = 0; i < 8; i++) { const col = s.cols[i]; if (!col.length) continue; s.sel = { where: 'col', i, k: col.length - 1 }; const t = autoTarget(s); if (t && t.where !== 'cell') { tryMove(s, t); return; } } s.sel = null; },
+});
+</script></body></html>
