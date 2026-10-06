@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Séance</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"seance","n":164,"title":"SÉANCE","genre":"horror","desc":"Six candles, six hands around the table. The spirit tells you which hands must stay joined, and it keeps changing its mind. Hold exactly the right keys (or press the right hands on a phone), let go of the others, and keep the circle unbroken until the clock strikes. Every slip blows out a candle. Lose them all and the circle opens.","controls":"Hold the keys A S D J K L that the spirit asks for (phone: hold the glowing hands) · release the others","scoreLabel":"SÉANCES","tasks":[{"stat":"score","target":2,"text":"Survive 2 séances"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const KEYS = ['KeyA', 'KeyS', 'KeyD', 'KeyJ', 'KeyK', 'KeyL'], LBL = ['A', 'S', 'D', 'J', 'K', 'L'];
+const pos = (i) => { const a = Math.PI + (i / 5) * Math.PI; return { x: 480 + Math.cos(a) * 280, y: 300 + Math.sin(a) * 160 }; };
+// every finger on the screen (phones need several hands held at once; the kit's mouse is one pointer)
+const FINGERS = new Map();
+const toGame = (e) => { const vw = innerWidth, vh = innerHeight, sc = Math.min(vw / 960, vh / 540); return { x: (e.clientX - (vw - 960 * sc) / 2) / sc, y: (e.clientY - (vh - 540 * sc) / 2) / sc }; };
+addEventListener('pointerdown', (e) => FINGERS.set(e.pointerId, toGame(e)));
+addEventListener('pointermove', (e) => { if (FINGERS.has(e.pointerId)) FINGERS.set(e.pointerId, toGame(e)); });
+['pointerup', 'pointercancel'].forEach((ev) => addEventListener(ev, (e) => FINGERS.delete(e.pointerId)));
+const WHISPER = ['hold on', 'do not let go', 'it is cold here', 'who is there', 'closer', 'let me in', 'I see you', 'the left hand', 'not that one', 'again'];
+function seance(s) { s.left = 45 + s.n * 10; s.candles = 6; s.need = new Set([0, 5]); s.change = 3; s.grace = 1.5; s.state = 'play'; s.msg = 'Hold A and L to begin'; }
+K.game({
+  touch: { stick: false, buttons: [] },
+  bg: '#0a0608',
+  init(s) { s.n = 0; s.won = 0; s.touchHeld = new Set(); seance(s); },
+  update(s, dt) {
+    if (s.state !== 'play') { s.t -= dt; if (s.t <= 0) { if (s.state === 'lost') return K.end(s, { score: s.won, won: s.won > 0, title: 'THE CIRCLE OPENED', text: `${s.won} séance${s.won === 1 ? '' : 's'} survived` }); s.n++; if (s.n >= 3) return K.end(s, { score: s.won, won: true, stats: { won: 1 }, title: 'THE SPIRIT IS AT REST', text: 'Three séances, the circle held.' }); seance(s); } return; }
+    // phone: hold the hands themselves (multi-touch through the mouse when one finger)
+    const held = new Set(KEYS.map((k, i) => (K.down(k) ? i : -1)).filter((i) => i >= 0));
+    const pts = [...FINGERS.values()]; if (K.mouse.down) pts.push({ x: K.mouse.x, y: K.mouse.y });
+    KEYS.forEach((_, i) => { const p = pos(i); if (pts.some((f) => Math.hypot(f.x - p.x, f.y - p.y) < 50)) held.add(i); });
+    s.held = held;
+    s.left -= dt; s.change -= dt; s.grace -= dt;
+    if (s.change <= 0) {
+      const k = Math.min(4, 2 + Math.floor((45 - s.left) / 18) + s.n), next = new Set();
+      while (next.size < k) next.add(K.irand(0, 5));
+      s.need = next; s.change = Math.max(2.2, 4.5 - s.n * 0.6 - (45 - s.left) * 0.02); s.grace = 1.4; s.msg = K.pick(WHISPER); K.sfx('whisper');
+    }
+    const ok = [...s.need].every((i) => held.has(i)) && [...held].every((i) => s.need.has(i));
+    if (!ok && s.grace <= 0) { s.candles--; s.grace = 1.6; K.sfx('scare'); K.shake(8); K.flash('#000', 0.5); if (s.candles <= 0) { s.state = 'lost'; s.t = 1.8; return; } }
+    if (s.left <= 0) { s.won++; s.state = 'safe'; s.t = 2; K.sfx('win'); }
+  },
+  draw(s) {
+    K.circle(480, 300, 230, '#2a1a12'); K.circle(480, 300, 210, '#3a2418');
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.28 + 0.3, x = 480 + Math.cos(a) * 120, y = 300 + Math.sin(a) * 70; K.rect(x - 5, y - 22, 10, 22, '#e8dcc0', 2); if (i < s.candles) { K.glow('#ffb43a', 14); K.circle(x, y - 28 + Math.sin(K.time() * 12 + i) * 1.5, 5, '#ffd93a'); K.noGlow(); } }
+    KEYS.forEach((_, i) => {
+      const p = pos(i), need = s.need.has(i), held = s.held?.has(i);
+      K.glow(need ? '#c45cff' : '#000', need ? 20 : 0); K.circle(p.x, p.y, 40, held ? (need ? '#6a3a8a' : '#6a1a1a') : need ? '#2a1a3a' : '#1a1214'); K.noGlow();
+      K.stroke(p.x - 40, p.y - 40, 80, 80, need ? '#c45cff' : '#3a2a2a', 2, 40);
+      K.text('✋', p.x, p.y - 4, 26, '#fff'); K.text(LBL[i], p.x, p.y + 26, 14, need ? '#e8c8ff' : '#6a5a5a', 'center', 'd');
+    });
+    K.text(`"${s.msg}"`, 480, 300, 20, '#c45cff', 'center', 'u');
+    K.text(`SÉANCE ${s.n + 1} / 3`, 20, 24, 14, '#e8c8c8', 'left', 'd');
+    K.text(`${Math.max(0, Math.ceil(s.left))}`, 940, 24, 18, '#e8c8c8', 'right', 'd');
+    K.text('Hold ONLY the glowing hands', 480, 510, 14, '#8a6a7a', 'center', 'u');
+    K.vignette(0.85);
+    if (s.state === 'safe') K.text('THE CANDLES STEADY', 480, 130, 30, '#ffd93a', 'center', 'd', 14);
+    if (s.state === 'lost') K.text('THE CIRCLE IS BROKEN', 480, 130, 30, '#ff3355', 'center', 'd', 14);
+  },
+  ai(s) { KEYS.forEach((k, i) => K.vhold(k, s.need.has(i))); },
+});
+</script></body></html>

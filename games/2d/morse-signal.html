@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Morse Signal</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"morse-signal","n":161,"title":"MORSE SIGNAL","genre":"horror","desc":"3 AM at the coastguard station. A lamp blinks out of the fog: a ship is sinking and its radio is dead. Read the flashes and beeps with the Morse chart, type the word, and send the boats to the right place before the water reaches the bridge. The messages get longer, and the last ones are not from the crew.","controls":"Watch / listen, type the word + Enter · REPLAY (or 0) plays it again (costs time) · the chart is on the right","scoreLabel":"MESSAGES","tasks":[{"stat":"score","target":5,"text":"Decode 5 messages in Morse Signal"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const MORSE = { A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..' };
+const MSGS = ['SOS', 'HELP', 'ICE', 'COLD', 'SINK', 'RAFT', 'WATER', 'NORTH', 'ROCKS', 'HURRY', 'LIGHTS', 'FOUR LEFT', 'ITS UNDER', 'DONT COME', 'WE DROWNED', 'COME CLOSER'];
+const UNIT = 0.16;
+function message(s) {
+  s.word = s.order[s.k]; s.typed = ''; s.play(); s.msgT = 0;
+}
+function schedule(s) { // a list of [on/off, duration]
+  const out = []; [...s.word].forEach((ch, i) => { if (ch === ' ') { out.push([0, UNIT * 4]); return; } [...MORSE[ch]].forEach((sym, k) => { out.push([1, sym === '.' ? UNIT : UNIT * 3]); out.push([0, UNIT]); }); out.push([0, UNIT * 2]); }); return out;
+}
+K.game({
+  typing: true,
+  bg: '#0a0f14', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.order = MSGS.slice(0, 4).concat(K.shuffle(MSGS.slice(4, 12)).slice(0, 4), MSGS.slice(12)); s.k = 0; s.water = 0; s.got = 0; s.fog = 0;
+    s.play = () => { s.sch = schedule(s); s.si = 0; s.st = 0; s.lamp = 0; };
+    message(s);
+  },
+  update(s, dt) {
+    s.fog += dt;
+    s.water += dt * (0.006 + s.k * 0.0009);
+    if (s.water >= 1) return K.end(s, { score: s.got, won: false, title: 'THE SHIP WENT DOWN', text: `${s.got} messages decoded. The lamp goes dark.` });
+    // play the signal
+    if (s.si < s.sch.length) { s.st += dt; const [on, d] = s.sch[s.si]; if (on && s.lamp === 0) { s.lamp = 1; K.tone(620, d, 'sine', 0.06); } if (s.st >= d) { s.st = 0; s.si++; s.lamp = 0; } } else { s.st += dt; if (s.st > 2.5) s.play(); }
+    if (K.tap('Digit0') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 470, y: 400, w: 130, h: 36 }))) { s.play(); s.water += 0.03; K.sfx('click'); }
+    for (const ch of K.typed()) if (s.typed.length < 14) s.typed += ch;
+    if (K.tap('Space') && s.typed && !s.typed.endsWith(' ')) s.typed += ' ';
+    if (K.tap('Backspace')) s.typed = s.typed.slice(0, -1);
+    if (K.tap('Enter') && s.typed) {
+      if (s.typed.trim() === s.word) { s.got++; s.k++; s.water = Math.max(0, s.water - 0.12); K.sfx(s.k > 12 ? 'whisper' : 'coin'); s.flash = 1; if (s.k >= s.order.length) return K.end(s, { score: s.got, won: true, stats: { won: 1 }, title: 'THE BOATS ARE OUT', text: 'Every message decoded. You do not answer the last one.' }); message(s); }
+      else { K.sfx('wrong'); s.water += 0.05; s.bad = 0.6; s.typed = ''; }
+    }
+    s.flash = Math.max(0, (s.flash || 0) - dt); s.bad = Math.max(0, (s.bad || 0) - dt);
+  },
+  draw(s) {
+    const c = K.ctx();
+    // sea + ship
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#0a0f14', '#13202a', '#0b141c']); c.fillRect(0, 0, 620, 540);
+    const sy = 250 + s.water * 90;
+    K.poly([[160, sy], [430, sy], [400, sy + 40], [190, sy + 40]], '#1c2a34'); K.rect(270, sy - 50, 70, 50, '#1c2a34'); K.rect(296, sy - 90, 8, 40, '#1c2a34');
+    K.glow('#fff6c0', s.lamp ? 40 : 0); K.circle(300, sy - 96, 9, s.lamp ? '#fff6c0' : '#2a3540'); K.noGlow();
+    if (s.lamp) { K.alpha(0.15); c.fillStyle = '#fff6c0'; c.beginPath(); c.moveTo(300, sy - 96); c.lineTo(620, sy - 160); c.lineTo(620, sy - 30); c.fill(); K.alpha(1); }
+    for (let i = 0; i < 8; i++) K.line(0, sy + 40 + i * 30, 620, sy + 40 + i * 30 + Math.sin(s.fog + i) * 6, '#2a4a5a55', 2);
+    K.alpha(0.35 + Math.sin(s.fog * 0.3) * 0.1); K.rect(0, 0, 620, 540, '#8a9aa833'); K.alpha(1);
+    // water gauge
+    K.rect(20, 60, 18, 400, '#1a2a34', 8); K.rect(20, 460 - 400 * s.water, 18, 400 * s.water, s.water > 0.75 ? '#ff3355' : '#3a8aff', 8); K.text('WATER', 29, 474, 9, '#8ea8b8', 'center', 'd');
+    K.text(`MESSAGE ${s.k + 1} / ${s.order.length}`, 60, 26, 14, '#d8e8f0', 'left', 'd');
+    // typing
+    K.rect(60, 470, 540, 50, '#0b141c', 10); K.stroke(60, 470, 540, 50, s.bad > 0 ? '#ff3355' : '#3a8aff', 2, 10);
+    K.text((s.typed || 'type what the lamp says') + (Math.sin(K.time() * 8) > 0 ? '|' : ''), 80, 496, 20, s.typed ? '#fff' : '#4a5a6a', 'left', 'm');
+    K.text(`${s.word.length} letters${s.word.includes(' ') ? ' (with a space)' : ''}`, 260, 452, 12, '#8ea8b8', 'center', 'u');
+    K.button(470, 400, 130, 36, '↻ REPLAY', { color: '#3a8aff', size: 11 });
+    // chart
+    K.rect(630, 0, 330, 540, '#efe6cf');
+    K.text('MORSE CHART', 795, 24, 16, '#3a2a10', 'center', 'd'); K.text('· short   — long', 795, 44, 12, '#6a5a3a', 'center', 'u');
+    Object.entries(MORSE).forEach(([l, code], i) => { const x = 650 + Math.floor(i / 13) * 160, y = 70 + (i % 13) * 35; K.text(l, x, y, 18, '#2a1a08', 'left', 'd'); K.text(code.replace(/\./g, '·').replace(/-/g, '—'), x + 30, y, 18, '#2a1a08', 'left', 'm'); });
+  },
+});
+</script></body></html>

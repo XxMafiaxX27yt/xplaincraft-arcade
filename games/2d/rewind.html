@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rewind</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"rewind","n":163,"title":"REWIND","genre":"horror","desc":"You cannot die here - not properly. Whenever the watchers' lights catch you, time snaps back ten seconds and you are standing where you were, with your last attempt glowing on the floor as a warning. The watchers always walk the same way. Learn their pattern, slip past, reach the door. Six floors of the old asylum.","controls":"WASD / arrows (or the stick) to sneak · reach the green door · getting seen rewinds 10 seconds","scoreLabel":"FLOORS","tasks":[{"stat":"score","target":3,"text":"Escape 3 floors in Rewind"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// watchers: patrol between two points (ping-pong) with a light cone, or turn on the spot
+function floor(s) {
+  const n = 2 + s.lv;
+  s.w = Array.from({ length: n }, (_, i) => { const y = 70 + (i + 0.5) * (400 / n), turn = s.lv >= 2 && i % 2 === 1; return turn ? { kind: 'turn', x: K.rand(300, 700), y, sp: K.rand(0.6, 1.1) * (i % 4 ? 1 : -1), ph: K.rand(0, 6) } : { kind: 'walk', ax: K.rand(180, 420), bx: K.rand(540, 800), y, sp: K.rand(70, 120), ph: K.rand(0, 6) }; });
+  s.door = { x: 900, y: K.rand(80, 460) }; s.p = { x: 60, y: K.rand(80, 460) }; s.t = 0; s.hist = []; s.ghost = []; s.rew = 0; s.flash = 0; s.state = 'play';
+}
+function wpos(w, t) {
+  if (w.kind === 'turn') return { x: w.x, y: w.y, a: w.ph + t * w.sp };
+  const span = w.bx - w.ax, d = (t * w.sp + w.ph * 40) % (span * 2), x = d < span ? w.ax + d : w.bx - (d - span);
+  return { x, y: w.y, a: d < span ? 0 : Math.PI };
+}
+const seen = (w, t, p) => { const q = wpos(w, t), dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy); if (d < 18) return true; if (d > 170) return false; let a = Math.atan2(dy, dx) - q.a; a = Math.atan2(Math.sin(a), Math.cos(a)); return Math.abs(a) < 0.42; };
+K.game({
+  touch: { buttons: [] },
+  bg: '#0d0d10',
+  init(s) { s.lv = 0; s.escaped = 0; s.rewinds = 0; floor(s); },
+  update(s, dt) {
+    s.flash = Math.max(0, s.flash - dt);
+    if (s.state === 'out') { s.out -= dt; if (s.out <= 0) { s.lv++; s.escaped++; if (s.lv >= 6) return K.end(s, { score: s.escaped, won: true, stats: { won: 1 }, title: 'OUT OF THE ASYLUM', text: `${s.rewinds} rewinds` }); floor(s); } return; }
+    s.t += dt;
+    const d = K.dir(), L = Math.hypot(d.x, d.y) || 1;
+    s.p.x = K.clamp(s.p.x + (d.x / L) * 150 * dt * (d.x || d.y ? 1 : 0), 14, 946); s.p.y = K.clamp(s.p.y + (d.y / L) * 150 * dt * (d.x || d.y ? 1 : 0), 50, 526);
+    s.hist.push({ t: s.t, x: s.p.x, y: s.p.y }); while (s.hist.length && s.hist[0].t < s.t - 12) s.hist.shift();
+    if (s.w.some((w) => seen(w, s.t, s.p))) {
+      // rewind ten seconds: same world (it only depends on time), you go back to where you were
+      s.ghost = s.hist.map((h) => [h.x, h.y]);
+      const back = Math.max(0, s.t - 10), h = s.hist.find((q) => q.t >= back) || s.hist[0];
+      s.t = back; s.p = { x: h ? h.x : 60, y: h ? h.y : 270 }; s.hist = s.hist.filter((q) => q.t <= back);
+      s.rewinds++; s.flash = 0.6; K.sfx('scare'); K.tone(900, 0.6, 'sawtooth', 0.05, -700);
+      // never come back inside a light
+      if (s.w.some((w) => seen(w, s.t, s.p))) { s.t = 0; s.p = { x: 60, y: s.hist[0]?.y ?? 270 }; }
+      return;
+    }
+    if (Math.hypot(s.p.x - s.door.x, s.p.y - s.door.y) < 26) { s.state = 'out'; s.out = 1.4; K.sfx('win'); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    for (let x = 0; x < 960; x += 48) for (let y = 40; y < 540; y += 48) K.rect(x + 1, y + 1, 46, 46, (x + y) % 96 ? '#16161c' : '#141419');
+    if (s.ghost.length > 1) { c.strokeStyle = '#ff335555'; c.lineWidth = 3; c.setLineDash([6, 8]); c.beginPath(); s.ghost.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); c.setLineDash([]); }
+    s.w.forEach((w) => {
+      const q = wpos(w, s.t);
+      c.save(); c.globalAlpha = 0.22; c.fillStyle = '#fff3b0'; c.beginPath(); c.moveTo(q.x, q.y); c.arc(q.x, q.y, 170, q.a - 0.42, q.a + 0.42); c.closePath(); c.fill(); c.restore();
+      K.circle(q.x, q.y, 13, '#c8c8d0'); K.circle(q.x + Math.cos(q.a) * 6, q.y + Math.sin(q.a) * 6, 3, '#111');
+    });
+    K.glow('#3dffa0', 16); K.rect(s.door.x - 14, s.door.y - 22, 28, 44, '#1f8a4a', 4); K.noGlow();
+    K.circle(s.p.x, s.p.y, 10, '#22e6ff');
+    K.text(`FLOOR ${s.lv + 1} / 6`, 20, 22, 14, '#d8d8e0', 'left', 'd'); K.text(`REWINDS ${s.rewinds}`, 940, 22, 14, '#ff8aa0', 'right', 'd');
+    const tt = s.t % 60; K.text(`${String(Math.floor(tt)).padStart(2, '0')}.${Math.floor((tt % 1) * 10)}`, 480, 22, 16, '#8e88b8', 'center', 'm');
+    if (s.flash > 0) { K.alpha(s.flash); K.rect(0, 0, 960, 540, '#ff335544'); K.text('◀◀ REWIND', 480, 270, 40, '#fff', 'center', 'd', 14); K.alpha(1); }
+  },
+  ai(s) { const a = Math.atan2(s.door.y - s.p.y, s.door.x - s.p.x); const danger = s.w.some((w) => seen(w, s.t + 0.4, { x: s.p.x + Math.cos(a) * 30, y: s.p.y + Math.sin(a) * 30 })); K.vhold('ArrowRight', !danger && Math.cos(a) > 0.3); K.vhold('ArrowLeft', !danger && Math.cos(a) < -0.3); K.vhold('ArrowDown', !danger && Math.sin(a) > 0.3); K.vhold('ArrowUp', !danger && Math.sin(a) < -0.3); },
+});
+</script></body></html>

@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Ice</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-ice","n":162,"title":"THE ICE","genre":"horror","desc":"The only way to the cabin is across the frozen lake, at night, in a snow storm. Every step tells you something: the ice under your boots cracks once for every weak patch right next to you. Read the cracks, mark the bad ice, and do not step where it is thin - something under the ice is waiting. Three lakes.","controls":"Arrow keys / WASD (or the stick) to step · Space / tap a square next to you to mark it as thin ice","scoreLabel":"LAKES","tasks":[{"stat":"score","target":1,"text":"Cross a lake in The Ice"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const W = 11, H = 13, T = 38, OX = 480 - (W * T) / 2, OY = 22;
+function lake(s) {
+  for (let t = 0; t < 300; t++) {
+    const thin = Array.from({ length: H }, () => Array(W).fill(false)), n = 18 + s.lv * 8;
+    for (let k = 0; k < n; k++) { const x = K.irand(0, W - 1), y = K.irand(1, H - 2); thin[y][x] = true; }
+    s.start = [Math.floor(W / 2), H - 1]; s.cabin = [K.irand(1, W - 2), 0]; thin[s.start[1]][s.start[0]] = false; thin[s.cabin[1]][s.cabin[0]] = false;
+    // there must be a safe way across
+    const seen = new Set([s.start.join()]), q = [s.start]; let ok = false;
+    while (q.length) { const [x, y] = q.shift(); if (x === s.cabin[0] && y === s.cabin[1]) { ok = true; break; } for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < W && ny < H && !thin[ny][nx] && !seen.has(nx + ',' + ny)) { seen.add(nx + ',' + ny); q.push([nx, ny]); } } }
+    if (!ok) continue;
+    s.thin = thin; break;
+  }
+  s.p = s.start.slice(); s.known = Array.from({ length: H }, () => Array(W).fill(-1)); s.mark = Array.from({ length: H }, () => Array(W).fill(false)); s.moveT = 0; s.state = 'walk';
+  step(s);
+}
+const count = (s, x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].filter(([dx, dy]) => s.thin[y + dy]?.[x + dx]).length;
+function step(s) {
+  const [x, y] = s.p, n = count(s, x, y); s.known[y][x] = n;
+  for (let i = 0; i < n; i++) K.noise(0.12, 0.05 + n * 0.02, 1800 - i * 200, i * 0.14);
+  if (!n) K.sfx('step');
+}
+K.game({
+  touch: { buttons: [['Space', 'MARK']] },
+  bg: '#0c1218',
+  init(s) { s.lv = 0; s.lives = 3; s.crossed = 0; s.snow = Array.from({ length: 120 }, () => [K.rand(0, 960), K.rand(0, 540), K.rand(20, 60)]); lake(s); },
+  update(s, dt) {
+    s.snow.forEach((f) => { f[0] -= f[2] * 0.6 * dt; f[1] += f[2] * dt; if (f[1] > 540) { f[1] = -5; f[0] = K.rand(0, 1100); } });
+    if (s.state === 'fell') { s.t -= dt; if (s.t <= 0) { s.lives--; if (s.lives <= 0) return K.end(s, { score: s.crossed, won: s.crossed > 0, title: 'UNDER THE ICE', text: 'Something holds your ankle. It does not let go.' }); s.p = s.last.slice(); s.state = 'walk'; } return; }
+    if (s.state === 'safe') { s.t -= dt; if (s.t <= 0) { s.lv++; if (s.lv >= 3) return K.end(s, { score: s.crossed, won: true, stats: { won: 1 }, title: 'THE CABIN', text: 'Three lakes crossed. The fire is still warm. Who lit it?' }); lake(s); } return; }
+    s.moveT -= dt;
+    // mark: Space marks the square ahead (last direction), or tap a neighbouring square
+    if (K.mouse.clicked) { const x = Math.floor((K.mouse.x - OX) / T), y = Math.floor((K.mouse.y - OY) / T); if (Math.abs(x - s.p[0]) + Math.abs(y - s.p[1]) === 1 && x >= 0 && y >= 0 && x < W && y < H) { s.mark[y][x] = !s.mark[y][x]; K.sfx('tick'); return; } }
+    const d = K.tapDir(); if (!d || s.moveT > 0) return;
+    const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[d];
+    if (K.down('Space')) { const x = s.p[0] + dx, y = s.p[1] + dy; if (x >= 0 && y >= 0 && x < W && y < H) { s.mark[y][x] = !s.mark[y][x]; K.sfx('tick'); } return; }
+    const nx = s.p[0] + dx, ny = s.p[1] + dy;
+    if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
+    if (s.mark[ny][nx]) { K.sfx('wrong'); return; }
+    s.last = s.p.slice(); s.p = [nx, ny]; s.moveT = 0.15;
+    if (s.thin[ny][nx]) { s.state = 'fell'; s.t = 1.6; s.known[ny][nx] = 9; K.sfx('scare'); K.noise(0.8, 0.2, 400); K.shake(18); K.flash('#0a1a2a', 0.8); return; }
+    step(s);
+    if (nx === s.cabin[0] && ny === s.cabin[1]) { s.crossed++; s.state = 'safe'; s.t = 2; K.sfx('win'); }
+  },
+  draw(s) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const X = OX + x * T, Y = OY + y * T, k = s.known[y][x];
+      K.rect(X + 1, Y + 1, T - 2, T - 2, k === 9 ? '#020608' : k >= 0 ? '#a8c4d4' : '#6a8a9e', 3);
+      if (k > 0 && k < 9) { for (let i = 0; i < k; i++) { const a = (i / k) * 6.28 + x; K.line(X + T / 2, Y + T / 2, X + T / 2 + Math.cos(a) * T * 0.42, Y + T / 2 + Math.sin(a) * T * 0.42, '#2a3a4a', 1.5); } K.text(String(k), X + T - 7, Y + 9, 9, '#2a3a4a', 'center', 'd'); }
+      if (s.mark[y][x]) K.text('⚠', X + T / 2, Y + T / 2 + 1, 18, '#ff3355');
+      if (k === 9) { K.circle(X + T / 2, Y + T / 2, 8, '#000'); K.circle(X + T / 2 - 3, Y + T / 2 - 2, 1.5, '#9aff9a'); K.circle(X + T / 2 + 3, Y + T / 2 - 2, 1.5, '#9aff9a'); }
+    }
+    const cx = OX + s.cabin[0] * T, cy = OY + s.cabin[1] * T; K.rect(cx + 6, cy + 8, T - 12, T - 12, '#4a2a14', 3); K.glow('#ffb43a', 12); K.rect(cx + 14, cy + 16, 8, 8, '#ffb43a'); K.noGlow();
+    const px = OX + s.p[0] * T + T / 2, py = OY + s.p[1] * T + T / 2; K.circle(px, py, 10, '#22303c'); K.circle(px, py - 4, 6, '#d8c8b0');
+    K.darkness([{ x: px, y: py, r: 120 }, { x: cx + T / 2, y: cy + T / 2, r: 60 }], 0.82);
+    s.snow.forEach(([x, y]) => K.circle(x, y, 1.6, '#ffffffaa'));
+    K.text(`LAKE ${s.lv + 1} / 3`, 20, 24, 14, '#d8e8f0', 'left', 'd'); for (let i = 0; i < 3; i++) K.text('♥', 900 + i * 20, 24, 16, i < s.lives ? '#ff3355' : '#ffffff22');
+    K.wrapText('Each crack under your boots = one thin patch next to you (diagonals too). Mark thin ice with Space + a direction, or tap a square beside you.', 140, 200, 220, 13, '#8ea8b8', 1.35);
+    if (s.state === 'fell') K.text('THE ICE BROKE', 480, 270, 34, '#9aff9a', 'center', 'd', 16);
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 20) return; const opts = [['up', 0, -1], ['left', -1, 0], ['right', 1, 0]].filter(([, dx, dy]) => { const x = s.p[0] + dx, y = s.p[1] + dy; return x >= 0 && x < W && y >= 0 && !s.thin[y]?.[x]; }); if (opts.length) K.vtap({ up: 'ArrowUp', left: 'ArrowLeft', right: 'ArrowRight' }[opts[0][0]]); },
+});
+</script></body></html>

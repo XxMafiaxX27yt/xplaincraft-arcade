@@ -753,6 +753,136 @@ export const GAME_LIST = [
 "cover": "games/covers/lights-out-house.png"
 },
 {
+"id": "morse-signal",
+"n": 161,
+"title": "MORSE SIGNAL",
+"genre": "horror",
+"desc": "3 AM at the coastguard station. A lamp blinks out of the fog: a ship is sinking and its radio is dead. Read the flashes and beeps with the Morse chart, type the word, and send the boats to the right place before the water reaches the bridge. The messages get longer, and the last ones are not from the crew.",
+"controls": "Watch / listen, type the word + Enter · REPLAY (or 0) plays it again (costs time) · the chart is on the right",
+"scoreLabel": "MESSAGES",
+"tasks": [
+{
+"stat": "score",
+"target": 5,
+"text": "Decode 5 messages in Morse Signal"
+}
+],
+"file": "games/2d/morse-signal.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/morse-signal.png"
+},
+{
+"id": "the-ice",
+"n": 162,
+"title": "THE ICE",
+"genre": "horror",
+"desc": "The only way to the cabin is across the frozen lake, at night, in a snow storm. Every step tells you something: the ice under your boots cracks once for every weak patch right next to you. Read the cracks, mark the bad ice, and do not step where it is thin - something under the ice is waiting. Three lakes.",
+"controls": "Arrow keys / WASD (or the stick) to step · Space / tap a square next to you to mark it as thin ice",
+"scoreLabel": "LAKES",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Cross a lake in The Ice"
+}
+],
+"file": "games/2d/the-ice.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-ice.png"
+},
+{
+"id": "rewind",
+"n": 163,
+"title": "REWIND",
+"genre": "horror",
+"desc": "You cannot die here - not properly. Whenever the watchers' lights catch you, time snaps back ten seconds and you are standing where you were, with your last attempt glowing on the floor as a warning. The watchers always walk the same way. Learn their pattern, slip past, reach the door. Six floors of the old asylum.",
+"controls": "WASD / arrows (or the stick) to sneak · reach the green door · getting seen rewinds 10 seconds",
+"scoreLabel": "FLOORS",
+"tasks": [
+{
+"stat": "score",
+"target": 3,
+"text": "Escape 3 floors in Rewind"
+}
+],
+"file": "games/2d/rewind.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/rewind.png"
+},
+{
+"id": "seance",
+"n": 164,
+"title": "SÉANCE",
+"genre": "horror",
+"desc": "Six candles, six hands around the table. The spirit tells you which hands must stay joined, and it keeps changing its mind. Hold exactly the right keys (or press the right hands on a phone), let go of the others, and keep the circle unbroken until the clock strikes. Every slip blows out a candle. Lose them all and the circle opens.",
+"controls": "Hold the keys A S D J K L that the spirit asks for (phone: hold the glowing hands) · release the others",
+"scoreLabel": "SÉANCES",
+"tasks": [
+{
+"stat": "score",
+"target": 2,
+"text": "Survive 2 séances"
+}
+],
+"file": "games/2d/seance.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/seance.png"
+},
+{
+"id": "lost-kid",
+"n": 165,
+"title": "LOST KID",
+"genre": "horror",
+"desc": "The carnival closed hours ago and a little girl is still here, holding your hand. Lead her to the gate through the dark rides. Walk too fast and her hand slips out of yours - she stops and cries, and the clowns hear crying. Lamps keep them away. Get her out three times; the carnival keeps moving the gate.",
+"controls": "Arrow keys / WASD (or the stick) to walk · hold Shift to run (she cannot keep up!) · go back to her to take her hand again",
+"scoreLabel": "RESCUES",
+"tasks": [
+{
+"stat": "score",
+"target": 1,
+"text": "Get the lost kid out once"
+}
+],
+"file": "games/2d/lost-kid.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
+"id": "chalk-circle",
+"n": 166,
+"title": "CHALK CIRCLE",
+"genre": "horror",
+"desc": "Midnight is coming. Around every candle on the floor, draw a chalk circle - a closed one, no gaps - before the clock strikes. Then the things in the dark come to test your circles: a broken circle lets one through and the candle dies. During the night they scuff the chalk; redraw fast. Five nights.",
+"controls": "Drag to draw a closed loop around a candle (end where you started) · redraw a scuffed circle any time",
+"scoreLabel": "CANDLES",
+"tasks": [
+{
+"stat": "score",
+"target": 10,
+"text": "Keep 10 candles burning in Chalk Circle"
+}
+],
+"file": "games/2d/chalk-circle.html",
+"dim": "2d",
+"modes": [
+"sp"
+]
+},
+{
 "id": "breakout",
 "n": 1,
 "title": "BREAKOUT",
@@ -2340,7 +2470,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/bomb-defuse.png"
 },
 {
 "id": "lying-simon",
@@ -2361,7 +2492,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/lying-simon.png"
 },
 {
 "id": "match-3",

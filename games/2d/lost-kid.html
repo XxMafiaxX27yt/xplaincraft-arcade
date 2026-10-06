@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lost Kid</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lost-kid","n":165,"title":"LOST KID","genre":"horror","desc":"The carnival closed hours ago and a little girl is still here, holding your hand. Lead her to the gate through the dark rides. Walk too fast and her hand slips out of yours - she stops and cries, and the clowns hear crying. Lamps keep them away. Get her out three times; the carnival keeps moving the gate.","controls":"Arrow keys / WASD (or the stick) to walk · hold Shift to run (she cannot keep up!) · go back to her to take her hand again","scoreLabel":"RESCUES","tasks":[{"stat":"score","target":1,"text":"Get the lost kid out once"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const WW = 1800, WH = 1100;
+function night(s) {
+  s.p = { x: 120, y: K.rand(200, WH - 200) }; s.kid = { x: s.p.x - 30, y: s.p.y, held: true, cry: 0, fear: 0 };
+  s.gate = { x: WW - 100, y: K.rand(150, WH - 150) };
+  s.stalls = []; for (let i = 0; i < 22; i++) { const r = { x: K.rand(260, WW - 300), y: K.rand(60, WH - 160), w: K.rand(80, 160), h: K.rand(60, 110) }; if (!s.stalls.some((o) => K.rectHit({ x: r.x - 60, y: r.y - 60, w: r.w + 120, h: r.h + 120 }, o))) s.stalls.push(r); }
+  s.lamps = Array.from({ length: 9 }, () => ({ x: K.rand(300, WW - 300), y: K.rand(80, WH - 80) }));
+  s.clowns = Array.from({ length: 2 + s.n }, () => ({ x: K.rand(700, WW - 200), y: K.rand(100, WH - 100), tx: 0, ty: 0, t: 0 }));
+  s.state = 'go';
+}
+const solid = (s, x, y, r) => s.stalls.some((o) => x + r > o.x && x - r < o.x + o.w && y + r > o.y && y - r < o.y + o.h);
+const lit = (s, x, y) => s.lamps.some((l) => Math.hypot(l.x - x, l.y - y) < 110);
+function move(s, o, vx, vy, dt, r) { const nx = K.clamp(o.x + vx * dt, 20, WW - 20), ny = K.clamp(o.y + vy * dt, 20, WH - 20); if (!solid(s, nx, o.y, r)) o.x = nx; if (!solid(s, o.x, ny, r)) o.y = ny; }
+K.game({
+  touch: { buttons: [['ShiftLeft', 'RUN']] },
+  bg: '#07060c',
+  init(s) { s.n = 0; s.saved = 0; night(s); },
+  update(s, dt) {
+    if (s.state !== 'go') { s.t -= dt; if (s.t <= 0) { if (s.state === 'lost') return K.end(s, { score: s.saved, won: s.saved > 0, title: 'SHE WAS TAKEN', text: 'The music starts again. The carousel turns by itself.' }); s.n++; if (s.n >= 3) return K.end(s, { score: s.saved, won: true, stats: { won: 1 }, title: 'HOME SAFE', text: 'Three times out of the carnival. Her parents never ask how.' }); night(s); } return; }
+    const d = K.dir(), run = K.down('ShiftLeft') && (d.x || d.y), sp = run ? 230 : 120, L = Math.hypot(d.x, d.y) || 1;
+    move(s, s.p, (d.x / L) * sp * (d.x || d.y ? 1 : 0), (d.y / L) * sp * (d.x || d.y ? 1 : 0), dt, 12);
+    const k = s.kid, dk = Math.hypot(s.p.x - k.x, s.p.y - k.y);
+    if (k.held) {
+      if (dk > 30) { const a = Math.atan2(s.p.y - k.y, s.p.x - k.x); move(s, k, Math.cos(a) * Math.min(130, (dk - 26) * 8), Math.sin(a) * Math.min(130, (dk - 26) * 8), dt, 9); }
+      if (Math.hypot(s.p.x - k.x, s.p.y - k.y) > 70 || run) { k.held = false; k.cry = 0; K.sfx('wrong'); }
+    } else {
+      k.cry += dt; if (Math.floor(k.cry * 2) !== Math.floor((k.cry - dt) * 2)) K.tone(K.rand(500, 700), 0.25, 'sine', 0.04, -150);
+      if (dk < 26) { k.held = true; K.sfx('chime'); }
+    }
+    // clowns wander, follow crying, stay out of lamplight
+    for (const c of s.clowns) {
+      c.t -= dt;
+      if (!k.held && k.cry > 0.6) { c.tx = k.x; c.ty = k.y; }
+      else if (c.t <= 0 || Math.hypot(c.tx - c.x, c.ty - c.y) < 20) { c.tx = K.rand(200, WW - 100); c.ty = K.rand(60, WH - 60); c.t = 6; }
+      const a = Math.atan2(c.ty - c.y, c.tx - c.x), cs = (!k.held ? 105 : 60) + s.n * 15;
+      const nx = c.x + Math.cos(a) * cs * dt, ny = c.y + Math.sin(a) * cs * dt;
+      if (!lit(s, nx, ny)) { c.x = nx; c.y = ny; } else { c.t = 0; }
+      if (Math.hypot(c.x - k.x, c.y - k.y) < 22 && !lit(s, k.x, k.y)) { s.state = 'lost'; s.t = 2; K.sfx('scare'); K.shake(20); K.flash('#fff', 0.4); return; }
+      if (Math.hypot(c.x - s.p.x, c.y - s.p.y) < 22) { const b = Math.atan2(s.p.y - c.y, s.p.x - c.x); s.p.x += Math.cos(b) * 40; s.p.y += Math.sin(b) * 40; K.sfx('hit'); k.held = false; }
+    }
+    if (k.held && Math.hypot(s.gate.x - s.p.x, s.gate.y - s.p.y) < 50) { s.saved++; s.state = 'safe'; s.t = 2; K.sfx('win'); }
+  },
+  draw(s) {
+    const cx = K.clamp(s.p.x - 480, 0, WW - 960), cy = K.clamp(s.p.y - 270, 0, WH - 540), c = K.ctx();
+    c.save(); c.translate(-cx, -cy);
+    for (let x = 0; x < WW; x += 60) for (let y = 0; y < WH; y += 60) K.rect(x, y, 59, 59, (x + y) % 120 ? '#1a1410' : '#17120e');
+    s.stalls.forEach((o, i) => { K.rect(o.x, o.y, o.w, o.h, '#3a1a2a', 6); for (let k = 0; k < o.w; k += 20) K.rect(o.x + k, o.y, 10, 16, i % 2 ? '#c03050' : '#e8e0d0'); });
+    s.lamps.forEach((l) => { K.circle(l.x, l.y, 6, '#ffe08a'); });
+    K.glow('#3dffa0', 16); K.rect(s.gate.x - 20, s.gate.y - 40, 40, 80, '#1f6a4a', 6); K.noGlow(); K.text('EXIT', s.gate.x, s.gate.y - 50, 12, '#3dffa0', 'center', 'd');
+    s.clowns.forEach((cl) => { K.circle(cl.x, cl.y, 14, '#f2f2f2'); K.circle(cl.x, cl.y - 3, 4, '#ff3355'); K.circle(cl.x - 5, cl.y - 8, 2, '#111'); K.circle(cl.x + 5, cl.y - 8, 2, '#111'); K.poly([[cl.x - 10, cl.y - 12], [cl.x, cl.y - 30], [cl.x + 10, cl.y - 12]], '#c45cff'); });
+    const k = s.kid; K.circle(k.x, k.y, 8, '#ff9bc8'); K.circle(k.x, k.y - 7, 5, '#f1c9a5'); if (k.held) K.line(k.x, k.y, s.p.x, s.p.y, '#f1c9a588', 2); else if (Math.sin(K.time() * 10) > 0) K.text('😢', k.x, k.y - 20, 14, '#fff');
+    K.circle(s.p.x, s.p.y, 11, '#22e6ff');
+    c.restore();
+    K.darkness([{ x: s.p.x - cx, y: s.p.y - cy, r: 150 }, ...s.lamps.map((l) => ({ x: l.x - cx, y: l.y - cy, r: 110 })), { x: s.gate.x - cx, y: s.gate.y - cy, r: 70 }], 0.94);
+    // arrow to the gate
+    const a = Math.atan2(s.gate.y - s.p.y, s.gate.x - s.p.x); K.text('➤', 480 + Math.cos(a) * 230, 270 + Math.sin(a) * 200, 20, '#3dffa088');
+    K.text(`NIGHT ${s.n + 1} / 3`, 20, 22, 14, '#e8d8e8', 'left', 'd');
+    K.text(k.held ? 'holding her hand' : 'SHE LET GO - go back to her!', 480, 518, 14, k.held ? '#8e88b8' : '#ff3355', 'center', 'd');
+    if (s.state === 'safe') K.text('OUT!', 480, 230, 40, '#3dffa0', 'center', 'd', 16);
+  },
+  ai(s) { const a = Math.atan2(s.gate.y - s.p.y, s.gate.x - s.p.x); K.vhold('ArrowRight', Math.cos(a) > 0.3); K.vhold('ArrowLeft', Math.cos(a) < -0.3); K.vhold('ArrowDown', Math.sin(a) > 0.3); K.vhold('ArrowUp', Math.sin(a) < -0.3); },
+});
+</script></body></html>

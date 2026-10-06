@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chalk Circle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"chalk-circle","n":166,"title":"CHALK CIRCLE","genre":"horror","desc":"Midnight is coming. Around every candle on the floor, draw a chalk circle - a closed one, no gaps - before the clock strikes. Then the things in the dark come to test your circles: a broken circle lets one through and the candle dies. During the night they scuff the chalk; redraw fast. Five nights.","controls":"Drag to draw a closed loop around a candle (end where you started) · redraw a scuffed circle any time","scoreLabel":"CANDLES","tasks":[{"stat":"score","target":10,"text":"Keep 10 candles burning in Chalk Circle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+function night(s) {
+  const n = 2 + s.n; s.c = [];
+  for (let t = 0; s.c.length < n && t < 500; t++) { const p = { x: K.rand(140, 820), y: K.rand(120, 440) }; if (!s.c.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 170)) s.c.push({ ...p, ring: null, lit: true, scuff: 0 }); }
+  s.clock = Math.max(9, 18 - s.n * 2); s.phase = 'draw'; s.line = null; s.spirits = []; s.night = 0;
+}
+// a drawn line counts as a circle for a candle when it closes on itself and goes all the way round it
+function closes(pts) { return pts.length > 12 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 34; }
+function encloses(pts, x, y) { let inside = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside; } return inside; }
+K.game({
+  bg: '#0e0c10',
+  init(s) { s.n = 0; s.kept = 0; night(s); },
+  update(s, dt) {
+    const m = K.mouse;
+    if (s.phase === 'over') { s.t -= dt; if (s.t <= 0) { s.n++; if (s.n >= 5 || !s.alive) return K.end(s, { score: s.kept, won: s.alive && s.n >= 5, stats: { won: s.alive && s.n >= 5 ? 1 : 0 }, title: s.alive ? 'DAWN' : 'ALL THE CANDLES DIED', text: `${s.kept} candles kept burning` }); night(s); } return; }
+    // drawing
+    if (m.down) { if (m.clicked || !s.line) s.line = [[m.x, m.y]]; const l = s.line[s.line.length - 1]; if (Math.hypot(m.x - l[0], m.y - l[1]) > 6) s.line.push([m.x, m.y]); if (Math.random() < 0.3) K.noise(0.04, 0.02, 3500); }
+    else if (s.line) {
+      if (closes(s.line)) { const c = s.c.find((q) => q.lit && encloses(s.line, q.x, q.y)); if (c) { const r = Math.max(...s.line.map(([x, y]) => Math.hypot(x - c.x, y - c.y))); if (r < 150) { c.ring = s.line; c.scuff = 0; K.sfx('chime'); } else K.sfx('wrong'); } }
+      else K.sfx('tick');
+      s.line = null;
+    }
+    if (s.phase === 'draw') { s.clock -= dt; if (s.clock <= 0) { s.phase = 'night'; s.night = 10 + s.n * 2; K.sfx('scare'); K.tone(110, 2, 'sawtooth', 0.05); } return; }
+    // the night: spirits drift in toward candles; a circle stops them unless it is scuffed open
+    s.night -= dt;
+    if (Math.random() < dt * (0.8 + s.n * 0.3)) { const a = K.rand(0, 6.28), t = K.pick(s.c.filter((q) => q.lit)); if (t) s.spirits.push({ x: 480 + Math.cos(a) * 600, y: 270 + Math.sin(a) * 400, t }); }
+    if (Math.random() < dt * (0.15 + s.n * 0.08)) { const c = K.pick(s.c.filter((q) => q.lit && q.ring && !q.scuff)); if (c) { c.scuff = 1; K.sfx('whisper'); } }
+    for (const sp of s.spirits) {
+      const a = Math.atan2(sp.t.y - sp.y, sp.t.x - sp.x); sp.x += Math.cos(a) * 70 * dt; sp.y += Math.sin(a) * 70 * dt;
+      const c = sp.t, d = Math.hypot(sp.x - c.x, sp.y - c.y);
+      if (c.ring && !c.scuff && encloses(c.ring, sp.x, sp.y) === false && d < 160 && c.ring.some(([x, y]) => Math.hypot(x - sp.x, y - sp.y) < 12)) { sp.dead = true; K.burst(sp.x, sp.y, '#c9c3ff', 8); }
+      else if (d < 14) { sp.dead = true; c.lit = false; c.ring = null; K.sfx('scare'); K.shake(10); }
+    }
+    s.spirits = s.spirits.filter((sp) => !sp.dead && sp.t.lit);
+    if (s.night <= 0) { s.phase = 'over'; s.t = 1.8; const k = s.c.filter((q) => q.lit).length; s.kept += k; s.alive = k > 0; K.sfx(k ? 'win' : 'lose'); }
+  },
+  draw(s) {
+    const c = K.ctx();
+    for (let i = 0; i < 30; i++) K.line((i * 97) % 960, 0, (i * 97 + 60) % 960, 540, '#ffffff05', 18);
+    s.c.forEach((q) => {
+      if (q.ring) { c.strokeStyle = q.scuff ? '#8a8a8a' : '#f2f2f2'; c.lineWidth = 5; c.lineCap = 'round'; c.setLineDash(q.scuff ? [14, 22] : []); c.beginPath(); q.ring.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke(); c.setLineDash([]); }
+      K.rect(q.x - 6, q.y - 18, 12, 24, '#e8dcc0', 2);
+      if (q.lit) { K.glow('#ffb43a', 18); K.circle(q.x, q.y - 24 + Math.sin(K.time() * 11 + q.x) * 1.5, 6, '#ffd93a'); K.noGlow(); } else K.text('~', q.x, q.y - 30, 14, '#666');
+    });
+    if (s.line) { c.strokeStyle = '#ffffffcc'; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); s.line.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); if (s.line.length > 12) K.ring(s.line[0][0], s.line[0][1], 34, '#3dffa055', 2); }
+    s.spirits.forEach((sp) => { K.alpha(0.75); K.circle(sp.x, sp.y, 14, '#c9c3ff'); K.poly([[sp.x - 14, sp.y], [sp.x - 8, sp.y + 22], [sp.x, sp.y + 12], [sp.x + 8, sp.y + 22], [sp.x + 14, sp.y]], '#c9c3ff'); K.alpha(1); K.circle(sp.x - 5, sp.y - 2, 2, '#111'); K.circle(sp.x + 5, sp.y - 2, 2, '#111'); });
+    K.darkness([...s.c.filter((q) => q.lit).map((q) => ({ x: q.x, y: q.y, r: 190 })), { x: K.mouse.x, y: K.mouse.y, r: 60 }], 0.9);
+    K.text(`NIGHT ${s.n + 1} / 5`, 20, 22, 14, '#e8e0f0', 'left', 'd');
+    if (s.phase === 'draw') K.text(`MIDNIGHT IN ${Math.ceil(s.clock)}`, 480, 30, 22, s.clock < 4 ? '#ff3355' : '#e8e0f0', 'center', 'd');
+    if (s.phase === 'night') K.text(`DAWN IN ${Math.ceil(s.night)} · redraw scuffed circles!`, 480, 30, 18, '#c9c3ff', 'center', 'd');
+    const done = s.c.filter((q) => q.ring && !q.scuff).length; K.text(`circles ${done} / ${s.c.filter((q) => q.lit).length}`, 940, 22, 14, '#e8e0f0', 'right', 'd');
+    if (s.phase === 'draw' && !done && !K.attract) K.text('draw a closed loop around each candle', 480, 520, 15, '#8e88b8', 'center', 'u');
+  },
+  ai(s) { const q = s.c.find((c) => !c.ring); if (!q || s.aiT > 0) { s.aiT = (s.aiT || 0) - 1 / 60; return; } q.ring = Array.from({ length: 40 }, (_, i) => [q.x + Math.cos((i / 40) * 6.28) * 70, q.y + Math.sin((i / 40) * 6.28) * 60]); s.aiT = 1; },
+});
+</script></body></html>
