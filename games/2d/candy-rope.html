@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Candy Rope</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"candy-rope","n":167,"title":"CANDY ROPE","genre":"fun","desc":"A sweet hangs on ropes and a little green monster is starving below. Swipe across the ropes to cut them, let the candy swing and fall into its mouth, and grab the stars on the way. Bubbles lift the candy, spikes pop it. Ten boxes of puzzles.","controls":"Swipe (drag) across a rope to cut it · tap a bubble to pop it","scoreLabel":"STARS","tasks":[{"stat":"score","target":10,"text":"Collect 10 stars in Candy Rope"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// level: ropes from anchors, candy start, monster, stars, optional bubble [x,y] and spikes [[x,y,w]]
+const LEVELS = [
+  { candy: [480, 200], ropes: [[480, 60]], mon: [480, 470], stars: [[480, 300], [480, 360], [480, 420]] },
+  { candy: [400, 200], ropes: [[300, 60], [520, 60]], mon: [650, 470], stars: [[520, 300], [600, 380], [430, 260]] },
+  { candy: [300, 220], ropes: [[180, 80], [420, 80]], mon: [564, 447], stars: [[357, 249], [450, 262], [517, 322]] },
+  { candy: [480, 150], ropes: [[300, 60], [660, 60], [480, 40]], mon: [200, 470], stars: [[380, 260], [300, 340], [230, 410]] },
+  { candy: [300, 300], ropes: [[180, 160], [420, 160]], mon: [323, 126], bubble: [300, 400], stars: [[311, 430], [317, 438], [321, 300]] },
+  { candy: [480, 200], ropes: [[360, 60], [600, 60]], mon: [480, 470], spikes: [[380, 360, 70], [530, 360, 70]], stars: [[480, 290], [480, 340], [480, 410]] },
+  { candy: [220, 180], ropes: [[120, 60], [340, 60]], mon: [450, 458], spikes: [[60, 480, 60], [240, 480, 60]], stars: [[302, 225], [389, 221], [426, 297]] },
+  { candy: [480, 300], ropes: [[360, 160], [600, 160]], mon: [531, 127], bubble: [480, 400], spikes: [[60, 480, 60], [240, 480, 60]], stars: [[503, 431], [516, 444], [525, 308]] },
+  { candy: [200, 260], ropes: [[100, 80], [300, 80], [200, 60]], mon: [360, 457], spikes: [[60, 480, 60], [480, 480, 60]], stars: [[245, 273], [326, 282], [348, 318]] },
+  { candy: [480, 180], ropes: [[340, 40], [620, 40], [480, 20]], mon: [210, 458], spikes: [[340, 480, 60], [520, 480, 60]], stars: [[467, 173], [383, 233], [281, 312]] },
+];
+const SEG = 18;
+function level(s) {
+  const L = LEVELS[s.lv]; s.c = { x: L.candy[0], y: L.candy[1], px: L.candy[0], py: L.candy[1], r: 16 };
+  s.ropes = L.ropes.map(([ax, ay]) => { const n = Math.max(2, Math.round(Math.hypot(L.candy[0] - ax, L.candy[1] - ay) / SEG)), pts = []; for (let i = 0; i <= n; i++) { const x = ax + ((L.candy[0] - ax) * i) / n, y = ay + ((L.candy[1] - ay) * i) / n; pts.push({ x, y, px: x, py: y }); } return { pts, len: Math.hypot(L.candy[0] - ax, L.candy[1] - ay) / n, cut: -1 }; });
+  s.stars = L.stars.map(([x, y]) => ({ x, y, got: false })); s.bub = L.bubble ? { x: L.bubble[0], y: L.bubble[1], on: false, gone: false } : null;
+  s.state = 'play'; s.t = 0; s.got = 0;
+}
+function phys(s, dt) {
+  const g = 900 * dt * dt, c = s.c, lift = s.bub && s.bub.on;
+  const vx = (c.x - c.px) * 0.995, vy = (c.y - c.py) * 0.995; c.px = c.x; c.py = c.y; c.x += vx; c.y += vy + (lift ? -g * 0.55 : g);
+  s.ropes.forEach((r) => r.pts.forEach((p, i) => { if (i === 0) return; const vx2 = (p.x - p.px) * 0.99, vy2 = (p.y - p.py) * 0.99; p.px = p.x; p.py = p.y; p.x += vx2; p.y += vy2 + g; }));
+  for (let it = 0; it < 18; it++) s.ropes.forEach((r) => {
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      if (i === r.cut) continue;
+      const a = r.pts[i], b = r.pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, diff = (d - r.len) / d;
+      if (i === 0) { b.x -= dx * diff; b.y -= dy * diff; } else { a.x += dx * diff * 0.5; a.y += dy * diff * 0.5; b.x -= dx * diff * 0.5; b.y -= dy * diff * 0.5; }
+    }
+    // the last point is tied to the candy (only while that part of the rope is still attached)
+    if (r.cut < 0) { const e = r.pts[r.pts.length - 1], dx = c.x - e.x, dy = c.y - e.y; e.x += dx * 0.5; e.y += dy * 0.5; c.x -= dx * 0.5; c.y -= dy * 0.5; }
+  });
+}
+const cross = (a, b, c, d) => { const o = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)); return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b); };
+K.game({
+  bg: '#f4e8d0', touch: { stick: false, buttons: [] },
+  init(s) { s.lv = 0; s.total = 0; s.last = null; level(s); },
+  update(s, dt) {
+    const m = K.mouse, L = LEVELS[s.lv];
+    if (s.state !== 'play') { s.t -= dt; if (s.t <= 0) { if (s.state === 'won') { s.lv++; if (s.lv >= LEVELS.length) return K.end(s, { score: s.total, won: true, stats: { won: 1 }, title: 'MONSTER IS FULL', text: `${s.total} of 30 stars` }); } level(s); } return; }
+    // swipe to cut
+    if (m.down && s.last) { const a = s.last, b = { x: m.x, y: m.y }; s.ropes.forEach((r) => { if (r.cut >= 0) return; for (let i = 0; i < r.pts.length - 1; i++) if (cross(a, b, r.pts[i], r.pts[i + 1])) { r.cut = i; K.sfx('whoosh'); break; } }); }
+    s.last = m.down ? { x: m.x, y: m.y } : null;
+    if (s.bub && !s.bub.gone) { if (!s.bub.on && Math.hypot(s.c.x - s.bub.x, s.c.y - s.bub.y) < 34) { s.bub.on = true; K.sfx('pop'); } if (s.bub.on && m.clicked && Math.hypot(m.x - s.c.x, m.y - s.c.y) < 40) { s.bub.on = false; s.bub.gone = true; K.sfx('pop'); } }
+    for (let k = 0; k < 2; k++) phys(s, dt / 2);
+    const c = s.c;
+    s.stars.forEach((st) => { if (!st.got && Math.hypot(st.x - c.x, st.y - c.y) < 28) { st.got = true; s.got++; K.tone(800 + s.got * 200, 0.15, 'triangle', 0.06); } });
+    if (Math.hypot(c.x - L.mon[0], c.y - (L.mon[1] - 10)) < 40) { s.total += s.got; s.state = 'won'; s.t = 1.5; K.sfx('win'); return; }
+    if ((L.spikes || []).some(([x, y, w]) => c.x > x - 4 && c.x < x + w + 4 && Math.abs(c.y - y) < 20) || c.y > 600 || c.y < -100 || c.x < -60 || c.x > 1020) { s.state = 'lost'; s.t = 1; K.sfx('hit'); }
+  },
+  draw(s) {
+    const L = LEVELS[s.lv], c = K.ctx();
+    for (let i = 0; i < 12; i++) K.rect(i * 80, 0, 40, 540, '#efe0c4');
+    (L.spikes || []).forEach(([x, y, w]) => { for (let k = 0; k < w; k += 14) K.poly([[x + k, y + 10], [x + k + 7, y - 10], [x + k + 14, y + 10]], '#7a7a8a'); });
+    // monster
+    const [mx, my] = L.mon, open = Math.hypot(s.c.x - mx, s.c.y - my) < 160;
+    K.circle(mx, my, 38, '#4ac04a'); K.circle(mx - 13, my - 14, 9, '#fff'); K.circle(mx + 13, my - 14, 9, '#fff'); K.circle(mx - 13, my - 12, 4, '#111'); K.circle(mx + 13, my - 12, 4, '#111');
+    c.fillStyle = '#5a1a1a'; c.beginPath(); c.ellipse(mx, my + 10, 18, open ? 14 : 4, 0, 0, 6.28); c.fill();
+    s.stars.forEach((st) => { if (!st.got) { K.glow('#ffd93a', 12); K.text('★', st.x, st.y, 30, '#ffd93a'); K.noGlow(); } });
+    s.ropes.forEach((r) => { L.ropes.forEach(() => {}); K.circle(r.pts[0].x, r.pts[0].y, 7, '#6a4a2a'); c.strokeStyle = '#8a5a2a'; c.lineWidth = 4; c.lineCap = 'round'; c.beginPath(); r.pts.forEach((p, i) => { if (i === 0) c.moveTo(p.x, p.y); else if (i - 1 === r.cut) { c.stroke(); c.beginPath(); c.moveTo(p.x, p.y); } else c.lineTo(p.x, p.y); }); c.stroke(); });
+    if (s.bub && !s.bub.gone) { const b = s.bub.on ? s.c : s.bub; K.alpha(0.35); K.circle(b.x, b.y, 30, '#9ad8ff'); K.alpha(1); K.ring(b.x, b.y, 30, '#5ab8ff', 2); }
+    K.glow('#ff2bd6', 10); K.circle(s.c.x, s.c.y, s.c.r, '#ff4ab0'); K.noGlow(); K.circle(s.c.x - 5, s.c.y - 5, 5, '#ffc8e8');
+    K.text(`BOX ${s.lv + 1} / ${LEVELS.length}`, 20, 22, 14, '#5a3a1a', 'left', 'd'); K.text(`★ ${s.total + s.got}`, 940, 22, 16, '#c89a1a', 'right', 'd');
+    if (s.state === 'won') K.text('YUM!', 480, 250, 50, '#3a8a3a', 'center', 'd');
+    if (s.state === 'lost') K.text('OOPS', 480, 250, 40, '#aa3a3a', 'center', 'd');
+    if (s.lv === 0 && !K.attract) K.text('swipe across the rope', 480, 520, 15, '#8a6a4a', 'center', 'u');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw === 50 && s.ropes[0]) s.ropes[0].cut = 2; },
+});
+</script></body></html>

@@ -1,0 +1,96 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sheep Herder</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sheep-herder","n":172,"title":"SHEEP HERDER","genre":"fun","desc":"You are the farm dog. The sheep run away from you - so come at them from the far side and push the flock through the gate into the pen before sundown. Hedges get in the way, and later fields have a fox who wants dinner. Bark to scatter them (carefully).","controls":"Move the dog with the mouse / finger (or WASD / the stick) · Space / BARK scares sheep nearby","scoreLabel":"SHEEP","tasks":[{"stat":"score","target":30,"text":"Pen 30 sheep in Sheep Herder"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const PEN = { x: 772, y: 170, w: 170, h: 200, gate: [205, 335] };
+// the fence as solid rectangles: top, bottom, back, and the two short bits either side of the open gate
+const WALLS = [[PEN.x, PEN.y, PEN.w, 8], [PEN.x, PEN.y + PEN.h - 8, PEN.w, 8], [PEN.x + PEN.w - 8, PEN.y, 8, PEN.h], [PEN.x, PEN.y, 8, PEN.gate[0] - PEN.y], [PEN.x, PEN.gate[1], 8, PEN.y + PEN.h - PEN.gate[1]]];
+function field(s) {
+  const n = 6 + s.lv * 2;
+  s.hedges = s.lv >= 1 ? Array.from({ length: Math.min(4, s.lv + 1) }, () => ({ x: K.rand(320, 640), y: K.rand(40, 400), w: 24, h: K.rand(70, 130) })) : [];
+  s.sheep = [];
+  // one flock (later fields: two) grazing somewhere on the left half
+  const herds = s.lv >= 3 ? [[K.rand(120, 300), K.rand(90, 200)], [K.rand(120, 300), K.rand(340, 450)]] : [[K.rand(140, 320), K.rand(120, 420)]];
+  while (s.sheep.length < n) { const [hx, hy] = herds[s.sheep.length % herds.length], a = K.rand(0, 6.28), r = K.rand(0, 70), x = hx + Math.cos(a) * r, y = hy + Math.sin(a) * r; if (!solid(s, x, y, 14) && x > 20 && y > 20 && y < 520) s.sheep.push({ x, y, vx: 0, vy: 0, in: false }); }
+  s.fox = s.lv >= 2 ? { x: 900, y: 500, cool: 8 } : null;
+  s.time = 60 + n * 4; s.dog = { x: 40, y: 270 }; s.state = 'play';
+}
+const hit = (x, y, r, [rx, ry, rw, rh]) => x + r > rx && x - r < rx + rw && y + r > ry && y - r < ry + rh;
+const solid = (s, x, y, r) => s.hedges.some((h) => hit(x, y, r, [h.x, h.y, h.w, h.h])) || WALLS.some((w) => hit(x, y, r, w));
+const inPen = (x, y) => x > PEN.x + 22 && x < PEN.x + PEN.w - 8 && y > PEN.y + 8 && y < PEN.y + PEN.h - 8;
+K.game({
+  touch: { buttons: [['Space', 'BARK']] },
+  bg: '#4a8a3a',
+  init(s) { s.lv = 0; s.penned = 0; field(s); },
+  update(s, dt) {
+    if (s.state !== 'play') { s.t -= dt; if (s.t <= 0) { s.lv++; if (s.lv >= 6) return K.end(s, { score: s.penned, won: true, stats: { won: 1 }, title: 'GOOD DOG!', text: `${s.penned} sheep penned` }); field(s); } return; }
+    s.time -= dt; s.msg2T = (s.msg2T || 0) - dt;
+    const d = K.dir(), dog = s.dog;
+    let mx = 0, my = 0;
+    if (d.x || d.y) { mx = d.x * 260 * dt; my = d.y * 260 * dt; } else if (K.mouse.down || K.mouse.moved) { const a = Math.atan2(K.mouse.y - dog.y, K.mouse.x - dog.x), dd = Math.hypot(K.mouse.x - dog.x, K.mouse.y - dog.y); if (dd > 6) { mx = Math.cos(a) * Math.min(260, dd * 5) * dt; my = Math.sin(a) * Math.min(260, dd * 5) * dt; } }
+    // the dog stays out of the pen (hedges and fence block it too)
+    const dogOk = (x, y) => !solid(s, x, y, 12) && !(x + 12 > PEN.x && y + 12 > PEN.y && y - 12 < PEN.y + PEN.h);
+    if (dogOk(K.clamp(dog.x + mx, 10, 950), dog.y)) dog.x = K.clamp(dog.x + mx, 10, 950);
+    if (dogOk(dog.x, K.clamp(dog.y + my, 10, 530))) dog.y = K.clamp(dog.y + my, 10, 530);
+    const bark = K.tap('Space'); if (bark) { K.noise(0.15, 0.1, 900); K.tone(280, 0.1, 'square', 0.05, -80); }
+    for (const sh of s.sheep) {
+      let ax = 0, ay = 0;
+      const dd = Math.hypot(sh.x - dog.x, sh.y - dog.y);
+      if (dd < 160) { ax += ((sh.x - dog.x) / dd) * (160 - dd) * 7; ay += ((sh.y - dog.y) / dd) * (160 - dd) * 7; }
+      if (bark && dd < 220) { ax += ((sh.x - dog.x) / dd) * 900; ay += ((sh.y - dog.y) / dd) * 900; }
+      if (s.fox) { const fd = Math.hypot(sh.x - s.fox.x, sh.y - s.fox.y); if (fd < 120) { ax += ((sh.x - s.fox.x) / fd) * 300; ay += ((sh.y - s.fox.y) / fd) * 300; } }
+      // flocking: stay near the others, do not bump
+      // (penned sheep only flock with penned sheep, so the ones outside never pull them back out)
+      let cx = 0, cy = 0, n = 0; for (const o of s.sheep) { if (o === sh) continue; const od = Math.hypot(o.x - sh.x, o.y - sh.y); if (od < 24) { ax -= (o.x - sh.x) * 6; ay -= (o.y - sh.y) * 6; } if (od < 160 && o.in === sh.in) { cx += o.x; cy += o.y; n++; } }
+      if (n) { ax += (cx / n - sh.x) * 0.8; ay += (cy / n - sh.y) * 0.8; }
+      if (sh.in) { ax += (PEN.x + PEN.w * 0.6 - sh.x) * 2; ay += (PEN.y + PEN.h / 2 - sh.y) * 2; } else { sh.wa = (sh.wa ?? K.rand(0, 6.28)) + K.rand(-2, 2) * dt; ax += Math.cos(sh.wa) * 15; ay += Math.sin(sh.wa) * 15; }
+      sh.vx = (sh.vx + ax * dt) * Math.pow(0.15, dt); sh.vy = (sh.vy + ay * dt) * Math.pow(0.15, dt);
+      const sp = Math.hypot(sh.vx, sh.vy), max = 170; if (sp > max) { sh.vx *= max / sp; sh.vy *= max / sp; }
+      const nx = K.clamp(sh.x + sh.vx * dt, 12, 948), ny = K.clamp(sh.y + sh.vy * dt, 12, 528);
+      if (!solid(s, nx, sh.y, 10)) sh.x = nx; else sh.vx *= -0.5; if (!solid(s, sh.x, ny, 10)) sh.y = ny; else sh.vy *= -0.5;
+      const was = sh.in; sh.in = inPen(sh.x, sh.y); if (sh.in && !was) K.tone(700, 0.08, 'triangle', 0.05);
+    }
+    if (s.fox) {
+      const f = s.fox, fd = Math.hypot(dog.x - f.x, dog.y - f.y); f.cool -= dt;
+      const tgt = f.cool > 0 ? null : s.sheep.filter((q) => !q.in).sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
+      if (fd < 150) { f.x += ((f.x - dog.x) / fd) * 220 * dt; f.y += ((f.y - dog.y) / fd) * 220 * dt; }
+      else if (tgt) { const a = Math.atan2(tgt.y - f.y, tgt.x - f.x); f.x += Math.cos(a) * 62 * dt; f.y += Math.sin(a) * 62 * dt; if (Math.hypot(tgt.x - f.x, tgt.y - f.y) < 14) { s.sheep.splice(s.sheep.indexOf(tgt), 1); K.sfx('scare'); f.x = 945; f.y = K.rand(40, 500); f.cool = 9; s.msg2 = 'THE FOX GOT ONE!'; s.msg2T = 1.5; } }
+      f.x = K.clamp(f.x, 10, 950); f.y = K.clamp(f.y, 10, 530);
+    }
+    const inside = s.sheep.filter((q) => q.in).length;
+    if (inside === s.sheep.length || s.time <= 0) { const all = inside === s.sheep.length && inside > 0; s.penned += inside; s.state = 'done'; s.t = 2.2; K.sfx(all ? 'win' : 'chime'); s.msg = all ? 'ALL PENNED!' : `SUNDOWN - ${inside} penned`; }
+  },
+  draw(s) {
+    for (let i = 0; i < 60; i++) K.rect((i * 157) % 960, (i * 83) % 540, 3, 7, '#3a7a2a');
+    K.rect(PEN.x, PEN.y, PEN.w, PEN.h, '#6aa04a'); const fc = '#8a5a2a';
+    WALLS.forEach(([x, y, w, h]) => K.rect(x, y, w, h, fc, 2));
+    K.text('GATE ▶', PEN.x - 40, (PEN.gate[0] + PEN.gate[1]) / 2, 12, '#fff', 'center', 'd');
+    s.hedges.forEach((h) => { K.rect(h.x, h.y, h.w, h.h, '#2a5a1a', 8); });
+    s.sheep.forEach((sh) => { K.circle(sh.x, sh.y, 12, '#f4f4f0'); K.circle(sh.x + (sh.vx > 0 ? 9 : -9), sh.y - 2, 5, '#333'); });
+    if (s.fox) { K.circle(s.fox.x, s.fox.y, 11, '#e8743a'); K.poly([[s.fox.x - 8, s.fox.y - 6], [s.fox.x - 4, s.fox.y - 18], [s.fox.x, s.fox.y - 8]], '#e8743a'); K.poly([[s.fox.x + 8, s.fox.y - 6], [s.fox.x + 4, s.fox.y - 18], [s.fox.x, s.fox.y - 8]], '#e8743a'); }
+    K.circle(s.dog.x, s.dog.y, 13, '#4a3a2a'); K.circle(s.dog.x + 6, s.dog.y - 6, 6, '#6a5a4a'); K.circle(s.dog.x + 8, s.dog.y - 7, 2, '#111');
+    const inside = s.sheep.filter((q) => q.in).length;
+    K.text(`FIELD ${s.lv + 1} / 6   ·   PENNED ${inside} / ${s.sheep.length}`, 20, 22, 14, '#fff', 'left', 'd');
+    K.text(`${Math.max(0, Math.ceil(s.time))}s`, 940, 22, 16, s.time < 10 ? '#ffd93a' : '#fff', 'right', 'd');
+    if (s.time < 15) { K.alpha((15 - s.time) / 30); K.rect(0, 0, 960, 540, '#ff8a3a'); K.alpha(1); }
+    if (s.state === 'done') K.text(s.msg, 480, 270, 34, '#fff', 'center', 'd', 12);
+    if (s.msg2T > 0) K.text(s.msg2, 480, 60, 20, '#ff8a3a', 'center', 'd');
+  },
+  ai(s) {
+    // demo dog: gather stragglers, line the flock up in front of the gate, then drive it in (walking round it to get behind)
+    const out = s.sheep.filter((q) => !q.in); if (!out.length) return;
+    const gy = (PEN.gate[0] + PEN.gate[1]) / 2, C = { x: out.reduce((a, q) => a + q.x, 0) / out.length, y: out.reduce((a, q) => a + q.y, 0) / out.length };
+    const far = out.reduce((a, q) => (Math.hypot(q.x - C.x, q.y - C.y) > Math.hypot(a.x - C.x, a.y - C.y) ? q : a));
+    const lined = Math.abs(C.y - gy) < 40 && C.x < PEN.x + 10;
+    let P = C, T = lined ? { x: PEN.x + 90, y: gy } : { x: PEN.x - 160, y: gy }, back = 75;
+    if (Math.hypot(far.x - C.x, far.y - C.y) > 100) { P = far; T = C; back = 60; }
+    const L = Math.hypot(P.x - T.x, P.y - T.y) || 1, ux = (P.x - T.x) / L, uy = (P.y - T.y) / L;
+    let gx = P.x + ux * back, gy2 = P.y + uy * back;
+    const dog = s.dog, side = (dog.x - P.x) * ux + (dog.y - P.y) * uy;
+    if (side < 20 && Math.hypot(dog.x - P.x, dog.y - P.y) < 230) { const px = -uy, py = ux, sg = (dog.x - P.x) * px + (dog.y - P.y) * py >= 0 ? 1 : -1; gx = P.x + px * sg * 180 + ux * 60; gy2 = P.y + py * sg * 180 + uy * 60; }
+    K.vmouse(K.clamp(gx, 15, 945), K.clamp(gy2, 15, 525), false, true);
+  },
+});
+</script></body></html>

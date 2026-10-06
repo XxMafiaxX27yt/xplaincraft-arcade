@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rocket Lander</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"rocket-lander","n":168,"title":"ROCKET LANDER","genre":"fun","desc":"Bring the lander down on the moon. Fire the engine to slow your fall, tilt to drift sideways, and touch down gently and upright on a flat pad - the small pads score more. Every landing gives more points the more fuel you save. Crash three times and the mission is over.","controls":"↑ / W / Space = engine · ← → / A D = tilt · land slowly, straight, on a pad","scoreLabel":"POINTS","tasks":[{"stat":"score","target":1500,"text":"Score 1500 in Rocket Lander"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const GRAV = 34;
+function terrain(s) {
+  const pts = [], pads = [], nPads = 3;
+  let x = 0, y = K.rand(380, 470);
+  const padAt = K.shuffle([1, 2, 3, 4, 5, 6, 7, 8]).slice(0, nPads).sort((a, b) => a - b);
+  for (let i = 0; i < 10; i++) {
+    pts.push([x, y]);
+    if (padAt.includes(i)) { const w = [110, 80, 54][pads.length] - Math.min(20, s.round * 3), mult = [2, 3, 5][pads.length]; pads.push({ x0: x, x1: x + w, y, mult }); x += w; pts.push([x, y]); }
+    x += K.rand(60, 110); y = K.clamp(y + K.rand(-90, 90), 260, 500);
+  }
+  pts.push([980, y]); s.ground = pts; s.pads = pads;
+}
+const groundY = (s, x) => { for (let i = 0; i < s.ground.length - 1; i++) { const [x0, y0] = s.ground[i], [x1, y1] = s.ground[i + 1]; if (x >= x0 && x <= x1) return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0 || 1); } return 500; };
+function round(s) { terrain(s); s.ship = { x: K.rand(120, 840), y: 40, vx: K.rand(-40, 40), vy: 0, a: 0 }; s.fuel = Math.max(55, 100 - s.round * 6); s.state = 'fly'; }
+K.game({
+  touch: { buttons: [['Space', 'ENGINE']] },
+  bg: '#05050c',
+  init(s) { s.score = 0; s.lives = 3; s.round = 0; s.stars = Array.from({ length: 90 }, () => [K.rand(0, 960), K.rand(0, 400), K.rand(0.3, 1.3)]); round(s); },
+  update(s, dt) {
+    if (s.state !== 'fly') { s.t -= dt; if (s.t <= 0) { if (s.lives <= 0) return K.end(s, { score: s.score, won: s.round > 0, stats: { won: s.round > 0 ? 1 : 0 }, title: 'MISSION OVER', text: `${s.round} landing${s.round === 1 ? '' : 's'}` }); round(s); } return; }
+    const sh = s.ship, d = K.dir(), burn = (K.down('ArrowUp', 'KeyW', 'Space') || (K.mouse.down && K.mouse.y < 520)) && s.fuel > 0;
+    sh.a = K.clamp(sh.a + d.x * 2.2 * dt, -1.4, 1.4);
+    if (burn) { sh.vx += Math.sin(sh.a) * 80 * dt; sh.vy -= Math.cos(sh.a) * 80 * dt; s.fuel = Math.max(0, s.fuel - 9 * dt); if (Math.random() < 0.7) K.particle({ x: sh.x - Math.sin(sh.a) * 16, y: sh.y + Math.cos(sh.a) * 16, vx: -Math.sin(sh.a) * 120 + K.rand(-30, 30), vy: Math.cos(sh.a) * 120, color: K.pick(['#ffd93a', '#ff8a3a']), life: 0.3, size: 4 }); if (Math.random() < dt * 10) K.noise(0.08, 0.03, 300); }
+    sh.vy += GRAV * dt; sh.x += sh.vx * dt; sh.y += sh.vy * dt;
+    if (sh.x < 10 || sh.x > 950) { sh.vx *= -0.5; sh.x = K.clamp(sh.x, 10, 950); }
+    const gy = groundY(s, sh.x);
+    if (sh.y + 14 >= gy) {
+      const pad = s.pads.find((p) => sh.x - 12 >= p.x0 && sh.x + 12 <= p.x1);
+      const soft = Math.abs(sh.vx) < 22 && sh.vy < 38 && Math.abs(sh.a) < 0.25;
+      if (pad && soft) { const pts = Math.round((50 + s.fuel * 3) * pad.mult); s.score += pts; s.round++; s.state = 'landed'; s.t = 2; s.msg = `LANDED ×${pad.mult}  +${pts}`; K.sfx('win'); sh.y = gy - 14; }
+      else { s.lives--; s.state = 'crash'; s.t = 1.8; s.msg = !pad ? 'NOT ON A PAD' : Math.abs(sh.a) >= 0.25 ? 'NOT UPRIGHT' : 'TOO FAST'; K.sfx('boom'); K.shake(18); K.burst(sh.x, gy, ['#ff8a3a', '#fff', '#ffd93a'], 40, 260); }
+    }
+  },
+  draw(s) {
+    const c = K.ctx(), sh = s.ship;
+    s.stars.forEach(([x, y, r]) => K.circle(x, y, r, '#ffffff77'));
+    c.fillStyle = '#4a4a5a'; c.beginPath(); c.moveTo(0, 540); s.ground.forEach(([x, y]) => c.lineTo(x, y)); c.lineTo(960, 540); c.closePath(); c.fill();
+    c.strokeStyle = '#8a8a9a'; c.lineWidth = 2; c.beginPath(); s.ground.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke();
+    s.pads.forEach((p) => { K.glow('#3dffa0', 10); K.rect(p.x0, p.y - 3, p.x1 - p.x0, 5, '#3dffa0'); K.noGlow(); K.text(`×${p.mult}`, (p.x0 + p.x1) / 2, p.y + 16, 13, '#3dffa0', 'center', 'd'); });
+    if (s.state !== 'crash') { c.save(); c.translate(sh.x, sh.y); c.rotate(sh.a); K.rect(-10, -14, 20, 20, '#d8d8e0', 4); K.rect(-6, -10, 12, 8, '#22e6ff', 2); K.line(-10, 6, -16, 16, '#aaa', 2); K.line(10, 6, 16, 16, '#aaa', 2); c.restore(); }
+    const alt = Math.max(0, Math.round(groundY(s, sh.x) - sh.y - 14));
+    K.text(`SCORE ${s.score}`, 20, 22, 14, '#fff', 'left', 'd');
+    K.text(`H SPEED ${Math.round(sh.vx)}`, 20, 44, 12, Math.abs(sh.vx) < 22 ? '#3dffa0' : '#ff8a3a', 'left', 'm'); K.text(`V SPEED ${Math.round(sh.vy)}`, 20, 62, 12, sh.vy < 38 ? '#3dffa0' : '#ff8a3a', 'left', 'm'); K.text(`ALTITUDE ${alt}`, 20, 80, 12, '#c9c3ff', 'left', 'm');
+    K.rect(780, 16, 160, 10, '#222', 5); K.rect(780, 16, 1.6 * s.fuel, 10, s.fuel < 20 ? '#ff3355' : '#ffd93a', 5); K.text('FUEL', 776, 21, 10, '#ffd93a', 'right', 'd');
+    for (let i = 0; i < 3; i++) K.text('▲', 880 + i * 22, 44, 14, i < s.lives ? '#22e6ff' : '#ffffff22');
+    if (s.state !== 'fly') K.text(s.msg, 480, 200, 30, s.state === 'landed' ? '#3dffa0' : '#ff3355', 'center', 'd', 14);
+  },
+  ai(s) { const sh = s.ship, p = s.pads[0], tx = (p.x0 + p.x1) / 2; K.vhold('ArrowRight', sh.a < K.clamp((tx - sh.x) * 0.002 - sh.vx * 0.01, -0.3, 0.3) - 0.05); K.vhold('ArrowLeft', sh.a > K.clamp((tx - sh.x) * 0.002 - sh.vx * 0.01, -0.3, 0.3) + 0.05); K.vhold('ArrowUp', sh.vy > 25 || (groundY(s, sh.x) - sh.y < 120 && sh.vy > 12)); },
+});
+</script></body></html>

@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Color Gate</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"color-gate","n":170,"title":"COLOR GATE","genre":"fun","desc":"A little ball that only moves up when you tap. Spinning rings, sliding bars and crosses block the way, painted in four colours - you can only pass through the part that matches your ball. Rainbow orbs change your colour. Stars are points. How high can you go?","controls":"Space / click / tap to jump","scoreLabel":"STARS","tasks":[{"stat":"score","target":15,"text":"Collect 15 stars in Color Gate"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = ['#ff2bd6', '#22e6ff', '#ffd93a', '#8b5cf6'];
+function obstacle(s, y) {
+  const k = K.pick(s.made < 2 ? ['ring'] : ['ring', 'ring', 'bar', 'cross', 'double']);
+  s.obs.push({ k, y, rot: K.rand(0, 6.28), sp: (Math.random() < 0.5 ? 1 : -1) * (1.3 + Math.min(1.4, s.made * 0.06)) });
+  s.items.push({ k: 'star', y, got: false }); s.items.push({ k: 'switch', y: y - 150, got: false });
+  s.made++;
+}
+const colAt = (o, a) => COLS[Math.floor((((a - o.rot) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 2)) % 4];
+K.game({
+  touch: { stick: false, buttons: [] },
+  bg: '#141220',
+  init(s) { s.b = { y: 420, vy: 0, col: 0 }; s.cam = 0; s.obs = []; s.items = []; s.made = 0; s.score = 0; s.started = false; for (let i = 0; i < 4; i++) obstacle(s, 200 - i * 320); },
+  update(s, dt) {
+    const b = s.b;
+    if (K.action()) { b.vy = -420; s.started = true; K.tone(500 + b.col * 80, 0.06, 'triangle', 0.04); }
+    if (s.started) { b.vy += 1100 * dt; b.y += b.vy * dt; }
+    s.cam = Math.min(s.cam, b.y - 330);
+    s.obs.forEach((o) => (o.rot += o.sp * dt));
+    while (s.obs[s.obs.length - 1].y > s.cam - 400) obstacle(s, s.obs[s.obs.length - 1].y - 320);
+    s.obs = s.obs.filter((o) => o.y < s.cam + 700); s.items = s.items.filter((it) => it.y < s.cam + 700);
+    const me = COLS[b.col], R = 9, x = 480;
+    for (const o of s.obs) {
+      const dy = b.y - o.y;
+      if (o.k === 'ring' || o.k === 'double') {
+        for (const rad of o.k === 'double' ? [90, 120] : [100]) { const d = Math.abs(dy); if (d < rad + 9 + R && d > rad - 9 - R) { const a = dy < 0 ? -Math.PI / 2 : Math.PI / 2; if (colAt({ rot: o.rot * (rad === 120 ? -1 : 1) }, a) !== me) return die(s); } }
+      } else if (o.k === 'bar') { if (Math.abs(dy) < 10 + R) { const seg = (((o.rot * 60) % 960) + 960) % 960, i = Math.floor(((x + seg) % 960) / 240); if (COLS[i] !== me) return die(s); } }
+      else if (o.k === 'cross') { // a 4-arm cross centred off to the side; arms sweep across the ball's lane
+        const cx = 400, cy = o.y; for (let k = 0; k < 4; k++) { const a = o.rot + (k * Math.PI) / 2, ex = cx + Math.cos(a) * 110, ey = cy + Math.sin(a) * 110; const t = K.clamp(((x - cx) * (ex - cx) + (b.y - cy) * (ey - cy)) / (110 * 110), 0, 1); if (Math.hypot(cx + (ex - cx) * t - x, cy + (ey - cy) * t - b.y) < 9 + R && COLS[k] !== me) return die(s); }
+      }
+    }
+    for (const it of s.items) {
+      if (it.got || Math.abs(it.y - b.y) > 18) continue;
+      it.got = true;
+      if (it.k === 'star') { s.score++; K.sfx('coin'); } else { let n; do { n = K.irand(0, 3); } while (n === b.col); b.col = n; K.sfx('power'); }
+    }
+    if (b.y > s.cam + 560) return die(s);
+  },
+  draw(s) {
+    const c = K.ctx(), b = s.b, Y = (y) => y - s.cam;
+    s.obs.forEach((o) => {
+      if (o.k === 'ring' || o.k === 'double') { for (const [rad, dir] of o.k === 'double' ? [[90, 1], [120, -1]] : [[100, 1]]) for (let k = 0; k < 4; k++) { c.strokeStyle = COLS[k]; c.lineWidth = 18; c.beginPath(); c.arc(480, Y(o.y), rad, o.rot * dir + (k * Math.PI) / 2 + 0.02, o.rot * dir + ((k + 1) * Math.PI) / 2 - 0.02); c.stroke(); } }
+      else if (o.k === 'bar') { const seg = (((o.rot * 60) % 960) + 960) % 960; for (let k = -1; k < 5; k++) K.rect(k * 240 - seg, Y(o.y) - 10, 236, 20, COLS[((k % 4) + 4) % 4], 6); }
+      else { for (let k = 0; k < 4; k++) { const a = o.rot + (k * Math.PI) / 2; K.line(400, Y(o.y), 400 + Math.cos(a) * 110, Y(o.y) + Math.sin(a) * 110, COLS[k], 18); } }
+    });
+    s.items.forEach((it) => { if (it.got) return; if (it.k === 'star') K.text('★', 480, Y(it.y), 26, '#fff'); else { const g = c.createConicGradient ? c.createConicGradient(K.time(), 480, Y(it.y)) : null; if (g) { COLS.forEach((col, i) => g.addColorStop(i / 4, col)); g.addColorStop(1, COLS[0]); c.fillStyle = g; } else c.fillStyle = COLS[1]; c.beginPath(); c.arc(480, Y(it.y), 13, 0, 6.28); c.fill(); } });
+    K.glow(COLS[b.col], 16); K.circle(480, Y(b.y), 9, COLS[b.col]); K.noGlow();
+    K.text(String(s.score), 480, 40, 34, '#fff', 'center', 'd');
+    if (!s.started && !K.attract) K.text('TAP TO JUMP', 480, 500, 18, '#8e88b8', 'center', 'd');
+  },
+  ai(s) { const b = s.b; if (b.vy > 80 || !s.started) K.vtap('Space'); },
+});
+function die(s) { K.sfx('hit'); K.shake(10); K.burst(480, s.b.y - s.cam, s.obs.length ? COLS : ['#fff'], 30); K.end(s, { score: s.score, won: null, title: 'WRONG COLOUR', text: `${s.score} stars` }); }
+</script></body></html>

@@ -859,7 +859,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/lost-kid.png"
 },
 {
 "id": "chalk-circle",
@@ -880,7 +881,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/chalk-circle.png"
 },
 {
 "id": "breakout",
@@ -1681,6 +1683,138 @@ export const GAME_LIST = [
 "file": "games/2d/typing-race.html",
 "dim": "2d",
 "cover": "games/covers/typing-race.png"
+},
+{
+"id": "candy-rope",
+"n": 167,
+"title": "CANDY ROPE",
+"genre": "fun",
+"desc": "A sweet hangs on ropes and a little green monster is starving below. Swipe across the ropes to cut them, let the candy swing and fall into its mouth, and grab the stars on the way. Bubbles lift the candy, spikes pop it. Ten boxes of puzzles.",
+"controls": "Swipe (drag) across a rope to cut it · tap a bubble to pop it",
+"scoreLabel": "STARS",
+"tasks": [
+{
+"stat": "score",
+"target": 10,
+"text": "Collect 10 stars in Candy Rope"
+}
+],
+"file": "games/2d/candy-rope.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/candy-rope.png"
+},
+{
+"id": "rocket-lander",
+"n": 168,
+"title": "ROCKET LANDER",
+"genre": "fun",
+"desc": "Bring the lander down on the moon. Fire the engine to slow your fall, tilt to drift sideways, and touch down gently and upright on a flat pad - the small pads score more. Every landing gives more points the more fuel you save. Crash three times and the mission is over.",
+"controls": "↑ / W / Space = engine · ← → / A D = tilt · land slowly, straight, on a pad",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 1500,
+"text": "Score 1500 in Rocket Lander"
+}
+],
+"file": "games/2d/rocket-lander.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/rocket-lander.png"
+},
+{
+"id": "claw-machine",
+"n": 169,
+"title": "CLAW MACHINE",
+"genre": "fun",
+"desc": "Ten coins, one glass box full of plushies. Slide the claw over a prize, drop it, and pray: the claw grabs, lifts... and sometimes the prize slips. Line it up dead centre for a better grip, big plushies are heavier, and the shiny rare ones are worth a lot. Drop your catch in the chute to keep it.",
+"controls": "← → (or drag) to move the claw · Space / DROP to grab · it carries the prize to the chute by itself",
+"scoreLabel": "PRIZE PTS",
+"tasks": [
+{
+"stat": "score",
+"target": 100,
+"text": "Win 100 prize points at the Claw Machine"
+}
+],
+"file": "games/2d/claw-machine.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/claw-machine.png"
+},
+{
+"id": "color-gate",
+"n": 170,
+"title": "COLOR GATE",
+"genre": "fun",
+"desc": "A little ball that only moves up when you tap. Spinning rings, sliding bars and crosses block the way, painted in four colours - you can only pass through the part that matches your ball. Rainbow orbs change your colour. Stars are points. How high can you go?",
+"controls": "Space / click / tap to jump",
+"scoreLabel": "STARS",
+"tasks": [
+{
+"stat": "score",
+"target": 15,
+"text": "Collect 15 stars in Color Gate"
+}
+],
+"file": "games/2d/color-gate.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/color-gate.png"
+},
+{
+"id": "traffic-control",
+"n": 171,
+"title": "TRAFFIC CONTROL",
+"genre": "fun",
+"desc": "The traffic lights are broken and you are the only cop at the crossroads. Tap a car to make it stop, tap it again to let it go. Cars from the sides and from the top and bottom must never be in the middle at the same time - and drivers who wait too long get angry and honk. Keep the city moving.",
+"controls": "Click / tap a car to stop it or let it go",
+"scoreLabel": "CARS",
+"tasks": [
+{
+"stat": "score",
+"target": 40,
+"text": "Get 40 cars through Traffic Control"
+}
+],
+"file": "games/2d/traffic-control.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/traffic-control.png"
+},
+{
+"id": "sheep-herder",
+"n": 172,
+"title": "SHEEP HERDER",
+"genre": "fun",
+"desc": "You are the farm dog. The sheep run away from you - so come at them from the far side and push the flock through the gate into the pen before sundown. Hedges get in the way, and later fields have a fox who wants dinner. Bark to scatter them (carefully).",
+"controls": "Move the dog with the mouse / finger (or WASD / the stick) · Space / BARK scares sheep nearby",
+"scoreLabel": "SHEEP",
+"tasks": [
+{
+"stat": "score",
+"target": 30,
+"text": "Pen 30 sheep in Sheep Herder"
+}
+],
+"file": "games/2d/sheep-herder.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/sheep-herder.png"
 },
 {
 "id": "2048",

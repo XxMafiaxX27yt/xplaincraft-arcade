@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Traffic Control</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"traffic-control","n":171,"title":"TRAFFIC CONTROL","genre":"fun","desc":"The traffic lights are broken and you are the only cop at the crossroads. Tap a car to make it stop, tap it again to let it go. Cars from the sides and from the top and bottom must never be in the middle at the same time - and drivers who wait too long get angry and honk. Keep the city moving.","controls":"Click / tap a car to stop it or let it go","scoreLabel":"CARS","tasks":[{"stat":"score","target":40,"text":"Get 40 cars through Traffic Control"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// four approaches: [start x, start y, dx, dy, stop line position along the path]
+const LANES = [[-40, 290, 1, 0], [1000, 250, -1, 0], [500, -40, 0, 1], [460, 580, 0, -1]];
+const BOX = { x: 420, y: 210, w: 120, h: 120 };
+const COLS = ['#ff3355', '#22e6ff', '#ffd93a', '#3dffa0', '#c45cff', '#ff8a3a', '#f2f2f2'];
+function spawn(s) {
+  const l = K.irand(0, 3), [x, y, dx, dy] = LANES[l];
+  if (s.cars.some((c) => c.l === l && Math.hypot(c.x - x, c.y - y) < 70)) return;
+  s.cars.push({ l, x, y, dx, dy, sp: K.rand(110, 150) + s.passed * 1.2, stop: false, wait: 0, col: K.pick(COLS), len: Math.random() < 0.15 ? 60 : 36 });
+}
+const inBox = (c) => c.x + 20 > BOX.x && c.x - 20 < BOX.x + BOX.w && c.y + 20 > BOX.y && c.y - 20 < BOX.y + BOX.h;
+const before = (c) => (c.dx ? (c.dx > 0 ? c.x < BOX.x - 24 : c.x > BOX.x + BOX.w + 24) : c.dy > 0 ? c.y < BOX.y - 24 : c.y > BOX.y + BOX.h + 24);
+K.game({
+  bg: '#2a3a2a', touch: { stick: false, buttons: [] },
+  init(s) { s.cars = []; s.passed = 0; s.lives = 3; s.next = 0.5; s.t = 0; },
+  update(s, dt) {
+    s.t += dt; s.next -= dt;
+    if (s.next <= 0) { spawn(s); s.next = Math.max(0.55, 1.6 - s.t * 0.012); }
+    if (K.mouse.clicked) { const c = s.cars.find((q) => Math.hypot(q.x - K.mouse.x, q.y - K.mouse.y) < 30); if (c) { c.stop = !c.stop; c.wait = 0; K.sfx(c.stop ? 'click' : 'blip'); } }
+    for (const c of s.cars) {
+      // stopped cars wait at the line (once inside the crossing they keep going); others queue behind
+      const ahead = s.cars.filter((o) => o !== c && o.l === c.l && (o.x - c.x) * c.dx + (o.y - c.y) * c.dy > 0).sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.y - c.y) - (Math.abs(b.x - c.x) + Math.abs(b.y - c.y)))[0];
+      const gap = ahead ? Math.abs(ahead.x - c.x) + Math.abs(ahead.y - c.y) - (ahead.len + c.len) / 2 : 1e9;
+      const atLine = c.stop && before(c) && (c.dx ? Math.abs((c.dx > 0 ? BOX.x - 30 : BOX.x + BOX.w + 30) - c.x) < 8 : Math.abs((c.dy > 0 ? BOX.y - 30 : BOX.y + BOX.h + 30) - c.y) < 8);
+      const go = !atLine && gap > 14;
+      if (go) { c.x += c.dx * c.sp * dt; c.y += c.dy * c.sp * dt; } else { c.wait += dt; if (c.wait > 6 && Math.floor(c.wait * 2) !== Math.floor((c.wait - dt) * 2)) K.tone(300, 0.2, 'square', 0.03); }
+      if (c.wait > 10) { c.wait = 0; s.lives--; c.angry = 1; K.sfx('wrong'); K.shake(6); if (s.lives <= 0) return over(s, 'DRIVERS GAVE UP'); }
+    }
+    // crash: two cars crossing different ways inside the box
+    const inside = s.cars.filter(inBox);
+    for (let i = 0; i < inside.length; i++) for (let j = i + 1; j < inside.length; j++) { const a = inside[i], b = inside[j]; if (!!a.dx !== !!b.dx && Math.abs(a.x - b.x) < (a.dx ? a.len / 2 + 14 : 14 + b.len / 2) && Math.abs(a.y - b.y) < (a.dy ? a.len / 2 + 14 : 14 + b.len / 2)) { K.sfx('boom'); K.shake(18); K.burst((a.x + b.x) / 2, (a.y + b.y) / 2, ['#ff8a3a', '#fff'], 30); return over(s, 'CRASH!'); } }
+    s.cars = s.cars.filter((c) => { const out = c.x < -80 || c.x > 1040 || c.y < -80 || c.y > 620; if (out) { s.passed++; if (s.passed % 10 === 0) K.sfx('coin'); } return !out; });
+  },
+  draw(s) {
+    K.rect(0, 210, 960, 120, '#3a3a40'); K.rect(420, 0, 120, 540, '#3a3a40');
+    for (let x = 0; x < 960; x += 40) if (x < 400 || x > 540) K.rect(x, 268, 22, 4, '#e8e0a0'); for (let y = 0; y < 540; y += 40) if (y < 190 || y > 330) K.rect(478, y, 4, 22, '#e8e0a0');
+    for (let k = 0; k < 6; k++) { K.rect(400, 214 + k * 20, 14, 10, '#f2f2f2'); K.rect(546, 214 + k * 20, 14, 10, '#f2f2f2'); K.rect(424 + k * 20, 194, 10, 14, '#f2f2f2'); K.rect(424 + k * 20, 332, 10, 14, '#f2f2f2'); }
+    s.cars.forEach((c) => {
+      const w = c.dx ? c.len : 26, h = c.dx ? 26 : c.len;
+      K.rect(c.x - w / 2, c.y - h / 2, w, h, c.col, 6); K.rect(c.x - w / 2 + (c.dx ? (c.dx > 0 ? w - 12 : 4) : 4), c.y - h / 2 + (c.dy ? (c.dy > 0 ? h - 12 : 4) : 4), c.dx ? 8 : w - 8, c.dx ? h - 8 : 8, '#1a2a3a', 2);
+      if (c.stop) { K.circle(c.x, c.y - 24, 9, '#ff3355'); K.text('✋', c.x, c.y - 24, 11, '#fff'); }
+      if (c.wait > 6) K.text('💢', c.x + 16, c.y - 20, 14, '#fff');
+    });
+    K.text(`CARS ${s.passed}`, 20, 26, 18, '#fff', 'left', 'd');
+    for (let i = 0; i < 3; i++) K.text('♥', 880 + i * 24, 26, 20, i < s.lives ? '#ff3355' : '#ffffff22');
+    K.text('tap a car: stop / go', 480, 520, 14, '#c8d8c8', 'center', 'u');
+  },
+  ai(s) { s.aw = (s.aw || 0) + 1; if (s.aw % 10) return; const busyH = s.cars.some((c) => c.dx && inBox(c)), busyV = s.cars.some((c) => c.dy && inBox(c)); s.cars.forEach((c) => { const near = before(c) && (Math.abs(c.x - 480) + Math.abs(c.y - 270) < 150); if (near) c.stop = c.dx ? busyV : busyH || s.cars.some((o) => o.dx && near); }); },
+});
+function over(s, why) { K.end(s, { score: s.passed, won: null, title: why, text: `${s.passed} cars got through` }); }
+</script></body></html>
