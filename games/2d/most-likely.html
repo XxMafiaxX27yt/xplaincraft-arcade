@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Most Likely To</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"most-likely","n":130,"title":"MOST LIKELY TO","genre":"mystery","modes":["online"],"minPlayers":3,"maxPlayers":8,"desc":"A party voting game for friends. \"Who is most likely to fall asleep in a horror movie?\" Everyone secretly taps a player, then the votes are revealed. Vote with the crowd to score; the most-voted player of each round wears the crown. Ten rounds of questions you will argue about.","controls":"Click / tap a player to vote","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Most Likely To"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const ROUNDS = 10, VOTE_T = 18, SHOW_T = 7;
+const Q = ['fall asleep during a horror movie', 'survive a zombie apocalypse', 'become famous on the internet', 'get lost in their own town', 'eat something off the floor',
+  'laugh at the wrong moment', 'win a reality show', 'forget their own birthday', 'adopt ten cats', 'become a millionaire', 'get stuck in a lift and panic',
+  'cry at a cartoon', 'talk to plants', 'win an argument with a teacher', 'start a band', 'trip over nothing', 'become a game developer',
+  'sleep through an earthquake', 'eat pizza for breakfast', 'scream at a spider', 'become the president', 'fight a goose and lose', 'go to space',
+  'be late to their own wedding', 'text the wrong person', 'stay up all night gaming', 'invent something useless', 'get a tattoo of a meme',
+  'survive alone on an island', 'befriend a ghost', 'become a famous chef', 'break a world record', 'lose their phone while holding it',
+  'start a dance battle', 'believe a fake news story', 'spend all their money on snacks', 'become a pro gamer', 'run into a glass door',
+  'join a circus', 'win the lottery and lose the ticket', 'cheat at a board game', 'name their pet something weird', 'get a selfie with a celebrity',
+  'sing in the shower loudly', 'be the first one to die in a horror movie', 'solve a real mystery', 'become a teacher', 'move to another country',
+  'forget where they parked', 'own a hundred pairs of shoes', 'fall in love on holiday', 'write a book', 'go viral for a fail', 'become a spy',
+  'eat the last slice without asking', 'build a robot', 'ride a horse backwards', 'say something rude by accident', 'live in a treehouse',
+  'never reply to messages', 'wear socks with sandals', 'be secretly rich', 'get kicked out of a library', 'finish a game in one night',
+  'get scared by their own reflection', 'win a staring contest', 'become a detective', 'pet a wild animal', 'start a food fight', 'marry a gamer'];
+
+K.game({
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    if (!K.net) PK.setFake([{ id: 'me', name: 'YOU' }, { id: 'b1', name: 'NOVA' }, { id: 'b2', name: 'BYTE' }, { id: 'b3', name: 'ECHO' }, { id: 'b4', name: 'PIXEL' }]);
+    s.pts = {}; s.round = 0; s.vote = null; s.votes = {}; s.over = false; s.crowns = {};
+    s.order = K.shuffle(Q.slice()); // host picks; prompts travel with the phase
+    s.onPhase = (s) => { if (s.ph === 'vote') { s.vote = null; s.votes = {}; s.botT = {}; } if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'THE CROWD KNOWS YOU' }); };
+    s.ph = 'start'; s.t = 1.2; s.botT = {};
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'v' && s.ph === 'vote') s.votes[from] = d.to;
+  },
+  onLeave(s, id) { delete s.votes[id]; if (PK.players().length < 2 && PK.host()) PK.go(s, 'end', 99, { pts: s.pts }); },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const pl = PK.players(), me = PK.me();
+    if (s.ph === 'vote' && !s.vote && K.mouse.clicked) {
+      cards(pl).forEach((c) => { if (K.inRect(K.mouse.x, K.mouse.y, c)) { s.vote = c.id; s.votes[me] = c.id; PK.send({ t: 'v', to: c.id }); K.sfx('click'); } });
+    }
+    // solo demo: bots vote after a moment
+    if (!K.net && s.ph === 'vote') pl.forEach((p) => { if (p.id !== me && !s.votes[p.id]) { s.botT[p.id] = (s.botT[p.id] ?? K.rand(2, 9)) - dt; if (s.botT[p.id] <= 0) s.votes[p.id] = K.pick(pl).id; } });
+    if (!PK.host()) return;
+    if (s.ph === 'start' && s.t <= 0) PK.go(s, 'vote', VOTE_T, { q: s.order[s.round % s.order.length], r: s.round + 1 });
+    else if (s.ph === 'vote' && (s.t <= 0 || pl.every((p) => s.votes[p.id]))) {
+      const count = {}; Object.values(s.votes).forEach((v) => (count[v] = (count[v] || 0) + 1));
+      const top = Math.max(0, ...Object.values(count)), winners = Object.keys(count).filter((k) => count[k] === top && top > 0);
+      Object.entries(s.votes).forEach(([v, to]) => { if (winners.includes(to)) s.pts[v] = (s.pts[v] || 0) + 1; });
+      winners.forEach((w) => (s.crowns[w] = (s.crowns[w] || 0) + 1));
+      PK.go(s, 'show', SHOW_T, { q: s.pd.q, r: s.pd.r, votes: { ...s.votes }, winners, pts: { ...s.pts } });
+    } else if (s.ph === 'show' && s.t <= 0) {
+      s.round++;
+      if (s.round >= ROUNDS) PK.go(s, 'end', 99, { pts: s.pts });
+      else PK.go(s, 'vote', VOTE_T, { q: s.order[s.round % s.order.length], r: s.round + 1 });
+    }
+  },
+  draw(s) {
+    const pl = PK.players();
+    if (s.ph === 'start' || s.ph === 'end' || !s.pd) { K.text('MOST LIKELY TO…', 480, 250, 44, '#fff', 'center', 'd', 18); return; }
+    const pts = s.pd.pts || s.pts;
+    K.text(`ROUND ${s.pd.r} / ${ROUNDS}`, 30, 30, 14, '#8e88b8', 'left', 'd');
+    PK.bar(640, 26, 260, s);
+    K.text('WHO IS MOST LIKELY TO', 480, 74, 20, '#c45cff', 'center', 'd');
+    K.wrapText(String(s.pd.q).toUpperCase() + '?', 480, 112, 820, 30, '#fff', 1.15, 'center', 'd');
+    const votes = s.ph === 'show' ? s.pd.votes : s.votes;
+    cards(pl).forEach((c) => {
+      const p = pl.find((q) => q.id === c.id), mine = s.vote === c.id, win = s.ph === 'show' && s.pd.winners.includes(c.id);
+      K.glow(p.col, win ? 26 : mine ? 14 : 0); K.rect(c.x, c.y, c.w, c.h, win ? p.col + '44' : '#17142e', 14); K.noGlow();
+      K.stroke(c.x, c.y, c.w, c.h, mine || win ? p.col : '#2c2850', mine || win ? 3 : 2, 14);
+      K.circle(c.x + c.w / 2, c.y + 46, 30, p.col); K.text(p.name[0], c.x + c.w / 2, c.y + 48, 30, '#05040c', 'center', 'd');
+      if (win) K.text('👑', c.x + c.w / 2, c.y + 8, 26, '#ffd93a');
+      K.text(p.id === PK.me() ? 'YOU' : p.name, c.x + c.w / 2, c.y + 96, 16, '#fff', 'center', 'd');
+      if (s.ph === 'show') {
+        const by = Object.keys(votes).filter((v) => votes[v] === c.id);
+        K.text(`${by.length} vote${by.length === 1 ? '' : 's'}`, c.x + c.w / 2, c.y + 120, 14, win ? '#ffd93a' : '#8e88b8', 'center', 'd');
+        by.forEach((v, i) => K.circle(c.x + c.w / 2 - (by.length - 1) * 9 + i * 18, c.y + c.h - 16, 7, PK.col(v)));
+      }
+    });
+    if (s.ph === 'vote') {
+      const n = Object.keys(s.votes).length;
+      K.text(s.vote ? `voted · waiting for the others (${n}/${pl.length})` : 'tap a player', 480, 510, 16, s.vote ? '#3dffa0' : '#8e88b8', 'center', 'u');
+    } else K.text(s.pd.winners.length ? 'vote with the crowd = +1' : 'nobody voted!', 480, 510, 16, '#8e88b8', 'center', 'u');
+    // mini score list
+    pl.slice().sort((a, b) => (pts[b.id] || 0) - (pts[a.id] || 0)).slice(0, 4).forEach((p, i) => K.text(`${p.id === PK.me() ? 'YOU' : p.name} ${pts[p.id] || 0}`, 30, 60 + i * 18, 12, p.col, 'left', 'd'));
+  },
+  ai(s) {},
+});
+function cards(pl) {
+  const n = pl.length, cols = n <= 4 ? n : Math.ceil(n / 2), rows = n <= 4 ? 1 : 2, w = Math.min(190, 860 / cols - 14), h = rows === 1 ? 190 : 138;
+  const y0 = rows === 1 ? 210 : 172;
+  return pl.map((p, i) => { const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols); return { id: p.id, x: 480 - (inRow * (w + 14) - 14) / 2 + c * (w + 14), y: y0 + r * (h + 14), w, h }; });
+}
+</script></body></html>

@@ -1,27 +1,25 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draw &amp; Guess</title>
 <link rel="stylesheet" href="../kit/kit.css">
-<script type="application/json" id="meta">{"id":"draw-guess","n":89,"title":"DRAW & GUESS","genre":"mystery","modes":["online"],"minPlayers":2,"maxPlayers":8,"desc":"Party drawing game for 2-8. One player draws a secret word, everyone else races to guess it. Faster guesses score more, and the artist scores for every correct guess. Everyone draws once.","controls":"Drawing: drag on the canvas, pick colours / sizes · Guessing: type (or tap) + Enter","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Draw & Guess"}]}</script>
+<script type="application/json" id="meta">{"id":"draw-guess","n":89,"title":"DRAW & GUESS","genre":"mystery","modes":["online"],"minPlayers":2,"maxPlayers":8,"desc":"Party drawing game for 2-8. One player draws a secret word, everyone else races to guess it. Faster guesses score more, and the artist scores for every correct guess. Everyone draws once.","controls":"Drawing: drag on the canvas · pen, rainbow pen, eraser, line / box / circle / triangle / star (outline or filled), paint bucket, any colour from the rainbow + shade strips, undo · Guessing: type + Enter","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Draw & Guess"}]}</script>
 </head><body>
-<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/draw.js"></script>
 <script>
 const THINGS = 'apple banana pizza burger cake cookie donut carrot tree flower cactus mushroom sun moon star cloud rain snowman rainbow volcano mountain island beach wave boat ship anchor rocket plane car bus train bicycle truck tractor helicopter robot alien ghost dragon unicorn dinosaur shark whale fish octopus crab turtle frog snake spider butterfly bee ladybug snail bird owl penguin duck chicken cow pig horse sheep rabbit cat dog mouse lion tiger elephant giraffe monkey bear panda zebra camel kangaroo house castle tent bridge tower lighthouse church school door window ladder chair table bed lamp clock phone laptop camera guitar piano drum trumpet book pencil scissors key lock umbrella glasses hat crown shoe sock shirt dress glove ring necklace sword shield bow arrow hammer axe saw bucket broom candle balloon kite gift trophy medal football basketball tennis dice puzzle mask skull bone heart eye nose ear hand foot tooth brain snowflake fire lightning tornado bomb magnet battery bulb ghost pumpkin witch wizard pirate ninja king queen mermaid vampire zombie mummy'.split(' ');
-const PAL = ['#111111', '#ffffff', '#ff3355', '#ff8a3a', '#ffd93a', '#3dffa0', '#22e6ff', '#4f8bff', '#c45cff', '#ff9bc8', '#8a5a2a'];
-const CX = 20, CY = 70, CW = 640, CH = 400, TURN = 75;
-const inCanvas = (x, y) => x >= CX && x <= CX + CW && y >= CY && y <= CY + CH;
+const CX = 20, CY = 60, CW = 640, CH = 360, TURN = 80;
 K.game({
   typing: true,
   bg: '#0d0b1c', touch: { stick: false, buttons: [] },
   init(s) {
     s.players = (K.net ? K.net.players : [{ id: 'me', username: 'YOU' }]).map((p) => ({ id: p.id, name: p.username, pts: 0, got: false }));
     s.myId = K.net ? K.net.me : 'me';
-    s.turn = -1; s.drawer = null; s.word = null; s.len = 0; s.hint = []; s.choices = null; s.t = 0; s.ink = []; s.cur = null; s.buf = [];
-    s.col = '#111111'; s.size = 6; s.chat = []; s.typed = ''; s.phase = 'wait'; s.sendT = 0; s.revealed = ''; s.over = false; s.order = s.players.map((p) => p.id);
+    s.turn = -1; s.drawer = null; s.word = null; s.len = 0; s.hint = []; s.choices = null; s.t = 0;
+    s.pad = DRAW.pad({ x: CX, y: CY, w: CW, h: CH }); s.chat = []; s.typed = ''; s.phase = 'wait'; s.sendT = 0; s.revealed = ''; s.over = false; s.order = s.players.map((p) => p.id);
     s.turns = s.order.length * (s.order.length <= 3 ? 2 : 1); s.startT = 0;
   },
   onNet(s, d, from) {
     if (d.t === 'turn') startTurn(s, d);
     if (d.t === 'len' && s.drawer !== s.myId) { s.len = d.n; s.hint = Array(d.n).fill('_'); s.phase = 'draw'; s.t = TURN; }
-    if (d.t === 'ink') { if (d.clear) s.ink = []; (d.strokes || []).forEach((st) => { if (st.newStroke) s.ink.push({ c: st.c, w: st.w, pts: [] }); const last = s.ink[s.ink.length - 1]; if (last) last.pts.push(...st.pts); }); }
+    if (d.t === 'ink' && s.drawer !== s.myId) s.pad.apply(d.ops);
     if (d.t === 'guess' && s.drawer === s.myId) checkGuess(s, from, d.g);
     if (d.t === 'chat') s.chat.push({ who: name(s, d.id), text: d.g });
     if (d.t === 'ok') { award(s, d.id, d.pts, d.dpts); }
@@ -44,20 +42,9 @@ K.game({
       return;
     }
     if (s.phase === 'draw' && me) {
-      // tools
-      if (K.mouse.clicked) {
-        PAL.forEach((c, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + i * 36, y: CY + CH + 12, w: 30, h: 30 })) s.col = c; });
-        [3, 7, 14, 28].forEach((w, i) => { if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + 420 + i * 40, y: CY + CH + 12, w: 34, h: 30 })) s.size = w; });
-        if (K.inRect(K.mouse.x, K.mouse.y, { x: CX + 580, y: CY + CH + 12, w: 60, h: 30 })) { s.ink = []; s.buf = []; K.net && K.net.send({ t: 'ink', clear: true }); K.sfx('whoosh'); }
-      }
-      if (K.mouse.down && inCanvas(K.mouse.x, K.mouse.y)) {
-        const p = [Math.round(K.mouse.x - CX), Math.round(K.mouse.y - CY)];
-        if (!s.cur) { s.cur = { c: s.col, w: s.size, pts: [] }; s.ink.push(s.cur); s.buf.push({ newStroke: true, c: s.col, w: s.size, pts: [] }); }
-        const last = s.cur.pts.slice(-2);
-        if (!last.length || Math.hypot(last[0] - p[0], last[1] - p[1]) > 2) { s.cur.pts.push(...p); s.buf[s.buf.length - 1].pts.push(...p); }
-      } else if (s.cur) { s.cur = null; }
+      s.pad.update(true);
       s.sendT -= dt;
-      if (s.sendT <= 0 && s.buf.some((b) => b.pts.length || b.newStroke)) { K.net && K.net.send({ t: 'ink', strokes: s.buf }); s.buf = s.cur ? [{ newStroke: false, c: s.col, w: s.size, pts: [] }] : []; s.sendT = 0.09; }
+      if (s.sendT <= 0) { const ops = s.pad.take(); if (ops.length) K.net && K.net.send({ t: 'ink', ops }); s.sendT = 0.08; }
       // hints at half and quarter time
       if (!s.h1 && s.t < TURN / 2) { s.h1 = true; giveHint(s); }
       if (!s.h2 && s.t < TURN / 4 && s.word.length > 4) { s.h2 = true; giveHint(s); }
@@ -68,7 +55,7 @@ K.game({
     if (s.phase === 'draw' && !me) {
       const myP = s.players.find((p) => p.id === s.myId);
       if (myP?.got) return;
-      const kb = K.isTouch ? K.keyboard(230, 414, 420, {}, { h: 30 }) : null;
+      const kb = K.isTouch ? K.keyboard(680, 496, 260, {}, { h: 30 }) : null;
       const letters = K.isTouch ? (kb && kb.length === 1 ? [kb] : []) : K.typed();
       letters.forEach((ch) => s.typed.length < 20 && (s.typed += ch.toLowerCase()));
       if (K.tap('Space')) s.typed += ' ';
@@ -79,13 +66,7 @@ K.game({
   },
   draw(s) {
     const me = s.drawer === s.myId;
-    K.rect(CX, CY, CW, CH, '#f4f1ea', 8);
-    s.ink.forEach((st) => {
-      const c = K.ctx(); c.strokeStyle = st.c; c.lineWidth = st.w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath();
-      for (let i = 0; i < st.pts.length; i += 2) (i ? c.lineTo : c.moveTo).call(c, CX + st.pts[i], CY + st.pts[i + 1]);
-      if (st.pts.length === 2) c.lineTo(CX + st.pts[0] + 0.1, CY + st.pts[1]);
-      c.stroke();
-    });
+    s.pad.draw(me && s.phase === 'draw');
     // header: word / hint
     const dname = name(s, s.drawer);
     if (s.phase === 'draw' || s.phase === 'pick') {
@@ -95,11 +76,6 @@ K.game({
     }
     if (s.phase === 'reveal') K.text(`THE WORD WAS: ${String(s.revealed).toUpperCase()}`, CX + CW / 2, 36, 22, '#3dffa0', 'center', 'd');
     if (s.phase === 'wait') K.text('GETTING READY…', CX + CW / 2, 36, 22, '#fff', 'center', 'd');
-    if (me && s.phase === 'draw') {
-      PAL.forEach((c, i) => { K.rect(CX + i * 36, CY + CH + 12, 30, 30, c, 6); if (s.col === c) K.stroke(CX + i * 36 - 2, CY + CH + 10, 34, 34, '#22e6ff', 3, 7); });
-      [3, 7, 14, 28].forEach((w, i) => { K.rect(CX + 420 + i * 40, CY + CH + 12, 34, 30, s.size === w ? '#22e6ff44' : '#ffffff11', 6); K.circle(CX + 437 + i * 40, CY + CH + 27, Math.min(13, w / 2 + 1), '#fff'); });
-      K.button(CX + 580, CY + CH + 12, 60, 30, 'CLEAR', { color: '#ff3355', size: 11 });
-    }
     if (me && s.phase === 'pick') { K.rect(CX, CY, CW, CH, 'rgba(10,8,25,.85)', 8); K.text('CHOOSE WHAT TO DRAW', CX + CW / 2, 200, 24, '#fff', 'center', 'd'); s.choices.forEach((w, i) => K.button(120 + i * 180, 250, 160, 60, w.toUpperCase(), { color: '#ffd93a', size: 15 })); }
     // scores
     const sorted = s.players.slice().sort((a, b) => b.pts - a.pts);
@@ -112,7 +88,7 @@ K.game({
       const got = s.players.find((p) => p.id === s.myId)?.got;
       K.rect(680, 478, 260, 40, '#0b0a18', 8); K.stroke(680, 478, 260, 40, got ? '#3dffa0' : '#22e6ff', 2, 8);
       K.text(got ? 'YOU GOT IT! ✓' : (s.typed || 'type your guess + Enter') + (Math.sin(K.time() * 8) > 0 && !got ? '|' : ''), 692, 498, 15, got ? '#3dffa0' : s.typed ? '#fff' : '#5d5a80', 'left', 'u');
-      if (K.isTouch && !got) K.keyboard(230, 414, 420, {}, { h: 30 });
+      if (K.isTouch && !got) K.keyboard(680, 496, 260, {}, { h: 30 });
     }
   },
 });
@@ -127,7 +103,7 @@ function nextTurn(s) {
 }
 function startTurn(s, d) {
   if (d.end) return finish(s);
-  s.drawer = d.drawer; s.turn = d.k; s.ink = []; s.buf = []; s.cur = null; s.word = null; s.hint = []; s.len = 0; s.typed = ''; s.h1 = s.h2 = false;
+  s.drawer = d.drawer; s.turn = d.k; s.pad.clear(); s.pad.take(); s.word = null; s.hint = []; s.len = 0; s.typed = ''; s.h1 = s.h2 = false;
   s.players.forEach((p) => (p.got = false));
   s.phase = 'pick'; s.t = TURN;
   s.chat.push({ who: '★', text: `${s.drawer === s.myId ? 'Your' : name(s, s.drawer) + "'s"} turn to draw`, sys: true });

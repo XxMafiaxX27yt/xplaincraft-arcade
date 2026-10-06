@@ -1,0 +1,138 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Word Bluff</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"word-bluff","n":131,"title":"WORD BLUFF","genre":"mystery","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"A real but ridiculous English word appears: GONGOOZLER, BUMFUZZLE, SNOLLYGOSTER. Everyone invents a fake meaning that sounds real. Then all the meanings are shuffled together with the true one: find the real meaning (+2) and fool your friends with yours (+1 for each one you fool). Solo against three bluffing bots, or online for up to 8.","controls":"Type your fake meaning + Enter · click / tap the meaning you think is real","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Word Bluff"},{"stat":"score","target":8,"text":"Score 8 in Word Bluff"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const ROUNDS = 5, WRITE_T = 50, PICK_T = 28, SHOW_T = 9;
+const WORDS = [
+  ['GONGOOZLER', 'a person who likes watching boats on a canal'], ['BUMFUZZLE', 'to confuse someone'], ['SNOLLYGOSTER', 'a clever but dishonest person'],
+  ['PETRICHOR', 'the smell of rain falling on dry ground'], ['KERFUFFLE', 'a commotion or fuss'], ['LOLLYGAG', 'to waste time doing nothing useful'],
+  ['FLIBBERTIGIBBET', 'a silly person who talks too much'], ['CATTYWAMPUS', 'crooked, not lined up straight'], ['BORBORYGMUS', 'a rumbling noise in the stomach'],
+  ['WIDDERSHINS', 'in the opposite direction to the sun, anticlockwise'], ['COLLYWOBBLES', 'a nervous feeling in the stomach'], ['GARDYLOO', 'a warning shout before throwing dirty water out of a window'],
+  ['SNICKERSNEE', 'a large knife'], ['TARADIDDLE', 'a small, silly lie'], ['MUMPSIMUS', 'a person who keeps doing something wrong even after being told'],
+  ['QUOCKERWODGER', 'a wooden puppet moved by strings'], ['AGELAST', 'a person who never laughs'], ['DEFENESTRATION', 'throwing someone out of a window'],
+  ['NUDIUSTERTIAN', 'to do with the day before yesterday'], ['ULTRACREPIDARIAN', 'someone who gives opinions on things they know nothing about'], ['GROAK', 'to stare at someone eating, hoping they will share'],
+  ['CACOETHES', 'an urge you cannot resist to do something'], ['ZUGZWANG', 'a chess position where every move makes things worse'], ['PANDICULATION', 'stretching and yawning when you wake up'],
+  ['TITTYNOPE', 'a tiny amount of something left over'], ['ERINACEOUS', 'like a hedgehog'], ['BRABBLE', 'to argue loudly about something unimportant'],
+  ['WABBIT', 'tired and a bit unwell'], ['ABSQUATULATE', 'to leave somewhere suddenly'], ['BLOVIATE', 'to talk for a long time in a pompous way'],
+  ['HORNSWOGGLE', 'to cheat or trick someone'], ['SIALOQUENT', 'spitting a lot while speaking'], ['FUDGEL', 'to pretend to work when you are not working'],
+  ['YEX', 'to hiccup'], ['PHILTRUM', 'the groove between your nose and upper lip'], ['AGLET', 'the plastic tip on the end of a shoelace'],
+  ['TMESIS', 'putting a word in the middle of another word, like abso-flipping-lutely'], ['LETHOLOGICA', 'not being able to remember the word you want'], ['GRINAGOG', 'a person who is always grinning'],
+  ['JENTACULAR', 'to do with breakfast'], ['OCTOTHORPE', 'the # symbol'], ['INTERROBANG', 'the ?! punctuation mark'], ['WAMBLECROPT', 'feeling sick from indigestion'],
+  ['RAWGABBIT', 'a person who talks confidently about something they know nothing about'], ['QUIRE', 'twenty-four or twenty-five sheets of paper'],
+];
+const BOT_LIES = ['a small boat used for carrying cheese', 'the fear of running out of socks', 'a dance done at old Scottish weddings', 'the nest of a goose',
+  'a brush for cleaning chimneys', 'a person who hums while eating', 'the creak a door makes at night', 'a pudding made of mashed potato', 'a sneeze that never arrives',
+  'a medieval tax on hats', 'a very lazy cat', 'the last biscuit in the box', 'a wooden shoe worn by farmers', 'a hat worn by fishermen in storms',
+  'a cloud shaped like an animal', 'to jump over a puddle and miss', 'a cheap holiday souvenir', 'a song sung to scare away crows', 'the tingle when your foot falls asleep',
+  'a small dog that barks at rain', 'the hole in the middle of a doughnut', 'a knight who was afraid of horses', 'the space under a staircase', 'to sneak a snack at night',
+  'a pirate word for a treasure map', 'an old name for a hiccup cure', 'the noise a kettle makes before it boils', 'a soup made from nettles', 'a very loud whisper',
+  'a person who collects buttons', 'to fall asleep in the bath', 'a game played with walnuts', 'the smell of a new book', 'a bird that cannot stop yawning'];
+const BOTS = [{ id: 'me', name: 'YOU' }, { id: 'b1', name: 'PROFESSOR OWL' }, { id: 'b2', name: 'SLY FOX' }, { id: 'b3', name: 'TRUTHY' }];
+
+K.game({
+  typing: true,
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    if (!K.net) PK.setFake(BOTS);
+    s.pts = {}; s.round = 0; s.lies = {}; s.pick = null; s.picks = {}; s.text = ''; s.sent = false; s.over = false;
+    s.words = K.shuffle(WORDS.map((w, i) => i)); s.botLies = K.shuffle(BOT_LIES.slice());
+    s.onPhase = (s) => {
+      if (s.ph === 'write') { s.text = ''; s.sent = false; s.lies = {}; s.picks = {}; s.pick = null; s.botT = {}; }
+      if (s.ph === 'pick') { s.pick = null; s.picks = {}; s.botT = {}; }
+      if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'MASTER BLUFFER' });
+    };
+    s.ph = 'start'; s.t = 1.2; s.botT = {};
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'lie' && s.ph === 'write') s.lies[from] = String(d.text).slice(0, 70);
+    if (d.t === 'pick' && s.ph === 'pick') s.picks[from] = d.i;
+  },
+  onLeave(s, id) { delete s.lies[id]; delete s.picks[id]; if (PK.players().length < 2 && PK.host()) PK.go(s, 'end', 99, { pts: s.pts }); },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const pl = PK.players(), me = PK.me();
+    if (s.ph === 'write' && !s.sent) {
+      if (PK.type(s, 'text', 70)) { s.sent = true; s.lies[me] = s.text.trim(); PK.send({ t: 'lie', text: s.text.trim() }); K.sfx('coin'); }
+    }
+    if (s.ph === 'pick' && s.pick == null && K.mouse.clicked) {
+      cards(s.pd.list).forEach((c, i) => { if (K.inRect(K.mouse.x, K.mouse.y, c) && s.pd.list[i].by !== me) { s.pick = i; s.picks[me] = i; PK.send({ t: 'pick', i }); K.sfx('click'); } });
+    }
+    // bots (solo)
+    if (!K.net) pl.forEach((p) => {
+      if (p.id === me) return;
+      s.botT[p.id] = (s.botT[p.id] ?? K.rand(3, 14)) - dt;
+      if (s.botT[p.id] > 0) return;
+      if (s.ph === 'write' && !s.lies[p.id]) s.lies[p.id] = s.botLies.pop() || 'a kind of very small sandwich';
+      if (s.ph === 'pick' && s.picks[p.id] == null) {
+        const ok = s.pd.list.map((x, i) => i).filter((i) => s.pd.list[i].by !== p.id);
+        const real = s.pd.list.findIndex((x) => x.by === 'real');
+        s.picks[p.id] = p.id === 'b3' && Math.random() < 0.6 ? real : K.pick(ok); // TRUTHY is good at this
+      }
+    });
+    if (!PK.host()) return;
+    const next = () => s.round >= ROUNDS ? PK.go(s, 'end', 99, { pts: s.pts }) : PK.go(s, 'write', WRITE_T, { w: s.words[s.round % s.words.length], r: s.round + 1 });
+    if (s.ph === 'start' && s.t <= 0) next();
+    else if (s.ph === 'write' && (s.t <= 0 || pl.every((p) => s.lies[p.id]))) {
+      const w = WORDS[s.pd.w], list = [{ by: 'real', text: w[1] }];
+      pl.forEach((p) => { const l = (s.lies[p.id] || '').trim(); if (l && l.toLowerCase() !== w[1].toLowerCase()) list.push({ by: p.id, text: l }); });
+      PK.go(s, 'pick', PICK_T, { w: s.pd.w, r: s.pd.r, list: K.shuffle(list) });
+    } else if (s.ph === 'pick' && (s.t <= 0 || pl.every((p) => s.picks[p.id] != null || !s.pd.list.some((x) => x.by !== p.id)))) {
+      const list = s.pd.list, gain = {};
+      Object.entries(s.picks).forEach(([who, i]) => {
+        const c = list[i]; if (!c) return;
+        if (c.by === 'real') gain[who] = (gain[who] || 0) + 2;
+        else if (c.by !== who) gain[c.by] = (gain[c.by] || 0) + 1;
+      });
+      Object.entries(gain).forEach(([id, g]) => (s.pts[id] = (s.pts[id] || 0) + g));
+      s.round++;
+      PK.go(s, 'show', SHOW_T, { w: s.pd.w, r: s.pd.r, list, picks: { ...s.picks }, gain, pts: { ...s.pts } });
+    } else if (s.ph === 'show' && s.t <= 0) next();
+  },
+  draw(s) {
+    const pl = PK.players(), me = PK.me();
+    if (s.ph === 'start' || s.ph === 'end' || !s.pd) { K.text('WORD BLUFF', 480, 250, 48, '#fff', 'center', 'd', 18); return; }
+    const w = WORDS[s.pd.w];
+    K.text(`ROUND ${s.pd.r} / ${ROUNDS}`, 30, 30, 14, '#8e88b8', 'left', 'd');
+    PK.bar(640, 26, 260, s);
+    K.glow('#ffd93a', 18); K.text(w[0], 480, 78, w[0].length > 12 ? 40 : 52, '#ffd93a', 'center', 'd'); K.noGlow();
+    if (s.ph === 'write') {
+      K.text('What does it mean? Make up a meaning that sounds REAL.', 480, 130, 18, '#d6d2f5', 'center', 'u');
+      PK.box(110, 170, 740, 64, s.text, 'type your fake meaning…', !s.sent, '#ffd93a');
+      if (s.sent) K.text('SENT ✓  waiting for the others…', 480, 270, 18, '#3dffa0', 'center', 'd');
+      else K.text('ENTER to send · short and boring sounds the most real', 480, 270, 14, '#8e88b8', 'center', 'm');
+      const done = Object.keys(s.lies).length;
+      pl.forEach((p, i) => { const x = 480 - (pl.length * 120) / 2 + i * 120; K.text((s.lies[p.id] ? '✓ ' : '… ') + (p.id === me ? 'YOU' : p.name.split(' ')[0]), x + 60, 330, 13, s.lies[p.id] ? '#3dffa0' : '#5d5a80', 'center', 'd'); });
+      K.text(`${done} / ${pl.length} written`, 480, 360, 13, '#5d5a80', 'center', 'm');
+    } else {
+      const list = s.pd.list, show = s.ph === 'show';
+      K.text(show ? 'THE REAL MEANING…' : 'Which meaning is REAL? (not your own)', 480, 122, 16, show ? '#3dffa0' : '#d6d2f5', 'center', 'u');
+      cards(list).forEach((c, i) => {
+        const it = list[i], real = it.by === 'real', mine = it.by === me, picked = s.pick === i;
+        const col = show ? (real ? '#3dffa0' : '#ff3355') : picked ? '#22e6ff' : mine ? '#3a3570' : '#2c2850';
+        K.rect(c.x, c.y, c.w, c.h, show && real ? '#123a2a' : '#17142e', 10); K.stroke(c.x, c.y, c.w, c.h, col, picked || (show && real) ? 3 : 2, 10);
+        K.wrapText(it.text, c.x + c.w / 2, c.y + c.h / 2 - (it.text.length > 46 ? 9 : 0), c.w - 24, 15, mine && !show ? '#8e88b8' : '#fff', 1.2, 'center', 'u');
+        if (mine && !show) K.text('YOURS', c.x + c.w - 10, c.y + 12, 10, '#8e88b8', 'right', 'd');
+        if (show) {
+          K.text(real ? 'REAL ✓' : `by ${it.by === me ? 'YOU' : PK.name(it.by)}`, c.x + 10, c.y + 12, 11, real ? '#3dffa0' : PK.col(it.by), 'left', 'd');
+          const by = Object.keys(s.pd.picks).filter((v) => s.pd.picks[v] === i);
+          by.forEach((v, k) => K.circle(c.x + c.w - 14 - k * 16, c.y + c.h - 12, 6, PK.col(v)));
+        }
+      });
+      if (show) {
+        const g = s.pd.gain[me] || 0;
+        K.text(g ? `+${g} for you` : 'no points this round', 480, 520, 18, g ? '#ffd93a' : '#8e88b8', 'center', 'd');
+      } else K.text(s.pick != null ? 'locked in · waiting…' : 'tap the one you believe', 480, 520, 15, s.pick != null ? '#3dffa0' : '#8e88b8', 'center', 'u');
+    }
+    const pts = s.pd.pts || s.pts;
+    pl.slice().sort((a, b) => (pts[b.id] || 0) - (pts[a.id] || 0)).slice(0, 4).forEach((p, i) => K.text(`${p.id === me ? 'YOU' : p.name} ${pts[p.id] || 0}`, 30, 56 + i * 18, 12, p.col, 'left', 'd'));
+  },
+});
+function cards(list) {
+  const n = list.length, cols = n <= 4 ? 2 : 3, rows = Math.ceil(n / cols), w = cols === 2 ? 400 : 280, h = rows <= 2 ? 120 : 100, gap = 14;
+  return list.map((x, i) => { const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols); return { x: 480 - (inRow * (w + gap) - gap) / 2 + c * (w + gap), y: 150 + r * (h + gap), w, h }; });
+}
+</script></body></html>

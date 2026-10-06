@@ -22,6 +22,7 @@
 (function () {
   const W = 960, H = 540;
   const Q = new URLSearchParams(location.search);
+  const FAST = Math.min(8, Math.max(1, +Q.get('fast') || 1)); // ?fast=4 runs game time 4x (automatic tests only)
   const ATTRACT = Q.has('attract') || Q.has('cover');
   const COVER = Q.has('cover');
   const META = (() => { try { return JSON.parse(document.getElementById('meta').textContent); } catch { return {}; } })();
@@ -461,7 +462,7 @@
   };
 
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+    const dt = Math.min(0.05, (now - last) / 1000 || 0.016) * FAST;
     last = now; time += dt; stateT += dt;
     if (typeQ.length) tapped.add(typeQ.shift());
     try {

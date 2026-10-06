@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sketch Duel</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"sketch-duel","n":133,"title":"SKETCH DUEL","genre":"mystery","modes":["online"],"minPlayers":2,"maxPlayers":8,"desc":"Everyone gets the same ridiculous prompt - A DRAGON AT THE DENTIST, YOUR TEACHER AS A SUPERHERO - and 75 seconds to draw it with the full sketch pad: rainbow pen, shapes, paint bucket, any colour. Then the gallery opens and everybody votes for the best one (not their own). Votes are points, the round winner gets a bonus. Three rounds. Outside a party it is a practice sketchbook.","controls":"Draw with the mouse / finger · tools under the canvas · DONE when finished · click / tap a drawing to vote","scoreLabel":"VOTES","tasks":[{"stat":"won","target":1,"text":"Win a Sketch Duel"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/draw.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const ROUNDS = 3, DRAW_T = 75, VOTE_T = 25, SHOW_T = 8, PX = 20, PY = 64, PW = 640, PH = 360;
+const PROMPTS = ['a dragon at the dentist', 'your teacher as a superhero', 'a haunted pizza', 'the moon on holiday', 'a cat driving a bus', 'a robot learning to dance',
+  'a shark at a birthday party', 'the world’s worst sandwich', 'a ghost doing homework', 'a snowman in the desert', 'a pirate on a skateboard', 'an alien at the supermarket',
+  'a dinosaur playing football', 'a very angry cloud', 'a banana bodybuilder', 'a castle made of sweets', 'a penguin on a rollercoaster', 'a monster under your bed, but friendly',
+  'a sad volcano', 'a giant chicken attacking a city', 'a wizard who lost his hat', 'a cow on the moon', 'a fish riding a bicycle', 'a zombie at a job interview',
+  'the scariest toilet ever', 'a spider knitting a jumper', 'a burger with legs running away', 'a king made of cheese', 'a tiny elephant in a teacup', 'an octopus drummer'];
+
+K.game({
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.pad = DRAW.pad({ x: PX, y: PY, w: PW, h: PH });
+    s.pts = {}; s.round = 0; s.pics = {}; s.vote = null; s.votes = {}; s.done = false; s.over = false; s.solo = !K.net;
+    s.order = K.shuffle(PROMPTS.slice());
+    s.onPhase = (s) => {
+      if (s.ph === 'draw') { s.pad.clear(); s.pad.take(); s.pics = {}; s.done = false; s.sentPic = false; }
+      if (s.ph === 'vote') { s.vote = null; s.votes = {}; }
+      if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'GALLERY CHAMPION' });
+    };
+    if (s.solo) { s.ph = 'draw'; s.t = DRAW_T; s.dur = DRAW_T; s.pd = { p: s.order[0], r: 1 }; s.onPhase(s); }
+    else { s.ph = 'start'; s.t = 1.2; }
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'pic') s.pics[from] = d.items;
+    if (d.t === 'done') s.pics[from] = s.pics[from] || null;
+    if (d.t === 'vote' && s.ph === 'vote') s.votes[from] = d.to;
+  },
+  onLeave(s, id) { delete s.pics[id]; delete s.votes[id]; if (PK.players().length < 2 && PK.host()) PK.go(s, 'end', 99, { pts: s.pts }); },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const pl = PK.players(), me = PK.me();
+    if (s.ph === 'draw') {
+      s.pad.update(!s.done && s.t > 0);
+      s.pad.take();
+      if (!s.done && K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, doneBtn())) { s.done = true; K.sfx('coin'); }
+      // hand in the picture once (DONE pressed or time up)
+      if ((s.done || s.t <= 0) && !s.sentPic) { s.sentPic = true; s.pics[me] = s.pad.items; PK.send({ t: 'pic', items: s.pad.items }); }
+      if (s.solo && s.t <= 0) { s.round++; s.pd = { p: s.order[s.round % s.order.length], r: s.round + 1 }; s.t = DRAW_T; s.onPhase(s); }
+      if (s.solo && K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, nextBtn())) { s.round++; s.pd = { p: s.order[s.round % s.order.length], r: s.round + 1 }; s.t = DRAW_T; s.onPhase(s); K.sfx('whoosh'); }
+    }
+    if (s.ph === 'vote' && !s.vote && K.mouse.clicked) gallery(s.pd.ids).forEach((g) => { if (g.id !== me && K.inRect(K.mouse.x, K.mouse.y, g)) { s.vote = g.id; s.votes[me] = g.id; PK.send({ t: 'vote', to: g.id }); K.sfx('click'); } });
+    if (s.solo || !PK.host()) return;
+    if (s.ph === 'start' && s.t <= 0) PK.go(s, 'draw', DRAW_T, { p: s.order[0], r: 1 });
+    else if (s.ph === 'draw' && ((pl.every((p) => p.id in s.pics) && s.t < DRAW_T - 3) || s.t < -4)) {
+      const ids = pl.map((p) => p.id).filter((id) => s.pics[id]);
+      PK.go(s, 'vote', VOTE_T, { p: s.pd.p, r: s.pd.r, ids, pics: Object.fromEntries(ids.map((id) => [id, s.pics[id]])) });
+    } else if (s.ph === 'vote' && (s.t <= 0 || pl.every((p) => s.votes[p.id] || s.pd.ids.filter((x) => x !== p.id).length === 0))) {
+      const count = {}; Object.values(s.votes).forEach((v) => (count[v] = (count[v] || 0) + 1));
+      const top = Math.max(0, ...Object.values(count)), best = Object.keys(count).filter((k) => count[k] === top && top > 0);
+      Object.entries(count).forEach(([id, n]) => (s.pts[id] = (s.pts[id] || 0) + n));
+      best.forEach((id) => (s.pts[id] = (s.pts[id] || 0) + 1));
+      PK.go(s, 'show', SHOW_T, { ...s.pd, count, best, pts: { ...s.pts } });
+    } else if (s.ph === 'show' && s.t <= 0) {
+      s.round++;
+      if (s.round >= ROUNDS) PK.go(s, 'end', 99, { pts: s.pts });
+      else PK.go(s, 'draw', DRAW_T, { p: s.order[s.round % s.order.length], r: s.round + 1 });
+    }
+  },
+  draw(s) {
+    const pl = PK.players(), me = PK.me(), d = s.pd;
+    if (s.ph === 'start' || s.ph === 'end' || !d) { K.text('SKETCH DUEL', 480, 250, 50, '#fff', 'center', 'd', 18); return; }
+    if (s.ph === 'draw') {
+      K.text(s.solo ? 'PRACTICE · DRAW:' : `ROUND ${d.r} / ${ROUNDS} · EVERYONE DRAWS:`, PX, 22, 12, '#8e88b8', 'left', 'd');
+      K.text(d.p.toUpperCase(), PX, 46, d.p.length > 30 ? 18 : 22, '#ffd93a', 'left', 'd');
+      PK.bar(690, 40, 220, s);
+      s.pad.draw(!s.done && s.t > 0);
+      if (s.done || s.t <= 0) { K.rect(PX, PY + PH / 2 - 24, PW, 48, '#0d0b1cdd'); K.text(s.solo ? 'TIME!' : 'HANDED IN ✓ waiting for the others', PX + PW / 2, PY + PH / 2, 20, '#3dffa0', 'center', 'd'); }
+      if (!s.done && !s.solo) K.button(doneBtn().x, doneBtn().y, doneBtn().w, doneBtn().h, 'DONE ✓', { color: '#3dffa0', size: 16 });
+      if (s.solo) K.button(nextBtn().x, nextBtn().y, nextBtn().w, nextBtn().h, 'NEW PROMPT', { color: '#ffd93a', size: 14 });
+      if (!s.solo) pl.forEach((p, i) => K.text(((p.id in s.pics) ? '✓ ' : '✎ ') + (p.id === me ? 'YOU' : p.name), 700, 150 + i * 24, 14, (p.id in s.pics) ? '#3dffa0' : p.col, 'left', 'd'));
+      else K.wrapText('Party mode: everybody draws this at the same time, then the gallery votes for the best one.', 800, 160, 230, 14, '#8e88b8', 1.3);
+      return;
+    }
+    const show = s.ph === 'show';
+    K.text(show ? 'THE VOTES ARE IN' : 'VOTE FOR THE BEST (not your own)', 480, 26, 20, show ? '#ffd93a' : '#fff', 'center', 'd');
+    K.text(`“${d.p.toUpperCase()}”`, 480, 52, 14, '#8e88b8', 'center', 'd');
+    gallery(d.ids).forEach((g) => {
+      const mine = g.id === me, picked = s.vote === g.id, best = show && d.best.includes(g.id);
+      K.glow(best ? '#ffd93a' : '#000', best ? 24 : 0); K.rect(g.x - 4, g.y - 4, g.w + 8, g.h + 30, best ? '#ffd93a' : picked ? '#22e6ff' : '#211d3d', 10); K.noGlow();
+      DRAW.show(d.pics[g.id], g.x, g.y, g.w, g.h, PW, PH);
+      K.text(show || mine ? (mine ? 'YOU' : PK.name(g.id)) : '?', g.x + 8, g.y + g.h + 13, 13, best || picked ? '#05040c' : PK.col(g.id), 'left', 'd');
+      if (show) K.text(`${d.count[g.id] || 0} ★`, g.x + g.w - 8, g.y + g.h + 13, 13, best ? '#05040c' : '#ffd93a', 'right', 'd');
+      if (best) K.text('👑', g.x + g.w - 18, g.y + 18, 22, '#fff');
+    });
+    if (!show) K.text(s.vote ? 'voted · waiting…' : 'tap a drawing', 480, 525, 14, s.vote ? '#3dffa0' : '#8e88b8', 'center', 'u');
+    else K.text(pl.map((p) => `${p.id === me ? 'YOU' : p.name} ${d.pts[p.id] || 0}`).join('   '), 480, 525, 14, '#ffd93a', 'center', 'd');
+  },
+});
+const doneBtn = () => ({ x: 700, y: 440, w: 220, h: 50 });
+const nextBtn = () => ({ x: 700, y: 440, w: 220, h: 50 });
+function gallery(ids) {
+  const n = ids.length, cols = n <= 2 ? n : n <= 4 ? 2 : 4, rows = Math.ceil(n / cols);
+  const w = cols <= 2 ? (rows === 1 ? 400 : 300) : 210, h = Math.round((w * PH) / PW), gx = 16, gy = 36;
+  return ids.map((id, i) => { const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols); return { id, x: 480 - (inRow * (w + gx) - gx) / 2 + c * (w + gx), y: 76 + r * (h + gy), w, h }; });
+}
+</script></body></html>

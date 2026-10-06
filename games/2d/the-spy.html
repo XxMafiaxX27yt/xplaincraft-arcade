@@ -1,0 +1,186 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Spy</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-spy","n":132,"title":"THE SPY","genre":"mystery","modes":["sp","online"],"minPlayers":3,"maxPlayers":8,"desc":"Everyone is secretly in the same place - a beach, a haunted house, a submarine - everyone except the SPY, who has no idea. Three questions, everybody answers in one word at the same time: say too much and the spy works out where you are, say too little and you look like the spy. Then vote. A caught spy gets one last chance: guess the place and steal the win. Solo against three bots, or online for up to 8.","controls":"Type a one-word answer + Enter · click / tap a player to vote · the spy taps a place to guess","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of The Spy"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const MATCHES = 3, QS_PER = 3, ANS_T = 30, SEE_T = 7, VOTE_T = 30, GUESS_T = 20, ROLE_T = 7, RES_T = 8;
+const PLACES = [
+  ['BEACH', 'sand waves sun towel shells swimming crab sunscreen'], ['SCHOOL', 'teacher homework bell desk exam lunch chalk students'],
+  ['HOSPITAL', 'doctor nurse bed medicine injection ambulance patient xray'], ['AIRPORT', 'plane passport luggage gate pilot security ticket delay'],
+  ['CINEMA', 'popcorn screen movie dark seats trailer ticket loud'], ['SPACE STATION', 'rocket astronaut floating stars earth oxygen helmet alien'],
+  ['PIRATE SHIP', 'treasure parrot sail captain sword ocean plank waves'], ['ZOO', 'lion cage monkey keeper elephant feeding animals giraffe'],
+  ['RESTAURANT', 'waiter menu food chef bill table tip kitchen'], ['SUPERMARKET', 'trolley checkout shelves cashier aisle food receipt discount'],
+  ['HAUNTED HOUSE', 'ghost scream dark cobweb creaky spooky candle attic'], ['STADIUM', 'goal fans ball referee crowd chants pitch match'],
+  ['JUNGLE', 'trees snakes vines monkeys rain mosquitoes river parrots'], ['POLICE STATION', 'cop jail handcuffs crime badge detective cell report'],
+  ['CIRCUS', 'clown tent juggler lion acrobat ringmaster popcorn trapeze'], ['SUBMARINE', 'torpedo periscope ocean sonar captain deep pressure fish'],
+];
+const QUESTIONS = ['What do you hear here?', 'What would you wear here?', 'What is the first thing you see?', 'Describe the smell in one word.',
+  'Who else is here with you?', 'What could go wrong here?', 'Why are you here?', 'What did you bring with you?', 'How do you feel here?',
+  'What is the weather like?', 'What do you eat here?', 'What would you take home from here?'];
+const VAGUE = ['busy', 'people', 'noisy', 'fun', 'big', 'tired', 'friends', 'money', 'phone', 'shoes', 'hungry', 'water', 'cold', 'bag', 'lights'];
+const BOTS = [{ id: 'me', name: 'YOU' }, { id: 'b1', name: 'AGENT K' }, { id: 'b2', name: 'MOLE' }, { id: 'b3', name: 'WHISPER' }];
+const words = (i) => PLACES[i][1].split(' ');
+
+K.game({
+  typing: true,
+  bg: '#0b0d18', touch: { stick: false, buttons: [] },
+  init(s) {
+    if (!K.net) PK.setFake(BOTS);
+    s.pts = {}; s.match = 0; s.text = ''; s.sent = false; s.ans = {}; s.all = {}; s.vote = null; s.votes = {}; s.over = false;
+    s.onPhase = (s) => {
+      if (s.ph === 'role') { s.all = {}; }
+      if (s.ph === 'ans') { s.text = ''; s.sent = false; s.ans = {}; s.botT = {}; }
+      if (s.ph === 'see') { const q = s.pd.qi; Object.entries(s.pd.ans).forEach(([id, a]) => { (s.all[id] = s.all[id] || [])[q] = a; }); }
+      if (s.ph === 'vote') { s.vote = null; s.votes = {}; s.botT = {}; }
+      if (s.ph === 'guess') { s.botT = {}; s.guessed = false; }
+      if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'MASTER OF SECRETS' });
+    };
+    s.ph = 'start'; s.t = 1; s.botT = {};
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'ans' && s.ph === 'ans') s.ans[from] = String(d.a).slice(0, 24);
+    if (d.t === 'vote' && s.ph === 'vote') s.votes[from] = d.to;
+    if (d.t === 'guess' && s.ph === 'guess' && from === s.pd.spy && PK.host()) resolve(s, d.p);
+  },
+  onLeave(s, id) {
+    delete s.ans[id]; delete s.votes[id];
+    if (!PK.host()) return;
+    if (PK.players().length < 3) PK.go(s, 'end', 99, { pts: s.pts });
+    else if (s.pd && s.pd.spy === id && s.ph !== 'res') PK.go(s, 'res', RES_T, { ...s.pd, spyLeft: true, pts: s.pts });
+  },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const pl = PK.players(), me = PK.me(), d = s.pd || {};
+    if (s.ph === 'ans' && !s.sent) {
+      if (PK.type(s, 'text', 24)) { s.sent = true; s.ans[me] = s.text.trim(); PK.send({ t: 'ans', a: s.text.trim() }); K.sfx('coin'); }
+    }
+    if (s.ph === 'vote' && !s.vote && K.mouse.clicked) cards(pl).forEach((c) => { if (c.id !== me && K.inRect(K.mouse.x, K.mouse.y, c)) { s.vote = c.id; s.votes[me] = c.id; PK.send({ t: 'vote', to: c.id }); K.sfx('click'); } });
+    if (s.ph === 'guess' && d.spy === me && K.mouse.clicked && !s.guessed) placeCards().forEach((c, i) => { if (K.inRect(K.mouse.x, K.mouse.y, c)) { s.guessed = true; K.sfx('click'); if (PK.host()) resolve(s, i); else PK.send({ t: 'guess', p: i }); } });
+    if (!K.net) bots(s, dt, pl);
+    if (!PK.host()) return;
+    if (s.ph === 'start' && s.t <= 0) newMatch(s);
+    else if (s.ph === 'role' && s.t <= 0) PK.go(s, 'ans', ANS_T, { ...base(d), qi: 0, q: d.qs[0] });
+    else if (s.ph === 'ans' && (s.t <= 0 || pl.every((p) => s.ans[p.id]))) {
+      const ans = {}; pl.forEach((p) => (ans[p.id] = s.ans[p.id] || '…'));
+      PK.go(s, 'see', SEE_T, { ...base(d), qi: d.qi, q: d.q, ans });
+    } else if (s.ph === 'see' && s.t <= 0) {
+      if (d.qi + 1 < QS_PER) PK.go(s, 'ans', ANS_T, { ...base(d), qi: d.qi + 1, q: d.qs[d.qi + 1] });
+      else PK.go(s, 'vote', VOTE_T, { ...base(d), all: s.all });
+    } else if (s.ph === 'vote' && (s.t <= 0 || pl.every((p) => s.votes[p.id]))) {
+      const count = {}; Object.values(s.votes).forEach((v) => (count[v] = (count[v] || 0) + 1));
+      const top = Math.max(0, ...Object.values(count)), most = Object.keys(count).filter((k) => count[k] === top);
+      const caught = top > 0 && most.length === 1 && most[0] === d.spy;
+      if (caught) { s.guessed = false; PK.go(s, 'guess', GUESS_T, { ...base(d), all: d.all, votes: { ...s.votes } }); }
+      else { s.pts[d.spy] = (s.pts[d.spy] || 0) + 3; PK.go(s, 'res', RES_T, { ...base(d), all: d.all, votes: { ...s.votes }, caught: false, pts: { ...s.pts } }); }
+    } else if (s.ph === 'guess' && s.t <= 0) resolve(s, -1);
+    else if (s.ph === 'res' && s.t <= 0) { s.match++; if (s.match >= MATCHES) PK.go(s, 'end', 99, { pts: s.pts }); else newMatch(s); }
+  },
+  draw(s) {
+    const pl = PK.players(), me = PK.me(), d = s.pd;
+    if (s.ph === 'start' || s.ph === 'end' || !d) { K.text('THE SPY', 480, 250, 56, '#fff', 'center', 'd', 20); return; }
+    const spy = d.spy === me, place = PLACES[d.place][0];
+    K.text(`MATCH ${s.match + 1} / ${MATCHES}`, 30, 26, 13, '#8e88b8', 'left', 'd');
+    PK.bar(640, 22, 260, s);
+    // your secret card, always visible
+    K.rect(720, 40, 220, 34, spy ? '#3a1020' : '#102a24', 8);
+    K.text(spy ? '🕵 YOU ARE THE SPY' : `📍 ${place}`, 830, 58, 14, spy ? '#ff3355' : '#3dffa0', 'center', 'd');
+    if (s.ph === 'role') {
+      K.rect(230, 110, 500, 300, spy ? '#2a0c18' : '#0e2620', 18); K.stroke(230, 110, 500, 300, spy ? '#ff3355' : '#3dffa0', 3, 18);
+      if (spy) {
+        K.text('YOU ARE THE SPY', 480, 170, 36, '#ff3355', 'center', 'd', 16);
+        K.wrapText('You do not know where everyone is. Listen to their answers, give vague ones yourself, and do not get voted out. If you are caught, guess the place to still win.', 480, 230, 420, 17, '#ffd6de', 1.3);
+      } else {
+        K.text('YOU ARE AT THE', 480, 170, 18, '#8fe8c4', 'center', 'd');
+        K.text(place, 480, 220, place.length > 11 ? 36 : 46, '#3dffa0', 'center', 'd', 16);
+        K.wrapText('One player is a spy who does not know this. Answer so your friends can tell you are not the spy - but do not give the place away.', 480, 280, 420, 17, '#d8fff0', 1.3);
+      }
+      return;
+    }
+    if (s.ph === 'ans' || s.ph === 'see') {
+      K.text(`QUESTION ${d.qi + 1} / ${QS_PER}`, 480, 92, 14, '#8e88b8', 'center', 'd');
+      K.text(d.q.toUpperCase(), 480, 128, d.q.length > 30 ? 24 : 30, '#fff', 'center', 'd');
+      if (s.ph === 'ans') {
+        PK.box(260, 170, 440, 60, s.text, 'one word…', !s.sent, spy ? '#ff3355' : '#3dffa0');
+        K.text(s.sent ? 'SENT ✓ waiting for the others' : 'ENTER to answer', 480, 260, 14, s.sent ? '#3dffa0' : '#8e88b8', 'center', 'm');
+        pl.forEach((p, i) => K.text((s.ans[p.id] ? '✓ ' : '… ') + (p.id === me ? 'YOU' : p.name), 480 - ((pl.length - 1) * 110) / 2 + i * 110, 300, 12, s.ans[p.id] ? '#3dffa0' : '#5d5a80', 'center', 'd'));
+      } else {
+        cards(pl, 170).forEach((c) => { const p = pl.find((x) => x.id === c.id); K.rect(c.x, c.y, c.w, c.h, '#17142e', 12); PK.tag(c.x + 12, c.y + 22, p.id, { size: 13 }); K.text(String(d.ans[p.id] || '…').toUpperCase(), c.x + c.w / 2, c.y + c.h / 2 + 14, 20, '#fff', 'center', 'd'); });
+      }
+      history(s, pl, 380);
+      return;
+    }
+    if (s.ph === 'vote' || s.ph === 'guess' || s.ph === 'res') {
+      const votes = s.ph === 'vote' ? s.votes : d.votes || {};
+      K.text(s.ph === 'vote' ? 'WHO IS THE SPY?' : s.ph === 'guess' ? 'SPY CAUGHT!' : d.spyLeft ? 'THE SPY LEFT' : d.caught === false ? 'THE SPY GOT AWAY' : d.right ? 'THE SPY GUESSED IT!' : 'THE SPY LOSES', 480, 96, 34, s.ph === 'vote' ? '#fff' : '#ffd93a', 'center', 'd', 14);
+      if (s.ph === 'guess' && spy) {
+        K.text('One chance: where is everyone?', 480, 128, 16, '#ffd6de', 'center', 'u');
+        placeCards().forEach((c, i) => { K.rect(c.x, c.y, c.w, c.h, '#2a0c18', 8); K.stroke(c.x, c.y, c.w, c.h, '#ff3355', 2, 8); K.text(PLACES[i][0], c.x + c.w / 2, c.y + c.h / 2 + 1, 13, '#fff', 'center', 'd'); });
+        return;
+      }
+      if (s.ph === 'guess') K.text(`${PK.name(d.spy)} was the spy… and is now guessing the place`, 480, 128, 16, '#8e88b8', 'center', 'u');
+      if (s.ph === 'res') K.text(`The spy was ${d.spy === me ? 'YOU' : PK.name(d.spy)} · the place was ${place}${d.guess >= 0 && d.caught ? ' · spy guessed ' + PLACES[d.guess][0] : ''}`, 480, 128, 16, '#d6d2f5', 'center', 'u');
+      cards(pl, 160).forEach((c) => {
+        const p = pl.find((x) => x.id === c.id), mine = s.vote === c.id, isSpy = s.ph !== 'vote' && p.id === d.spy;
+        K.rect(c.x, c.y, c.w, c.h, isSpy ? '#3a1020' : '#17142e', 12); K.stroke(c.x, c.y, c.w, c.h, mine ? '#22e6ff' : isSpy ? '#ff3355' : '#2c2850', mine || isSpy ? 3 : 2, 12);
+        PK.tag(c.x + 12, c.y + 20, p.id, { size: 13 });
+        (s.all[p.id] || (d.all && d.all[p.id]) || []).forEach((a, k) => K.text(String(a || '…').toUpperCase(), c.x + 14, c.y + 46 + k * 18, 13, '#d6d2f5', 'left', 'u'));
+        const by = Object.keys(votes).filter((v) => votes[v] === p.id);
+        by.forEach((v, k) => K.circle(c.x + c.w - 14 - k * 15, c.y + c.h - 12, 6, PK.col(v)));
+        if (isSpy) K.text('🕵 SPY', c.x + c.w - 12, c.y + 20, 12, '#ff3355', 'right', 'd');
+      });
+      if (s.ph === 'vote') K.text(s.vote ? 'voted · waiting…' : 'tap who you think is the spy', 480, 520, 15, s.vote ? '#3dffa0' : '#8e88b8', 'center', 'u');
+      if (s.ph === 'res') { const pts = d.pts || s.pts; K.text(pl.map((p) => `${p.id === me ? 'YOU' : p.name} ${pts[p.id] || 0}`).join('   '), 480, 520, 14, '#ffd93a', 'center', 'd'); }
+    }
+  },
+});
+const base = (d) => ({ place: d.place, spy: d.spy, qs: d.qs });
+function newMatch(s) {
+  const pl = PK.players();
+  s.all = {}; s.guessed = false;
+  PK.go(s, 'role', ROLE_T, { place: Math.floor(Math.random() * PLACES.length), spy: K.pick(pl).id, qs: K.shuffle(QUESTIONS.slice()).slice(0, QS_PER) });
+}
+function resolve(s, guess) {
+  if (s.ph !== 'guess') return;
+  const d = s.pd, right = guess === d.place;
+  if (right) s.pts[d.spy] = (s.pts[d.spy] || 0) + 3;
+  else PK.players().forEach((p) => { if (p.id !== d.spy) s.pts[p.id] = (s.pts[p.id] || 0) + 2; });
+  PK.go(s, 'res', RES_T, { ...base(d), all: d.all, votes: d.votes, caught: true, guess, right, pts: { ...s.pts } });
+}
+function cards(pl, y0 = 170) {
+  const n = pl.length, cols = n <= 4 ? n : Math.ceil(n / 2), rows = n <= 4 ? 1 : 2, w = Math.min(210, 880 / cols - 12), h = rows === 1 ? 150 : 140;
+  return pl.map((p, i) => { const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols); return { id: p.id, x: 480 - (inRow * (w + 12) - 12) / 2 + c * (w + 12), y: y0 + r * (h + 12), w, h }; });
+}
+function placeCards() { return PLACES.map((p, i) => ({ x: 70 + (i % 4) * 210, y: 150 + Math.floor(i / 4) * 80, w: 196, h: 66 })); }
+function history(s, pl, y) {
+  if (!Object.keys(s.all).length) return;
+  K.text('EARLIER ANSWERS', 30, y, 11, '#5d5a80', 'left', 'd');
+  pl.forEach((p, i) => K.text(`${p.id === PK.me() ? 'YOU' : p.name}: ${(s.all[p.id] || []).filter(Boolean).join(', ').toUpperCase()}`, 30 + (i % 2) * 450, y + 22 + Math.floor(i / 2) * 20, 13, p.col, 'left', 'u'));
+}
+// solo: bots answer with clues about the place (the spy bot stays vague), vote for the least convincing player
+function bots(s, dt, pl) {
+  const d = s.pd; if (!d) return;
+  pl.forEach((p) => {
+    if (p.id === 'me') return;
+    s.botT[p.id] = (s.botT[p.id] ?? K.rand(2, 10)) - dt;
+    if (s.botT[p.id] > 0) return;
+    if (s.ph === 'ans' && !s.ans[p.id]) s.ans[p.id] = p.id === d.spy ? K.pick(VAGUE) : K.pick(words(d.place));
+    if (s.ph === 'vote' && !s.votes[p.id]) {
+      const cands = pl.filter((q) => q.id !== p.id);
+      if (p.id === d.spy) s.votes[p.id] = K.pick(cands).id;
+      else {
+        const score = (id) => (s.all[id] || []).filter((a) => a && words(d.place).some((w) => String(a).toLowerCase().includes(w))).length + Math.random() * 0.6;
+        s.votes[p.id] = cands.slice().sort((a, b) => score(a.id) - score(b.id))[0].id;
+      }
+    }
+    if (s.ph === 'guess' && p.id === d.spy && !s.guessed) {
+      s.guessed = true;
+      const said = Object.values(s.all).flat().map((a) => String(a || '').toLowerCase());
+      const best = PLACES.map((pp, i) => ({ i, n: words(i).filter((w) => said.some((a) => a.includes(w))).length + Math.random() * 0.5 })).sort((a, b) => b.n - a.n)[0].i;
+      resolve(s, best);
+    }
+  });
+}
+</script></body></html>

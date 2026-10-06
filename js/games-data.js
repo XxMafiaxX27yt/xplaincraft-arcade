@@ -1950,7 +1950,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/nonogram.png"
 },
 {
 "id": "stroop-test",
@@ -2085,7 +2086,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/tower-of-hanoi.png"
 },
 {
 "id": "rush-hour",
@@ -2150,7 +2152,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/number-memory.png"
 },
 {
 "id": "chimp-test",
@@ -2171,7 +2174,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/chimp-test.png"
 },
 {
 "id": "quiz-battle",
@@ -2226,7 +2230,8 @@ export const GAME_LIST = [
 }
 ],
 "file": "games/2d/memory-pairs.html",
-"dim": "2d"
+"dim": "2d",
+"cover": "games/covers/memory-pairs.png"
 },
 {
 "id": "match-3",
@@ -2912,7 +2917,7 @@ export const GAME_LIST = [
 "minPlayers": 2,
 "maxPlayers": 8,
 "desc": "Party drawing game for 2-8. One player draws a secret word, everyone else races to guess it. Faster guesses score more, and the artist scores for every correct guess. Everyone draws once.",
-"controls": "Drawing: drag on the canvas, pick colours / sizes · Guessing: type (or tap) + Enter",
+"controls": "Drawing: drag on the canvas · pen, rainbow pen, eraser, line / box / circle / triangle / star (outline or filled), paint bucket, any colour from the rainbow + shade strips, undo · Guessing: type + Enter",
 "scoreLabel": "POINTS",
 "tasks": [
 {
@@ -2950,5 +2955,156 @@ export const GAME_LIST = [
 "file": "games/2d/together.html",
 "dim": "2d",
 "cover": "games/covers/together.png"
+},
+{
+"id": "most-likely",
+"n": 130,
+"title": "MOST LIKELY TO",
+"genre": "mystery",
+"modes": [
+"online"
+],
+"minPlayers": 3,
+"maxPlayers": 8,
+"desc": "A party voting game for friends. \"Who is most likely to fall asleep in a horror movie?\" Everyone secretly taps a player, then the votes are revealed. Vote with the crowd to score; the most-voted player of each round wears the crown. Ten rounds of questions you will argue about.",
+"controls": "Click / tap a player to vote",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Most Likely To"
+}
+],
+"file": "games/2d/most-likely.html",
+"dim": "2d",
+"cover": "games/covers/most-likely.png"
+},
+{
+"id": "word-bluff",
+"n": 131,
+"title": "WORD BLUFF",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "A real but ridiculous English word appears: GONGOOZLER, BUMFUZZLE, SNOLLYGOSTER. Everyone invents a fake meaning that sounds real. Then all the meanings are shuffled together with the true one: find the real meaning (+2) and fool your friends with yours (+1 for each one you fool). Solo against three bluffing bots, or online for up to 8.",
+"controls": "Type your fake meaning + Enter · click / tap the meaning you think is real",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Word Bluff"
+},
+{
+"stat": "score",
+"target": 8,
+"text": "Score 8 in Word Bluff"
+}
+],
+"file": "games/2d/word-bluff.html",
+"dim": "2d",
+"cover": "games/covers/word-bluff.png"
+},
+{
+"id": "the-spy",
+"n": 132,
+"title": "THE SPY",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 3,
+"maxPlayers": 8,
+"desc": "Everyone is secretly in the same place - a beach, a haunted house, a submarine - everyone except the SPY, who has no idea. Three questions, everybody answers in one word at the same time: say too much and the spy works out where you are, say too little and you look like the spy. Then vote. A caught spy gets one last chance: guess the place and steal the win. Solo against three bots, or online for up to 8.",
+"controls": "Type a one-word answer + Enter · click / tap a player to vote · the spy taps a place to guess",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of The Spy"
+}
+],
+"file": "games/2d/the-spy.html",
+"dim": "2d",
+"cover": "games/covers/the-spy.png"
+},
+{
+"id": "sketch-duel",
+"n": 133,
+"title": "SKETCH DUEL",
+"genre": "mystery",
+"modes": [
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Everyone gets the same ridiculous prompt - A DRAGON AT THE DENTIST, YOUR TEACHER AS A SUPERHERO - and 75 seconds to draw it with the full sketch pad: rainbow pen, shapes, paint bucket, any colour. Then the gallery opens and everybody votes for the best one (not their own). Votes are points, the round winner gets a bonus. Three rounds. Outside a party it is a practice sketchbook.",
+"controls": "Draw with the mouse / finger · tools under the canvas · DONE when finished · click / tap a drawing to vote",
+"scoreLabel": "VOTES",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a Sketch Duel"
+}
+],
+"file": "games/2d/sketch-duel.html",
+"dim": "2d",
+"cover": "games/covers/sketch-duel.png"
+},
+{
+"id": "fake-artist",
+"n": 134,
+"title": "FAKE ARTIST",
+"genre": "mystery",
+"modes": [
+"online"
+],
+"minPlayers": 3,
+"maxPlayers": 8,
+"desc": "Everyone draws one picture together, one line each, taking turns - twice around the table. All the artists know the secret word. One of you is the FAKE and only knows the category. Draw enough to prove you know the word, but not so much that the fake can copy you. Then vote out the fake. A caught fake can still win by typing the word. 3 to 8 players.",
+"controls": "On your turn: draw ONE line (mouse / finger) · click / tap a player to vote · the fake types the word + Enter",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Fake Artist"
+}
+],
+"file": "games/2d/fake-artist.html",
+"dim": "2d",
+"cover": "games/covers/fake-artist.png"
+},
+{
+"id": "telephone-draw",
+"n": 135,
+"title": "TELEPHONE DRAW",
+"genre": "mystery",
+"modes": [
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Everyone writes a silly sentence. It passes to the next player, who has to DRAW it. The next one sees only the drawing and writes what they think it is. The next draws THAT... and so on around the party. At the end every chain is played back step by step - watch \"a cat doing homework\" turn into \"a volcano eating spaghetti\". Tap the heart on the best moments: hearts are points.",
+"controls": "Type + Enter to write · draw with the mouse / finger, DONE when finished · tap ❤ during the replay",
+"scoreLabel": "HEARTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Telephone Draw"
+}
+],
+"file": "games/2d/telephone-draw.html",
+"dim": "2d",
+"cover": "games/covers/telephone-draw.png"
 }
 ];

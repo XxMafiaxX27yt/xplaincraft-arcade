@@ -415,7 +415,10 @@ export async function logoutFlow() {
 // ---------- gifts from operators ----------
 let giftOpen = false;
 // never in the middle of a game: wait until the player leaves it
-window.addEventListener('xc-game', () => setTimeout(() => !isPlaying() && showGifts(), 600));
+window.addEventListener('xc-game', () => {
+  if (isPlaying() && giftOpen) { closeModal(); giftOpen = false; } // a game started over an open gift: it comes back afterwards
+  else setTimeout(() => !isPlaying() && showGifts(), 600);
+});
 function showGifts() {
   const g = store.me?.inbox?.[0];
   if (!g || giftOpen || isPlaying()) return;

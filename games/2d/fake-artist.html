@@ -1,0 +1,163 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fake Artist</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"fake-artist","n":134,"title":"FAKE ARTIST","genre":"mystery","modes":["online"],"minPlayers":3,"maxPlayers":8,"desc":"Everyone draws one picture together, one line each, taking turns - twice around the table. All the artists know the secret word. One of you is the FAKE and only knows the category. Draw enough to prove you know the word, but not so much that the fake can copy you. Then vote out the fake. A caught fake can still win by typing the word. 3 to 8 players.","controls":"On your turn: draw ONE line (mouse / finger) · click / tap a player to vote · the fake types the word + Enter","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Fake Artist"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/draw.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const MATCHES = 2, LAPS = 2, TURN_T = 25, ROLE_T = 8, VOTE_T = 35, GUESS_T = 25, RES_T = 9, PX = 20, PY = 70, PW = 640, PH = 360;
+const CATS = {
+  ANIMAL: 'elephant giraffe octopus penguin kangaroo snail spider crab', FOOD: 'pizza banana burger icecream carrot cake donut hotdog',
+  OBJECT: 'umbrella guitar scissors ladder lamp glasses key clock', PLACE: 'castle lighthouse volcano island pyramid igloo bridge tent',
+  VEHICLE: 'bicycle helicopter submarine tractor rocket train sailboat skateboard', JOB: 'firefighter chef pirate astronaut wizard doctor clown farmer',
+  SPORT: 'football basketball skiing boxing golf tennis surfing bowling', NATURE: 'rainbow tornado mushroom cactus waterfall snowman tree flower',
+};
+const PRACTICE = Object.values(CATS).join(' ').split(' ');
+
+K.game({
+  typing: true,
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.pad = DRAW.pad({ x: PX, y: PY, w: PW, h: PH, tools: false });
+    s.pad.size = 6;
+    s.pts = {}; s.match = 0; s.vote = null; s.votes = {}; s.text = ''; s.over = false; s.solo = !K.net;
+    s.pad.onStroke = () => { if (s.ph === 'turn' && s.pd.who === PK.me() && !s.drew) { s.drew = true; flush(s); PK.send({ t: 'drew' }); if (PK.host()) nextTurn(s); } };
+    s.onPhase = (s) => {
+      if (s.ph === 'role') { s.pad.clear(); s.pad.take(); }
+      if (s.ph === 'turn') { s.drew = false; s.pad.col = PK.col(s.pd.who); }
+      if (s.ph === 'vote') { s.vote = null; s.votes = {}; }
+      if (s.ph === 'guess') { s.text = ''; s.sent = false; }
+      if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'MASTER OF DECEPTION' });
+    };
+    if (s.solo) { s.ph = 'practice'; s.pd = { w: K.pick(PRACTICE) }; s.pad.col = '#22e6ff'; s.t = 0; s.dur = 0; }
+    else { s.ph = 'start'; s.t = 1.2; }
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'ink') s.pad.apply(d.ops);
+    if (d.t === 'drew' && PK.host() && s.ph === 'turn' && from === s.pd.who) nextTurn(s);
+    if (d.t === 'vote' && s.ph === 'vote') s.votes[from] = d.to;
+    if (d.t === 'word' && PK.host() && s.ph === 'guess' && from === s.pd.fake) resolve(s, d.w);
+  },
+  onLeave(s, id) {
+    if (!PK.host()) return;
+    if (PK.players().length < 3) return PK.go(s, 'end', 99, { pts: s.pts });
+    if (s.pd && s.pd.fake === id) return PK.go(s, 'res', RES_T, { ...base(s.pd), left: true, pts: { ...s.pts } });
+    if (s.ph === 'turn' && s.pd.who === id) nextTurn(s);
+  },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const pl = PK.players(), me = PK.me(), d = s.pd || {};
+    if (s.ph === 'practice') {
+      s.pad.update(true); s.pad.take();
+      if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 700, y: 440, w: 220, h: 50 })) { s.pad.clear(); s.pd = { w: K.pick(PRACTICE) }; K.sfx('whoosh'); }
+      return;
+    }
+    if (s.ph === 'turn') {
+      const mine = d.who === me && !s.drew;
+      s.pad.update(mine);
+      if (mine) { s.sendT = (s.sendT || 0) - dt; if (s.sendT <= 0) { flush(s); s.sendT = 0.06; } }
+    }
+    if (s.ph === 'vote' && !s.vote && K.mouse.clicked) cards(pl).forEach((c) => { if (c.id !== me && K.inRect(K.mouse.x, K.mouse.y, c)) { s.vote = c.id; s.votes[me] = c.id; PK.send({ t: 'vote', to: c.id }); K.sfx('click'); } });
+    if (s.ph === 'guess' && d.fake === me && !s.sent && PK.type(s, 'text', 20)) { s.sent = true; K.sfx('click'); if (PK.host()) resolve(s, s.text); else PK.send({ t: 'word', w: s.text }); }
+    if (!PK.host()) return;
+    if (s.ph === 'start' && s.t <= 0) newMatch(s);
+    else if (s.ph === 'role' && s.t <= 0) PK.go(s, 'turn', TURN_T, { ...base(d), turn: 0, who: d.order[0] });
+    else if (s.ph === 'turn' && s.t <= 0) nextTurn(s);
+    else if (s.ph === 'vote' && (s.t <= 0 || pl.every((p) => s.votes[p.id]))) {
+      const count = {}; Object.values(s.votes).forEach((v) => (count[v] = (count[v] || 0) + 1));
+      const top = Math.max(0, ...Object.values(count)), most = Object.keys(count).filter((k) => count[k] === top);
+      const caught = top > 0 && most.length === 1 && most[0] === d.fake;
+      if (caught) PK.go(s, 'guess', GUESS_T, { ...base(d), votes: { ...s.votes } });
+      else { s.pts[d.fake] = (s.pts[d.fake] || 0) + 3; PK.go(s, 'res', RES_T, { ...base(d), votes: { ...s.votes }, caught: false, pts: { ...s.pts } }); }
+    } else if (s.ph === 'guess' && s.t <= 0) resolve(s, '');
+    else if (s.ph === 'res' && s.t <= 0) { s.match++; if (s.match >= MATCHES) PK.go(s, 'end', 99, { pts: s.pts }); else newMatch(s); }
+  },
+  draw(s) {
+    const pl = PK.players(), me = PK.me(), d = s.pd;
+    if (s.ph === 'start' || s.ph === 'end' || !d) { K.text('FAKE ARTIST', 480, 250, 50, '#fff', 'center', 'd', 18); return; }
+    if (s.ph === 'practice') {
+      K.text('PRACTICE · ONE-LINE DRAWINGS', PX, 24, 12, '#8e88b8', 'left', 'd');
+      K.text(`TRY: ${d.w.toUpperCase()}`, PX, 50, 22, '#ffd93a', 'left', 'd');
+      s.pad.draw(false);
+      K.button(700, 440, 220, 50, 'NEW WORD', { color: '#ffd93a', size: 14 });
+      K.wrapText('Party mode (3-8 players): everyone draws one line per turn. One player is the FAKE and does not know the word. Vote them out!', 810, 150, 230, 14, '#8e88b8', 1.35);
+      return;
+    }
+    const fake = d.fake === me;
+    // secret card
+    K.rect(PX, 14, 420, 46, fake ? '#3a1020' : '#102a24', 10);
+    K.text(`CATEGORY: ${d.cat}`, PX + 14, 28, 12, '#8e88b8', 'left', 'd');
+    K.text(fake ? 'YOU ARE THE FAKE - blend in!' : `THE WORD: ${d.word.toUpperCase()}`, PX + 14, 48, 17, fake ? '#ff3355' : '#3dffa0', 'left', 'd');
+    PK.bar(690, s.ph === 'role' || s.ph === 'turn' ? 34 : 60, 220, s);
+    if (s.ph === 'role') {
+      s.pad.draw(false);
+      K.rect(PX, PY + 120, PW, 120, '#0d0b1cee');
+      K.text(fake ? 'YOU ARE THE FAKE ARTIST' : 'YOU ARE AN ARTIST', PX + PW / 2, PY + 160, 30, fake ? '#ff3355' : '#3dffa0', 'center', 'd', 14);
+      K.text(fake ? 'You only know the category. Draw like you know the word.' : 'One line per turn. Prove you know the word - quietly.', PX + PW / 2, PY + 200, 16, '#d6d2f5', 'center', 'u');
+    } else if (s.ph === 'turn') s.pad.draw(false);
+    // turn order / players
+    if (s.ph === 'role' || s.ph === 'turn') pl.forEach((p, i) => {
+      const y = 100 + i * 30, cur = s.ph === 'turn' && d.who === p.id;
+      if (cur) { K.rect(690, y - 13, 250, 26, p.col + '33', 6); }
+      PK.tag(700, y, p.id, { size: 14 });
+      if (cur) K.text(p.id === me ? 'YOUR LINE!' : 'drawing…', 930, y + 1, 12, p.col, 'right', 'd');
+    });
+    if (s.ph === 'turn') {
+      const mine = d.who === me;
+      K.text(mine ? (s.drew ? 'DONE' : 'YOUR TURN: draw ONE line') : `${PK.name(d.who)} is drawing one line`, PX + PW / 2, PY + PH + 30, 18, mine ? PK.col(me) : '#8e88b8', 'center', 'd');
+      K.text(`turn ${d.turn + 1} of ${d.order.length * LAPS}`, PX + PW / 2, PY + PH + 56, 12, '#5d5a80', 'center', 'm');
+    }
+    if (s.ph === 'vote' || s.ph === 'guess' || s.ph === 'res') {
+      const votes = s.ph === 'vote' ? s.votes : d.votes || {};
+      DRAW.show(s.pad.items, 270, 66, 420, 236, PW, PH);
+      K.stroke(270, 66, 420, 236, '#ffffff33', 2, 6);
+      const title = s.ph === 'vote' ? 'WHO IS THE FAKE?' : s.ph === 'guess' ? 'FAKE CAUGHT!' : d.left ? 'THE FAKE LEFT' : d.caught === false ? 'THE FAKE GOT AWAY!' : d.right ? 'THE FAKE GUESSED THE WORD!' : 'THE ARTISTS WIN';
+      K.text(title, 700, 40, 24, s.ph === 'vote' ? '#fff' : '#ffd93a', 'center', 'd', 12);
+      cards(pl).forEach((c) => {
+        const p = pl.find((x) => x.id === c.id), isFake = s.ph !== 'vote' && p.id === d.fake, picked = s.vote === p.id;
+        K.rect(c.x, c.y, c.w, c.h, isFake ? '#3a1020' : '#17142e', 10); K.stroke(c.x, c.y, c.w, c.h, picked ? '#22e6ff' : isFake ? '#ff3355' : p.col, picked || isFake ? 3 : 2, 10);
+        PK.tag(c.x + 12, c.y + c.h / 2, p.id, { size: 14 });
+        if (isFake) K.text('FAKE', c.x + c.w - 10, c.y + 14, 11, '#ff3355', 'right', 'd');
+        Object.keys(votes).filter((v) => votes[v] === p.id).forEach((v, k) => K.circle(c.x + c.w - 14 - k * 14, c.y + c.h - 11, 5, PK.col(v)));
+      });
+      if (s.ph === 'vote') K.text(s.vote ? 'voted · waiting…' : 'tap who you think is the fake', 480, 525, 14, s.vote ? '#3dffa0' : '#8e88b8', 'center', 'u');
+      if (s.ph === 'guess') {
+        if (fake) { PK.box(280, 440, 400, 54, s.text, 'type the word…', !s.sent, '#ff3355'); K.text('Guess the word to steal the win!', 480, 510, 14, '#ffd6de', 'center', 'u'); }
+        else K.text(`${PK.name(d.fake)} is the fake and gets one guess at the word…`, 480, 450, 16, '#8e88b8', 'center', 'u');
+      }
+      if (s.ph === 'res') {
+        K.text(`The word was ${d.word.toUpperCase()}${d.guess ? ` · the fake guessed “${d.guess.toUpperCase()}”` : ''}`, 480, 440, 16, '#d6d2f5', 'center', 'u');
+        K.text(pl.map((p) => `${p.id === me ? 'YOU' : p.name} ${(d.pts || {})[p.id] || 0}`).join('   '), 480, 480, 14, '#ffd93a', 'center', 'd');
+      }
+    }
+  },
+});
+const base = (d) => ({ cat: d.cat, word: d.word, fake: d.fake, order: d.order });
+function flush(s) { const ops = s.pad.take(); if (ops.length) PK.send({ t: 'ink', ops }); }
+function newMatch(s) {
+  const pl = PK.players(), cats = Object.keys(CATS), cat = K.pick(cats), word = K.pick(CATS[cat].split(' '));
+  // the fake never goes first
+  const fake = K.pick(pl).id, order = K.shuffle(pl.map((p) => p.id));
+  if (order[0] === fake) order.push(order.shift());
+  PK.go(s, 'role', ROLE_T, { cat, word, fake, order });
+}
+function nextTurn(s) {
+  const d = s.pd, n = d.turn + 1;
+  if (n >= d.order.length * LAPS) return PK.go(s, 'vote', VOTE_T, base(d));
+  let who = d.order[n % d.order.length];
+  if (!PK.players().some((p) => p.id === who)) { s.pd = { ...d, turn: n }; return nextTurn(s); }
+  PK.go(s, 'turn', TURN_T, { ...base(d), turn: n, who });
+}
+function resolve(s, w) {
+  if (s.ph !== 'guess') return;
+  const d = s.pd, right = String(w).toLowerCase().replace(/\s+/g, '') === d.word;
+  if (right) s.pts[d.fake] = (s.pts[d.fake] || 0) + 3;
+  else PK.players().forEach((p) => { if (p.id !== d.fake) s.pts[p.id] = (s.pts[p.id] || 0) + 2; });
+  PK.go(s, 'res', RES_T, { ...base(d), votes: d.votes, caught: true, right, guess: String(w), pts: { ...s.pts } });
+}
+function cards(pl) {
+  const n = pl.length, cols = Math.min(4, n), w = 200, h = 50;
+  return pl.map((p, i) => { const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols); return { id: p.id, x: 480 - (inRow * (w + 12) - 12) / 2 + c * (w + 12), y: 314 + r * (h + 10), w, h }; });
+}
+</script></body></html>

@@ -1,0 +1,152 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Telephone Draw</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"telephone-draw","n":135,"title":"TELEPHONE DRAW","genre":"mystery","modes":["online"],"minPlayers":2,"maxPlayers":8,"desc":"Everyone writes a silly sentence. It passes to the next player, who has to DRAW it. The next one sees only the drawing and writes what they think it is. The next draws THAT... and so on around the party. At the end every chain is played back step by step - watch \"a cat doing homework\" turn into \"a volcano eating spaghetti\". Tap the heart on the best moments: hearts are points.","controls":"Type + Enter to write · draw with the mouse / finger, DONE when finished · tap ❤ during the replay","scoreLabel":"HEARTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Telephone Draw"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/draw.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const WRITE_T = 45, DRAW_T = 75, GUESS_T = 35, SHOW_TXT = 4.5, SHOW_PIC = 6, PX = 20, PY = 64, PW = 640, PH = 360;
+const IDEAS = ['a cat doing homework', 'a shark playing guitar', 'grandma on a skateboard', 'a pizza falling in love', 'an alien stuck in traffic', 'a ghost brushing its teeth',
+  'a robot walking a dog', 'a volcano sneezing', 'a cowboy riding a chicken', 'a snowman at the beach', 'the sun wearing sunglasses', 'a dragon baking cookies',
+  'a fish in a spacesuit', 'a vampire at the dentist', 'a cow jumping over the moon', 'a giant spider at a tea party', 'a banana slipping on a person', 'a pirate lost in a supermarket'];
+
+K.game({
+  typing: true,
+  bg: '#0d0b1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.pad = DRAW.pad({ x: PX, y: PY, w: PW, h: PH });
+    s.chains = {}; s.hearts = {}; s.text = ''; s.sent = false; s.over = false; s.solo = !K.net; s.liked = {};
+    s.onPhase = (s) => {
+      if (s.ph === 'step') { s.text = ''; s.sent = false; s.pad.clear(); s.pad.take(); }
+      if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'CROWD FAVOURITE' });
+    };
+    if (s.solo) { s.ph = 'practice'; s.pd = { idea: K.pick(IDEAS) }; s.t = 0; s.dur = 0; }
+    else { s.ph = 'start'; s.t = 1.2; }
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'e') store(s, d.c, d.k, { by: from, text: d.text, items: d.items });
+    if (d.t === 'like' && PK.host()) like(s, from, d.c, d.k);
+  },
+  onLeave(s, id) { if (PK.host() && PK.players().length < 2) PK.go(s, 'end', 99, { pts: s.hearts }); },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const me = PK.me(), d = s.pd || {};
+    if (s.ph === 'practice') {
+      s.pad.update(true); s.pad.take();
+      if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 700, y: 440, w: 220, h: 50 })) { s.pad.clear(); s.pd = { idea: K.pick(IDEAS) }; K.sfx('whoosh'); }
+      return;
+    }
+    if (s.ph === 'step') {
+      const job = myJob(s), kind = kindOf(d.k);
+      if (!s.sent) {
+        if (kind === 'draw') {
+          s.pad.update(s.t > 0); s.pad.take();
+          if (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, doneBtn())) submit(s, job);
+        } else {
+          if (kind === 'write' && K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, ideaBtn())) { s.text = K.pick(IDEAS); K.sfx('click'); }
+          if (PK.type(s, 'text', 60)) submit(s, job);
+        }
+        if (s.t <= 0) submit(s, job); // time up: hand in whatever you have
+      }
+    }
+    if (s.ph === 'show' && K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, heartBtn())) {
+      const e = s.chains[d.c]?.[d.k], key = d.c + ':' + d.k;
+      if (e && e.by !== me && !s.liked[key]) { s.liked[key] = true; K.sfx('coin'); if (PK.host()) like(s, me, d.c, d.k); else PK.send({ t: 'like', c: d.c, k: d.k }); }
+    }
+    if (!PK.host()) return;
+    const pl = PK.players(), n = d.order ? d.order.length : pl.length;
+    if (s.ph === 'start' && s.t <= 0) {
+      const order = pl.map((p) => p.id), steps = Math.min(8, Math.max(4, order.length));
+      PK.go(s, 'step', WRITE_T, { order, steps, k: 0 });
+    } else if (s.ph === 'step') {
+      const have = d.order.filter((id, c) => s.chains[c] && s.chains[c][d.k]).length;
+      const alive = d.order.filter((id) => pl.some((p) => p.id === id)).length;
+      if (have >= alive || s.t < -5) {
+        const k = d.k + 1;
+        if (k >= d.steps) PK.go(s, 'show', SHOW_TXT, { order: d.order, steps: d.steps, c: 0, k: 0 });
+        else PK.go(s, 'step', kindOf(k) === 'draw' ? DRAW_T : GUESS_T, { order: d.order, steps: d.steps, k });
+      }
+    } else if (s.ph === 'show' && s.t <= 0) {
+      let c = d.c, k = d.k + 1;
+      if (k >= d.steps) { c++; k = 0; }
+      if (c >= n) PK.go(s, 'end', 99, { pts: s.hearts });
+      else PK.go(s, 'show', kindOf(k) === 'draw' ? SHOW_PIC : SHOW_TXT, { order: d.order, steps: d.steps, c, k, hearts: { ...s.hearts } });
+    }
+  },
+  draw(s) {
+    const me = PK.me(), d = s.pd;
+    if (s.ph === 'start' || s.ph === 'end' || !d) { K.text('TELEPHONE DRAW', 480, 250, 48, '#fff', 'center', 'd', 18); return; }
+    if (s.ph === 'practice') {
+      K.text('PRACTICE · DRAW THIS:', PX, 22, 12, '#8e88b8', 'left', 'd');
+      K.text(d.idea.toUpperCase(), PX, 46, 20, '#ffd93a', 'left', 'd');
+      s.pad.draw(true);
+      K.button(700, 440, 220, 50, 'NEW IDEA', { color: '#ffd93a', size: 14 });
+      K.wrapText('Party mode: write → someone draws it → someone guesses the drawing → someone draws the guess… then watch every chain fall apart.', 810, 150, 230, 14, '#8e88b8', 1.35);
+      return;
+    }
+    if (s.ph === 'step') {
+      const job = myJob(s), kind = kindOf(d.k), prev = d.k > 0 ? s.chains[job]?.[d.k - 1] : null;
+      K.text(`STEP ${d.k + 1} / ${d.steps}`, 30, 22, 12, '#8e88b8', 'left', 'd');
+      PK.bar(690, 18, 220, s);
+      if (kind === 'write') {
+        K.text('WRITE SOMETHING FUNNY FOR SOMEONE TO DRAW', 480, 110, 22, '#fff', 'center', 'd');
+        PK.box(130, 170, 700, 64, s.text, 'a cat doing homework…', !s.sent, '#ffd93a');
+        if (!s.sent) K.button(ideaBtn().x, ideaBtn().y, ideaBtn().w, ideaBtn().h, '🎲 GIVE ME AN IDEA', { color: '#c45cff', size: 13 });
+      } else if (kind === 'draw') {
+        K.text('DRAW THIS:', PX, 42, 12, '#8e88b8', 'left', 'd');
+        K.text(String(prev?.text || '…').toUpperCase(), PX + 90, 42, 18, '#ffd93a', 'left', 'd');
+        s.pad.draw(!s.sent && s.t > 0);
+        if (!s.sent) K.button(doneBtn().x, doneBtn().y, doneBtn().w, doneBtn().h, 'DONE ✓', { color: '#3dffa0', size: 16 });
+        else { K.rect(PX, PY + PH / 2 - 24, PW, 48, '#0d0b1cdd'); K.text('HANDED IN ✓', PX + PW / 2, PY + PH / 2, 20, '#3dffa0', 'center', 'd'); }
+      } else {
+        K.text('WHAT IS THIS? DESCRIBE THE DRAWING', 480, 50, 20, '#fff', 'center', 'd');
+        if (prev?.items) DRAW.show(prev.items, 240, 74, 480, 270, PW, PH); else K.text('(the artist drew nothing!)', 480, 200, 18, '#5d5a80', 'center', 'u');
+        PK.box(180, 360, 600, 58, s.text, 'it is a…', !s.sent, '#22e6ff');
+      }
+      if (s.sent) K.text('SENT ✓ waiting for the others…', 480, kind === 'draw' ? 470 : 470, 16, '#3dffa0', 'center', 'd');
+      const have = d.order.filter((id, c) => s.chains[c] && s.chains[c][d.k]).length;
+      K.text(`${have} / ${d.order.length} done`, 810, 525, 12, '#5d5a80', 'center', 'm');
+      return;
+    }
+    // replay
+    const chain = s.chains[d.c] || {}, e = chain[d.k], owner = d.order[d.c], kind = kindOf(d.k);
+    K.text(`${owner === me ? 'YOUR' : PK.name(owner).toUpperCase() + "'S"} CHAIN`, 30, 26, 16, PK.col(owner), 'left', 'd');
+    K.text(`${d.k + 1} / ${d.steps}`, 930, 26, 14, '#8e88b8', 'right', 'd');
+    for (let k = 0; k < d.steps; k++) K.rect(330 + k * 38, 20, 30, 8, k < d.k ? '#3a3570' : k === d.k ? '#ffd93a' : '#1c1838', 4);
+    if (!e) K.text('(skipped)', 480, 260, 22, '#5d5a80', 'center', 'u');
+    else {
+      if (kind === 'draw') { K.text(`${e.by === me ? 'YOU' : PK.name(e.by)} drew:`, 480, 62, 15, PK.col(e.by), 'center', 'd'); DRAW.show(e.items || [], 200, 78, 560, 315, PW, PH); }
+      else {
+        K.text(d.k === 0 ? `${e.by === me ? 'YOU' : PK.name(e.by)} wrote:` : `${e.by === me ? 'YOU' : PK.name(e.by)} thought it was:`, 480, 160, 18, PK.col(e.by), 'center', 'd');
+        K.wrapText(`“${String(e.text || '…').toUpperCase()}”`, 480, 230, 760, 36, '#fff', 1.2, 'center', 'd');
+      }
+      const key = d.c + ':' + d.k, mine = e.by === me;
+      K.button(heartBtn().x, heartBtn().y, heartBtn().w, heartBtn().h, s.liked[key] ? '❤ LIKED' : mine ? 'YOURS' : '❤ LOVE IT', { color: s.liked[key] ? '#ff2bd6' : mine ? '#5d5a80' : '#ff9bc8', size: 14 });
+    }
+    const hearts = d.hearts || s.hearts;
+    K.text(PK.players().map((p) => `${p.id === me ? 'YOU' : p.name} ❤${hearts[p.id] || 0}`).join('   '), 480, 525, 13, '#ff9bc8', 'center', 'd');
+  },
+});
+const kindOf = (k) => (k === 0 ? 'write' : k % 2 ? 'draw' : 'guess');
+const doneBtn = () => ({ x: 700, y: 440, w: 220, h: 50 });
+const ideaBtn = () => ({ x: 360, y: 260, w: 240, h: 44 });
+const heartBtn = () => ({ x: 380, y: 420, w: 200, h: 48 });
+// at step k, player i works on chain (i - k) mod n (chain c was started by player c)
+function myJob(s) { const d = s.pd, n = d.order.length, i = d.order.indexOf(PK.me()); return (((i - d.k) % n) + n) % n; }
+function store(s, c, k, e) { (s.chains[c] = s.chains[c] || {})[k] = e; }
+function submit(s, c) {
+  if (s.sent) return;
+  s.sent = true;
+  const d = s.pd, kind = kindOf(d.k);
+  const e = kind === 'draw' ? { items: s.pad.items } : { text: (s.text.trim() || '…').slice(0, 60) };
+  store(s, c, d.k, { by: PK.me(), ...e });
+  PK.send({ t: 'e', c, k: d.k, ...e });
+  K.sfx('coin');
+}
+function like(s, from, c, k) {
+  const e = s.chains[c]?.[k], key = 'L' + from + ':' + c + ':' + k;
+  if (!e || e.by === from || s.liked[key]) return;
+  s.liked[key] = true; s.hearts[e.by] = (s.hearts[e.by] || 0) + 1;
+}
+</script></body></html>
