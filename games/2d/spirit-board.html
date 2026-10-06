@@ -1,0 +1,145 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spirit Board</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"spirit-board","n":184,"title":"SPIRIT BOARD","genre":"horror","desc":"Fingers on the planchette. Ask it a question and it answers - sliding over the letters, stopping on the ones it means. Read what it spells and type it back so it knows you are listening. It glides past letters it does not mean, later it speaks backwards, and then it starts to lie. Every wrong answer makes it angrier. Ten questions, then let it say goodbye.","controls":"1 / 2 / 3 or tap to ask a question · type the word it spelled + Enter (phone: tap to open your keyboard) · Y / N or tap YES / NO for yes-or-no questions · ASK AGAIN replays it (it does not like that)","scoreLabel":"LETTERS","tasks":[{"stat":"score","target":30,"text":"Read 30 letters on the Spirit Board"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const Q = [
+  { q: 'Who is here with us?', a: ['MARY', 'ELSA', 'THOMAS', 'EDITH', 'ANNA', 'PETER', 'GRACE', 'OLIVE', 'SAMUEL'] },
+  { q: 'Where are you?', a: ['ATTIC', 'CELLAR', 'BEHIND', 'MIRROR', 'WELL', 'GARDEN', 'UNDER', 'CLOSET', 'WALLS'] },
+  { q: 'What do you want?', a: ['HELP', 'LIGHT', 'OUT', 'REST', 'YOU', 'WARMTH', 'BONES', 'FOUND', 'HOME'] },
+  { q: 'How did you die?', a: ['COLD', 'WATER', 'FIRE', 'FELL', 'ALONE', 'FEVER', 'STAIRS', 'HUNGER', 'LOCKED'] },
+  { q: 'What should we do?', a: ['RUN', 'LEAVE', 'PRAY', 'HIDE', 'WAKE', 'LISTEN', 'DIG', 'FORGET', 'STAY'] },
+  { q: 'What year is it for you?', a: ['NINETEEN', 'FORTY', 'NEVER', 'WINTER', 'ALWAYS', 'SUNDAY'] },
+];
+const YN = ['Are you friendly?', 'Are you in this room?', 'Is it safe here?', 'Are you alone?', 'Do you know us?', 'Can you see me?', 'Is someone behind me?'];
+const MODE = ['n', 'n', 'n', 'b', 'b', 'n', 'l', 'b', 'l', 'l'];   // normal · backwards · lies (each letter is one AFTER the real one)
+const ROUNDS = MODE.length;
+// board layout
+const POS = {};
+// two arcs of letters like the old boards, numbers in a row underneath, GOOD BYE at the bottom
+const arc = (str, r, half) => { const span = Math.asin(half / r); [...str].forEach((ch, i) => { const a = -Math.PI / 2 + ((i / (str.length - 1)) * 2 - 1) * span; POS[ch] = { x: 480 + Math.cos(a) * r, y: 900 + Math.sin(a) * r }; }); };
+arc('ABCDEFGHIJKLM', 760, 340); arc('NOPQRSTUVWXYZ', 688, 300);
+'1234567890'.split('').forEach((ch, i) => (POS[ch] = { x: 336 + i * 32, y: 316 }));
+POS.YES = { x: 150, y: 56 }; POS.NO = { x: 810, y: 56 }; POS.BYE = { x: 480, y: 350 }; const HOME = { x: 480, y: 262 };
+const next = (ch) => String.fromCharCode(((ch.charCodeAt(0) - 65 + 1) % 26) + 65);
+function round(s) {
+  s.st = 'ask'; s.inp = ''; s.replays = 0;
+  const qs = K.shuffle(Q.slice()).slice(0, 2).map((q) => ({ q: q.q, a: K.pick(q.a) }));
+  qs.push({ q: K.pick(YN), yn: K.pick(['YES', 'NO']) }); s.opts = K.shuffle(qs);
+  s.mode = MODE[s.r]; s.askT = 0;
+}
+function spell(s) {
+  const o = s.cur, m = s.mode, path = [], decoy = Math.min(0.55, 0.1 + s.r * 0.06), pause = Math.max(0.42, 0.9 - s.r * 0.05);
+  if (o.yn) {
+    s.shown = m === 'l' ? (o.yn === 'YES' ? 'NO' : 'YES') : o.yn;
+    if (Math.random() < 0.6) path.push({ ...POS[s.shown === 'YES' ? 'NO' : 'YES'], p: 0 });
+    path.push({ ...POS[s.shown], p: pause + 0.5, ch: s.shown });
+  } else {
+    let w = o.a; if (m === 'b') w = [...w].reverse().join(''); if (m === 'l') w = [...w].map(next).join(''); s.shown = w;
+    [...w].forEach((ch, i) => {
+      if (Math.random() < decoy) path.push({ ...POS[K.pick(Object.keys(POS).filter((k) => k.length === 1 && k !== ch))], p: 0 });
+      if (i && w[i - 1] === ch) path.push({ x: POS[ch].x + 34, y: POS[ch].y - 34, p: 0 });
+      path.push({ ...POS[ch], p: pause, ch });
+    });
+  }
+  path.push({ ...HOME, p: 0 }); s.path = path; s.st = 'spell'; s.typeT = 0;
+}
+function judge(s, said) {
+  const o = s.cur, ok = said === (o.yn || o.a);
+  if (ok) { s.score += o.yn ? 2 : o.a.length; s.anger = Math.max(0, s.anger - 8); s.res = { good: true, text: o.yn ? `${o.yn}.` : `${o.a}.` }; K.sfx('chime'); }
+  else { s.anger += 30; s.res = { good: false, text: `it meant ${o.yn || o.a}` }; K.sfx('scare'); K.shake(16); K.flash('#400', 0.3); }
+  s.st = 'res'; s.t = 2; s.path = [];
+}
+K.game({
+  bg: '#0b0806', typing: true, touch: { stick: false, buttons: [] },
+  init(s) { s.r = 0; s.score = 0; s.anger = 0; s.pl = { ...HOME }; s.path = []; s.hold = 0; s.glow = null; s.time = 0; round(s); },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(36.7, 0.028, 'triangle');
+    s.time += dt; if (Math.random() < dt * 0.08) K.sfx('whisper');
+    const m = K.mouse;
+    // the planchette slides from point to point and rests on the letters it means
+    if (s.path.length) {
+      const t = s.path[0], d = Math.hypot(t.x - s.pl.x, t.y - s.pl.y), sp = 380 + s.r * 40 + (s.st === 'gone' ? 900 : 0);
+      if (d > 2) { const k = Math.min(1, (sp * dt) / d); s.pl.x += (t.x - s.pl.x) * k; s.pl.y += (t.y - s.pl.y) * k; s.glow = null; if (Math.random() < dt * 6) K.noise(0.08, 0.012, 600); }
+      else { if (!s.hold && t.p) { s.glow = t.ch; K.tone(t.ch.length > 1 ? 220 : 180 + (t.ch.charCodeAt(0) - 65) * 9, t.p * 0.9, 'sine', 0.05); } s.hold += dt; if (s.hold >= t.p) { s.path.shift(); s.hold = 0; s.glow = null; } }
+    } else if (s.st === 'spell') s.st = 'type';
+    if (s.st === 'gone') { if (!s.path.length) { s.drone?.(); return K.end(s, s.endR); } return; }
+    if (s.st === 'ask') {
+      s.askT += dt;
+      s.opts.forEach((o, i) => { if (K.tap('Digit' + (i + 1), 'Numpad' + (i + 1)) || (m.clicked && K.inRect(m.x, m.y, { x: 250, y: 396 + i * 46, w: 600, h: 40 }))) { s.cur = o; spell(s); K.sfx('whoosh'); } });
+      return;
+    }
+    if (s.st === 'res') {
+      s.t -= dt; if (s.t > 0) return;
+      if (s.anger >= 100) { s.st = 'gone'; s.path = [{ x: 1200, y: -200, p: 0 }]; s.endR = { score: s.score, won: false, title: 'IT DID NOT SAY GOODBYE', text: `The planchette flew off the board. ${s.score} letters read. The candles went out one by one.` }; K.sfx('scare'); K.shake(30); K.flash('#fff', 0.4); return; }
+      s.r++;
+      if (s.r >= ROUNDS) { s.st = 'gone'; s.path = [{ ...POS.BYE, p: 1.6, ch: 'BYE' }]; s.endR = { score: s.score, won: true, stats: { won: 1 }, title: 'GOODBYE', text: `It said goodbye. ${s.score} letters read. Lift your fingers off the planchette. Slowly.` }; return; }
+      round(s); return;
+    }
+    // spelling or waiting: answer any time
+    if (s.st === 'type') s.typeT += dt;
+    if (s.st === 'type' && s.typeT > 7) s.anger += dt * 3;
+    if (s.anger >= 100) return judge(s, '');
+    if (s.st === 'type' && m.clicked && K.inRect(m.x, m.y, { x: 724, y: 460, w: 216, h: 36 })) { s.anger += 15; s.replays++; spell(s); K.sfx('wrong'); return; }
+    if (s.cur.yn) {
+      const yes = K.tap('KeyY') || (m.clicked && (K.inRect(m.x, m.y, { x: 250, y: 410, w: 220, h: 80 }) || Math.hypot(m.x - POS.YES.x, m.y - POS.YES.y) < 60));
+      const no = K.tap('KeyN') || (m.clicked && (K.inRect(m.x, m.y, { x: 490, y: 410, w: 220, h: 80 }) || Math.hypot(m.x - POS.NO.x, m.y - POS.NO.y) < 60));
+      if (yes || no) judge(s, yes ? 'YES' : 'NO');
+      return;
+    }
+    const k = K.keyboard(255, 384, 450, {}, { h: 42 });
+    if (!k) return;
+    if (k === 'BACK') s.inp = s.inp.slice(0, -1);
+    else if (k === 'ENTER') { if (s.inp.length) judge(s, s.inp); }
+    else if (s.inp.length < 10) { s.inp += k; K.sfx('tick'); }
+  },
+  draw(s) {
+    const c = K.ctx(), angry = s.anger / 100, serif = 'Georgia, "Times New Roman", serif';
+    // table + board
+    K.rect(0, 0, 960, 540, '#0b0806');
+    c.fillStyle = K.grad(0, 10, 0, 370, ['#c8a068', '#a88048']); c.beginPath(); c.roundRect(40, 8, 880, 364, 30); c.fill();
+    K.stroke(52, 20, 856, 340, '#5a3a1a', 2, 24);
+    K.text('☀', 70, 54, 30, '#5a3a1a'); K.text('☾', 890, 54, 30, '#5a3a1a');
+    const fl = (ch) => (angry > 0.55 && Math.random() < angry * 0.04 ? '#a01010' : '#2a1608');
+    K.text('YES', POS.YES.x, POS.YES.y, 32, s.glow === 'YES' ? '#000' : fl(), 'center', serif); K.text('NO', POS.NO.x, POS.NO.y, 32, s.glow === 'NO' ? '#000' : fl(), 'center', serif);
+    Object.keys(POS).forEach((ch) => { if (ch.length > 1) return; K.text(ch, POS[ch].x, POS[ch].y, /\d/.test(ch) ? 22 : 'NOPQRSTUVWXYZ'.includes(ch) ? 30 : 34, fl(), 'center', serif); });
+    K.text('GOOD BYE', POS.BYE.x, POS.BYE.y, 24, fl(), 'center', serif);
+    // the planchette (letter shows through the lens)
+    const p = s.pl, wob = s.path.length ? Math.sin(K.time() * 7) * 1.5 : 0, px = p.x + wob, py = p.y;
+    K.alpha(0.82); K.poly([[px, py - 46], [px + 50, py + 30], [px + 30, py + 58], [px - 30, py + 58], [px - 50, py + 30]], '#e8d8b8'); K.alpha(1);
+    K.poly([[px, py - 46], [px + 50, py + 30], [px + 30, py + 58], [px - 30, py + 58], [px - 50, py + 30]], '#6a4a2a', false, 2);
+    c.fillStyle = 'rgba(255,255,240,0.25)'; c.beginPath(); c.arc(px, py, 22, 0, 6.28); c.fill();
+    if (s.glow) { K.glow('#ffd93a', 22); K.ring(px, py, 22, '#ffd93a', 4); K.noGlow(); if (s.glow.length === 1) K.text(s.glow, px, py, 34, '#000', 'center', serif); }
+    else K.ring(px, py, 22, '#6a4a2a', 3);
+    // left column: question count, anger + its candles, this round's warning
+    K.text(`QUESTION ${Math.min(ROUNDS, s.r + 1)} / ${ROUNDS}`, 24, 392, 12, '#a08860', 'left', 'd');
+    K.text('ANGER', 24, 412, 10, '#a08860', 'left', 'd'); K.rect(24, 420, 110, 8, '#2a1a10', 4); K.rect(24, 420, 110 * Math.min(1, angry), 8, angry > 0.6 ? '#ff3355' : '#c87a3a', 4);
+    for (let i = 0; i < 3; i++) { const x = 168 + i * 26, y = 400; K.rect(x - 6, y, 12, 34, '#e8dcc0', 2); if (angry < 1 - (i + 1) / 3.5) { K.glow('#ffb43a', 12); K.circle(x, y - 6 + Math.sin(K.time() * 10 + i) * 1.2, 4, '#ffd93a'); K.noGlow(); } }
+    const tip = { b: 'it speaks BACKWARDS now', l: 'it LIES now: every letter is one AFTER the real one (it shows B, it means A)' }[s.mode];
+    if (s.st === 'ask') {
+      if (tip) K.text(tip, 480, 384, 14, '#ff6a5a', 'center', 'u');
+      s.opts.forEach((o, i) => { const b = { x: 250, y: 396 + i * 46, w: 600, h: 40 }, hov = K.inRect(K.mouse.x, K.mouse.y, b); K.rect(b.x, b.y, b.w, b.h, hov ? '#3a2a1a' : '#1a120c', 8); K.stroke(b.x, b.y, b.w, b.h, '#8a6a3a', 1.5, 8); K.text(`${i + 1}   “${o.q}”`, b.x + 20, b.y + 21, 16, '#e8d8b8', 'left', serif); });
+    } else if (s.st === 'spell' || s.st === 'type') {
+      K.text(`“${s.cur.q}”`, 480, 386, 15, '#c8b088', 'center', serif);
+      if (tip && !s.cur.yn) K.wrapText(tip, 24, 458, 200, 12, '#ff6a5a', 1.3, 'left', 'u');
+      if (s.cur.yn) { if (s.mode === 'l') K.wrapText('it LIES now: the true answer is the other one', 24, 458, 200, 12, '#ff6a5a', 1.3, 'left', 'u'); K.button(250, 410, 220, 80, 'YES  [Y]', { color: '#e8d8b8', size: 22 }); K.button(490, 410, 220, 80, 'NO  [N]', { color: '#e8d8b8', size: 22 }); }
+      else {
+        K.rect(724, 400, 216, 48, '#000a', 8); K.stroke(724, 400, 216, 48, '#8a6a3a', 1.5, 8);
+        K.text((s.inp || '') + (Math.sin(K.time() * 6) > 0 ? '_' : ' '), 832, 426, 24, '#ffd93a', 'center', serif);
+        K.keyboard(255, 404, 450, {}, { h: 36 });
+      }
+      if (s.st === 'type') { K.button(724, 460, 216, 36, 'ASK AGAIN', { color: '#ff8a6a', size: 12 }); if (s.typeT > 7) K.text('it is getting impatient', 832, 516, 13, '#ff6a5a', 'center', 'u'); }
+    } else if (s.st === 'res' && s.res) K.text(s.res.text, 480, 450, 30, s.res.good ? '#9ae8a8' : '#ff5a5a', 'center', serif, 12);
+    K.vignette(0.55 + angry * 0.3);
+    if (angry > 0.7 && Math.random() < 0.03) { K.alpha(0.6); K.rect(0, 0, 960, 540, '#000'); K.alpha(1); }
+  },
+  ai(s, dt) {
+    s.aw = (s.aw || 0) + dt; if (s.aw < 0.35) return; s.aw = 0;
+    if (s.st === 'ask') { if (s.askT > 1) K.vtap('Digit' + K.irand(1, 3)); return; }
+    if (s.st !== 'type') return;
+    if (s.cur.yn) return K.vtap(s.cur.yn === 'YES' ? 'KeyY' : 'KeyN');
+    const w = s.cur.a; if (s.inp.length < w.length) K.vtap('Key' + w[s.inp.length]); else K.vtap('Enter');
+  },
+});
+</script></body></html>

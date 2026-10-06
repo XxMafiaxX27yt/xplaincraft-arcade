@@ -1,0 +1,71 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Breathing</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"breathing","n":181,"title":"BREATHING","genre":"horror","desc":"You are hiding in the wardrobe. Through the slats you can see it walking around your bedroom, and it is listening. Hold your breath when it comes close - but your lungs only last so long, and if you run out you gasp. Breathe while it is far away, hold when it leans in. Eight visits until morning.","controls":"Hold Space (or hold the mouse / HOLD button) to hold your breath · let go to breathe","scoreLabel":"VISITS","tasks":[{"stat":"score","target":8,"text":"Survive all 8 visits in Breathing"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const VISITS = 8;
+function visit(s) { s.th.st = 'away'; s.th.t = K.rand(3.5, 6.5); s.th.d = 1; s.th.x = K.pick([140, 820]); s.th.fake = s.v >= 3 && Math.random() < 0.35; }
+K.game({
+  bg: '#000', touch: { stick: false, buttons: [['Space', 'HOLD']] },
+  init(s) { s.air = 100; s.sus = 0; s.v = 0; s.th = {}; visit(s); s.th.t = 2.5; s.gasp = 0; s.phase = 0; s.beatT = 0; s.stepT = 0; s.time = 0; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(32.7, 0.03);
+    s.time += dt;
+    const th = s.th, hold = s.gasp <= 0 && (K.down('Space') || K.mouse.down);
+    // the visitor: comes in, leans close, lingers, goes (later ones fake leaving and turn back)
+    th.t -= dt;
+    if (th.st === 'away') { th.d = 1; if (th.t <= 0) { th.st = 'come'; th.t = 4.5; th.sx = th.x; K.sfx('creak'); } }
+    else if (th.st === 'come') { const k = 1 - th.t / 4.5; th.d = 1 - k * 0.92; th.x = K.lerp(th.sx, 480, k); if (th.t <= 0) { th.st = 'linger'; th.t = 2 + s.v * 0.5; } }
+    else if (th.st === 'linger') { th.d = 0.08 + Math.max(0, Math.sin(s.time * 0.9)) * 0.05 - (Math.sin(s.time * 2.3) > 0.9 ? 0.06 : 0); th.x = 480 + Math.sin(s.time * 0.7) * 50; if (th.t <= 0) { th.st = 'leave'; th.t = 3; } }
+    else if (th.st === 'leave') {
+      const k = 1 - th.t / 3; th.d = 0.08 + k * 0.92; th.x = K.lerp(480, 820, k);
+      if (th.fake && k > 0.45) { th.fake = false; th.st = 'come'; th.t = 2.2; th.sx = th.x; K.sfx('knock'); }
+      else if (th.t <= 0) { s.v++; K.sfx('chime'); if (s.v >= VISITS) { s.drone?.(); return K.end(s, { score: s.v, won: true, stats: { won: 1 }, title: 'MORNING', text: 'Sunlight through the slats. The bedroom is empty. The bed is made. You never made it.' }); } visit(s); }
+    }
+    // lungs
+    if (hold) { s.air -= 11 * dt; if (s.air <= 0) { s.air = 0; s.gasp = 1.2; K.noise(0.7, 0.2, 500); K.tone(180, 0.4, 'sawtooth', 0.04, 120); } }
+    else s.air = Math.min(100, s.air + 14 * dt);
+    s.gasp -= dt;
+    s.phase += dt * (1.6 + (100 - s.air) * 0.035);
+    const base = 18 + (100 - s.air) * 0.6, wave = 0.5 + 0.5 * Math.sin(s.phase * Math.PI);
+    s.noise = s.gasp > 0 ? 95 : hold ? (s.air < 15 ? 6 : 0) : base * wave;
+    if (!hold && s.gasp <= 0 && Math.floor(s.phase) !== Math.floor(s.phase - dt * (1.6 + (100 - s.air) * 0.035)) && Math.floor(s.phase) % 2 === 1) K.noise(0.35, (base / 100) * 0.06, 800);
+    // it hears anything louder than this (the closer, the quieter it can hear)
+    s.thr = 8 + th.d * 90;
+    if (th.st !== 'away' && s.noise > s.thr) { s.sus += (s.noise - s.thr) * dt * 2.5; s.heard = 0.3; } else s.sus = Math.max(0, s.sus - 12 * dt);
+    s.heard = (s.heard || 0) - dt;
+    if (s.sus >= 100) { s.drone?.(); K.sfx('scare'); K.flash('#fff', 0.5); K.shake(30); return K.end(s, { score: s.v, won: false, title: 'IT HEARD YOU', text: `The wardrobe doors open. Visit ${s.v + 1} of ${VISITS}.` }); }
+    // heartbeat + footsteps
+    s.beatT -= dt; if (s.beatT <= 0) { K.sfx('heart'); s.beatT = 60 / (70 + (1 - th.d) * 55 + s.sus * 0.5); }
+    s.stepT -= dt; if (th.st !== 'away' && th.st !== 'linger' && s.stepT <= 0) { K.tone(55, 0.12, 'sine', 0.02 + (1 - th.d) * 0.09); s.stepT = 0.55; }
+  },
+  draw(s) {
+    const th = s.th, near = 1 - th.d;
+    // the bedroom (seen through the slats)
+    K.rect(0, 0, 960, 540, '#1c2640');
+    K.rect(700, 90, 170, 200, '#3a5280'); K.circle(800, 150, 24, '#e8eef8'); K.rect(780, 90, 8, 200, '#1c2640'); K.rect(700, 185, 170, 8, '#1c2640');
+    K.alpha(0.22); K.poly([[700, 290], [870, 290], [760, 540], [520, 540]], '#b8d0f0'); K.alpha(1);
+    K.rect(60, 300, 330, 140, '#2c3048', 8); K.rect(60, 280, 90, 40, '#4a4e68', 8); K.rect(0, 440, 960, 100, '#141a2a');
+    if (th.st !== 'away') {
+      const sc = 0.45 + near * 2.4, fx = th.x, fy = 330 + near * 260;
+      K.alpha(0.92); K.rect(fx - 26 * sc, fy - 210 * sc, 52 * sc, 170 * sc, '#030306', 18 * sc); K.circle(fx, fy - 235 * sc, 30 * sc, '#030306');
+      K.line(fx - 24 * sc, fy - 190 * sc, fx - 44 * sc, fy - 40 * sc, '#030306', 9 * sc); K.line(fx + 24 * sc, fy - 190 * sc, fx + 48 * sc, fy - 30 * sc, '#030306', 9 * sc);
+      K.line(fx - 12 * sc, fy - 50 * sc, fx - 16 * sc, fy, '#030306', 10 * sc); K.line(fx + 12 * sc, fy - 50 * sc, fx + 16 * sc, fy, '#030306', 10 * sc); K.alpha(1);
+      if (near > 0.6 || s.heard > 0) { K.glow('#e8e0c0', 12); K.circle(fx - 10 * sc, fy - 238 * sc, 3 * sc, '#e8e0c0'); K.circle(fx + 10 * sc, fy - 238 * sc, 3 * sc, '#e8e0c0'); K.noGlow(); }
+    }
+    // the wardrobe slats
+    for (let y = -10; y < 540; y += 58) { K.rect(0, y, 960, 24, '#050403'); K.rect(0, y + 24, 960, 3, '#16120e'); }
+    K.rect(0, 0, 70, 540, '#050403'); K.rect(890, 0, 70, 540, '#050403'); K.rect(470, 0, 20, 540, '#050403');
+    K.vignette(0.8 + near * 0.15);
+    // lungs, noise vs what it can hear
+    K.text('AIR', 90, 512, 12, '#8a9ab8', 'left', 'd'); K.rect(130, 504, 220, 14, '#1a1a24', 7); K.rect(130, 504, 220 * (s.air / 100), 14, s.air < 25 ? '#ff3355' : '#7ab8ff', 7);
+    K.text('NOISE', 600, 512, 12, '#8a9ab8', 'left', 'd'); K.rect(655, 504, 220, 14, '#1a1a24', 7); K.rect(655, 504, 220 * Math.min(1, s.noise / 100), 14, s.noise > s.thr && th.st !== 'away' ? '#ff3355' : '#c8c8d8', 7);
+    if (th.st !== 'away') { const tx = 655 + 220 * Math.min(1, s.thr / 100); K.rect(tx - 1, 498, 3, 26, '#ffd93a'); K.text('it hears', tx, 492, 10, '#ffd93a', 'center', 'u'); }
+    if (s.sus > 5) { K.alpha(Math.min(1, s.sus / 60)); K.text('👁', 480, 40, 28 + s.sus * 0.2, '#fff'); K.alpha(1); }
+    K.text(`VISIT ${Math.min(VISITS, s.v + 1)} / ${VISITS}`, 90, 30, 14, '#8a9ab8', 'left', 'd');
+    if (s.time < 6 && !K.attract) K.text('hold SPACE (or hold the screen) to hold your breath', 480, 470, 15, '#c8d0e8', 'center', 'u');
+  },
+  ai(s) { const h = s.th.st !== 'away' && s.th.d < 0.3 && s.air > 4; K.vhold('Space', h); },
+});
+</script></body></html>

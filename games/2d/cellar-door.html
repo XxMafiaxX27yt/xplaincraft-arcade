@@ -1,0 +1,145 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cellar Door</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"cellar-door","n":182,"title":"CELLAR DOOR","genre":"horror","desc":"You ran down into the cellar and something followed you to the door. Now it is hammering to get in. Search the shelves, boxes and the old wardrobe for anything you can use - planks to nail, chairs to wedge, crates to stack - and barricade the door before it gives. Lean on the door to soften the blows. From the second night it also tries the coal chute. Three nights.","controls":"A / D or ← → to walk · hold E (or Space / USE) to search, to nail what you carry onto the door or chute, or to lean on the door","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":200,"text":"Hold out 200 seconds in Cellar Door"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const FLOOR = 450, DOOR = 70, CHUTE = 890, NIGHTS = 3;
+const ITEM = { plank: { s: 16, t: 0.8, name: 'PLANK', sp: 1 }, chair: { s: 11, t: 0.4, name: 'CHAIR', sp: 0.9 }, crate: { s: 26, t: 0.5, name: 'CRATE', sp: 0.55 } };
+const PILES = [
+  { x: 230, name: 'SHELVES', loot: ['plank', 'plank', 'chair', 'crate'] },
+  { x: 380, name: 'WORKBENCH', loot: ['plank', 'plank', 'plank', 'chair'] },
+  { x: 530, name: 'OLD BOXES', loot: ['crate', 'crate', 'plank', 'chair'] },
+  { x: 680, name: 'WARDROBE', loot: ['chair', 'plank', 'plank', 'crate'] },
+  { x: 790, name: 'COAL PILE', loot: ['crate', 'plank', 'chair', 'chair'] },
+];
+const USE = ['KeyE', 'Space'];
+function night(s) {
+  s.len = 70 + s.n * 15; s.nt = s.len;
+  s.piles.forEach((p) => (p.stock = Math.min(6, (p.stock || 0) + (s.n ? 3 : 4))));
+  s.door.bar *= 0.6; s.chute.bar *= 0.6; s.door.hp = Math.min(100, s.door.hp + 30);
+  s.door.stack = s.door.stack.slice(0, Math.ceil(s.door.bar / 18)); s.chute.stack = s.chute.stack.slice(0, Math.ceil(s.chute.bar / 18));
+  s.atk = { where: 'door', st: 'quiet', t: 4 };
+  s.msg = s.n ? `NIGHT ${s.n + 1} · it is back${s.n >= 1 ? ' · watch the COAL CHUTE' : ''}` : 'NIGHT 1 · barricade the door'; s.msgT = 3.5;
+}
+const near = (s) => (s.p.x < DOOR + 75 ? 'door' : s.p.x > CHUTE - 60 && s.n >= 1 ? 'chute' : null);
+const pileAt = (s) => s.piles.find((p) => Math.abs(p.x - s.p.x) < 48);
+K.game({
+  bg: '#060504', touch: { buttons: [['KeyE', 'USE']] },
+  init(s) {
+    s.n = 0; s.time = 0; s.p = { x: 420, face: 1, carry: null, act: 0 }; s.piles = PILES.map((p) => ({ ...p, stock: 0 }));
+    s.door = { bar: 0, hp: 100, stack: [] }; s.chute = { bar: 0, stack: [] }; s.flashD = 0; s.flashC = 0; s.crawl = 0; night(s);
+  },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(41.2, 0.03);
+    if (s.pause > 0) { s.pause -= dt; if (s.pause <= 0) night(s); return; }
+    s.time += dt; s.nt -= dt; s.msgT -= dt; s.flashD -= dt; s.flashC -= dt;
+    const p = s.p, d = K.dir().x, hold = K.down(...USE), at = near(s), pile = pileAt(s);
+    // walking (slower while carrying something heavy, not while busy)
+    const busy = hold && (at || (pile && !p.carry));
+    if (!busy && d) { p.x = K.clamp(p.x + d * 210 * (p.carry ? ITEM[p.carry].sp : 1) * dt, DOOR + 10, s.n >= 1 ? CHUTE + 10 : CHUTE - 40); p.face = d; s.stepT = (s.stepT || 0) - dt; if (s.stepT <= 0) { K.sfx('step'); s.stepT = 0.33; } }
+    p.brace = hold && at === 'door' && !p.carry;
+    // searching / nailing / shoving
+    if (hold && s.crawl > 0 && at === 'chute') { if (K.tap(...USE)) { s.shoves++; K.sfx('hit'); K.shake(6); if (s.shoves >= 4) { s.crawl = 0; s.chute.bar = 6; K.sfx('knock'); K.floatText('SHOVED BACK', CHUTE - 40, 220, '#ffd93a', 16); } } }
+    else if (hold && at && p.carry) {
+      p.act += dt;
+      if (Math.floor(p.act * 6) !== Math.floor((p.act - dt) * 6)) p.carry === 'plank' ? K.tone(900, 0.03, 'square', 0.03) : K.sfx('step');
+      if (p.act >= ITEM[p.carry].t) { const e = s[at], cap = at === 'door' ? 130 : 70; e.bar = Math.min(cap, e.bar + ITEM[p.carry].s); e.stack.push(p.carry); K.floatText(`+${ITEM[p.carry].s}`, at === 'door' ? DOOR + 30 : CHUTE, 260, '#3dffa0', 16); K.sfx('knock'); p.carry = null; p.act = 0; }
+    } else if (hold && pile && !p.carry && !at) {
+      p.act += dt; if (Math.random() < 0.2) K.noise(0.05, 0.02, 2200);
+      if (p.act >= 0.9) {
+        p.act = 0;
+        if (pile.stock <= 0) { K.floatText('nothing left', pile.x, 330, '#888', 14); K.sfx('wrong'); }
+        else if (Math.random() < 0.12) { K.floatText('RATS!', pile.x, 330, '#ff8a8a', 16); K.tone(2400, 0.15, 'square', 0.02, 800); }
+        else { pile.stock--; p.carry = K.pick(pile.loot); K.floatText(ITEM[p.carry].name, pile.x, 330, '#ffd93a', 16); K.sfx('select'); }
+      }
+    } else p.act = 0;
+    // the thing outside: quiet, then scratching (warning), then a blow
+    const a = s.atk; a.t -= dt;
+    if (s.crawl > 0) {
+      s.crawl -= dt; if (Math.random() < dt * 4) K.noise(0.15, 0.05, 600);
+      if (s.crawl <= 0) return lose(s, 'IT CAME DOWN THE CHUTE', 'You heard it squeeze through the coal. Then it was in the dark with you.');
+    } else if (a.st === 'quiet' && a.t <= 0) { a.where = s.n >= 1 && Math.random() < 0.3 + s.n * 0.05 ? 'chute' : 'door'; a.st = 'warn'; a.t = 1.5 - s.n * 0.15; K.sfx(a.where === 'door' ? 'creak' : 'whisper'); }
+    else if (a.st === 'warn') { if (Math.random() < dt * 8) K.noise(0.08, 0.03, 1500); if (a.t <= 0) {
+      const e = s[a.where]; let dmg = K.rand(13, 21) + s.n * 4;
+      if (a.where === 'door' && p.brace) { dmg *= 0.45; K.floatText('HELD!', DOOR + 40, 230, '#9ad8ff', 18); }
+      K.sfx('boom'); K.shake(a.where === 'door' ? 14 : 8); a.where === 'door' ? (s.flashD = 0.25) : (s.flashC = 0.25);
+      if (e.bar >= dmg) e.bar -= dmg; else { const rest = dmg - e.bar; e.bar = 0; if (a.where === 'door') s.door.hp -= rest; else { s.crawl = 4.5; s.shoves = 0; K.sfx('scare'); s.msg = 'THE CHUTE! SHOVE IT BACK (tap E)'; s.msgT = 2.5; } }
+      while (e.stack.length > Math.ceil(e.bar / 18)) { e.stack.splice(K.irand(0, e.stack.length - 1), 1); K.burst(a.where === 'door' ? DOOR + 30 : CHUTE, 300, '#8a6a4a', 10); }
+      if (s.door.hp <= 0) return lose(s, 'THE DOOR GAVE WAY', `Night ${s.n + 1}. The wood split down the middle and it stepped in.`);
+      a.st = 'quiet'; a.t = K.rand(2.6, 5.8) - s.n * 0.5; } }
+    if (s.nt <= 0) {
+      s.n++; K.sfx('win');
+      if (s.n >= NIGHTS) { s.drone?.(); return K.end(s, { score: Math.floor(s.time), won: true, stats: { won: 1 }, title: 'DAYLIGHT', text: 'Birds. The scratching stopped an hour ago. You still do not open the door.' }); }
+      s.pause = 2.5; s.msg = 'DAWN · it goes quiet'; s.msgT = 2.5; s.crawl = 0;
+    }
+  },
+  draw(s) {
+    const p = s.p, a = s.atk;
+    // brick walls, beams, floor
+    K.rect(0, 0, 960, FLOOR, '#1a120e');
+    for (let y = 0; y < FLOOR; y += 26) for (let x = (y / 26) % 2 ? -30 : 0; x < 960; x += 60) K.rect(x + 2, y + 2, 56, 22, (x * 7 + y) % 3 ? '#241812' : '#2a1c14', 2);
+    for (let x = 40; x < 960; x += 180) K.rect(x, 0, 18, FLOOR, '#140d09');
+    K.rect(0, 0, 960, 34, '#120b08'); K.rect(0, FLOOR, 960, 90, '#0f0b09');
+    // the door + its barricade
+    K.rect(0, 210, DOOR + 30, FLOOR - 210, '#0a0706');
+    const dh = s.door.hp / 100; K.rect(10, 230, DOOR, FLOOR - 230, s.flashD > 0 ? '#5a3a24' : '#3a2616', 4);
+    for (let i = 0; i < 4; i++) K.line(14 + i * 17, 236, 14 + i * 17, FLOOR - 4, '#2a1a0e', 2);
+    if (dh < 0.7) K.line(30, 250, 55, 330, '#0a0605', 3); if (dh < 0.4) { K.line(55, 330, 35, 400, '#0a0605', 3); K.line(40, 280, 70, 300, '#0a0605', 2); }
+    if (a.st === 'warn' && a.where === 'door') { K.glow('#ff2a2a', 12); K.rect(10, FLOOR - 4, DOOR, 4, '#ff2a2a'); K.noGlow(); }
+    s.door.stack.forEach((it, i) => {
+      if (it === 'plank') K.rect(4, 260 + ((i * 47) % 170), DOOR + 14, 12, '#8a6a42', 2);
+      else if (it === 'chair') { const y = FLOOR - 70; K.rect(DOOR + 18, y, 30, 6, '#6a4a2a'); K.line(DOOR + 20, y, DOOR - 6, y - 50, '#6a4a2a', 5); K.line(DOOR + 46, y, DOOR + 46, FLOOR, '#6a4a2a', 4); }
+      else { const k = s.door.stack.slice(0, i).filter((q) => q === 'crate').length; K.rect(DOOR + 10 + (k % 2) * 6, FLOOR - 48 - k * 46, 52, 46, '#5a4026', 3); K.stroke(DOOR + 10 + (k % 2) * 6, FLOOR - 48 - k * 46, 52, 46, '#3a2816', 2); }
+    });
+    // the coal chute (from night 2)
+    if (s.n >= 1) {
+      K.rect(CHUTE - 30, 120, 90, 90, '#0a0706'); K.rect(CHUTE - 26, 124, 82, 82, s.flashC > 0 ? '#3a2a20' : '#141010');
+      K.poly([[CHUTE - 30, 210], [CHUTE + 60, 210], [960, FLOOR], [CHUTE - 60, FLOOR]], '#0c0a0a');
+      if (a.st === 'warn' && a.where === 'chute') { K.glow('#ff2a2a', 10); K.circle(CHUTE + 4, 160, 3, '#ff2a2a'); K.circle(CHUTE + 18, 160, 3, '#ff2a2a'); K.noGlow(); }
+      s.chute.stack.forEach((it, i) => K.rect(CHUTE - 34, 134 + i * 16, 98, 10, it === 'crate' ? '#5a4026' : '#8a6a42', 2));
+      if (s.crawl > 0) { const k = 1 - s.crawl / 4.5; K.circle(CHUTE + 14, 170 + k * 80, 24, '#050404'); for (let i = 0; i < 3; i++) K.line(CHUTE + 14, 180 + k * 80, CHUTE - 10 + i * 24, 230 + k * 120, '#050404', 6); K.circle(CHUTE + 6, 166 + k * 80, 3, '#ff2a2a'); K.circle(CHUTE + 22, 166 + k * 80, 3, '#ff2a2a'); }
+    }
+    // things to search
+    s.piles.forEach((q) => {
+      const x = q.x;
+      if (q.name === 'SHELVES') { K.rect(x - 40, 250, 80, 200, '#2e2016'); for (let i = 0; i < 4; i++) { K.rect(x - 40, 270 + i * 46, 80, 6, '#4a3424'); if (i < q.stock) K.rect(x - 30 + i * 6, 252 + i * 46, 22, 18, '#5a4a3a', 2); } }
+      else if (q.name === 'WORKBENCH') { K.rect(x - 50, 380, 100, 12, '#4a3424'); K.rect(x - 46, 392, 8, 58, '#3a2618'); K.rect(x + 38, 392, 8, 58, '#3a2618'); for (let i = 0; i < q.stock; i++) K.rect(x - 44, 372 - i * 7, 88, 6, '#8a6a42', 2); }
+      else if (q.name === 'OLD BOXES') { for (let i = 0; i < Math.max(1, q.stock); i++) K.rect(x - 40 + (i % 2) * 34, FLOOR - 36 - Math.floor(i / 2) * 34, 34, 34, q.stock ? '#4a3622' : '#2a1e14', 2); }
+      else if (q.name === 'WARDROBE') { K.rect(x - 38, 250, 76, 200, '#2a1a14', 4); K.line(x, 254, x, 446, '#140c08', 2); K.circle(x - 6, 350, 3, '#8a7a5a'); K.circle(x + 6, 350, 3, '#8a7a5a'); }
+      else { K.poly([[x - 60, FLOOR], [x - 10, FLOOR - 30 - q.stock * 6], [x + 50, FLOOR]], '#100e0e'); }
+      if (Math.abs(q.x - p.x) < 48 && !p.carry) K.text(`${q.name} · ${q.stock ? 'hold E to search' : 'empty'}`, x, 236, 12, q.stock ? '#e8d8b8' : '#776', 'center', 'd');
+    });
+    // you
+    const bob = Math.sin(s.time * 10) * (K.dir().x ? 2 : 0), px = p.brace ? DOOR + 44 : p.x;
+    K.rect(px - 10, FLOOR - 58 + bob, 20, 40, '#3a4a6a', 6); K.circle(px, FLOOR - 68 + bob, 10, '#d8b898'); K.rect(px - 9, FLOOR - 18, 7, 18, '#22283a'); K.rect(px + 2, FLOOR - 18, 7, 18, '#22283a');
+    const lx = px + p.face * 16; K.line(px, FLOOR - 46, lx, FLOOR - 40, '#3a4a6a', 4); K.glow('#ffb43a', 16); K.rect(lx - 4, FLOOR - 42, 8, 12, '#ffcf6a', 2); K.noGlow();
+    if (p.carry) { const c = p.carry, y = FLOOR - 98 + bob; if (c === 'plank') K.rect(px - 40, y, 80, 10, '#8a6a42', 2); else if (c === 'chair') { K.rect(px - 14, y - 10, 28, 6, '#6a4a2a'); K.rect(px - 14, y - 34, 6, 30, '#6a4a2a'); } else K.rect(px - 22, y - 30, 44, 40, '#5a4026', 3); }
+    if (p.act > 0) { const t = p.carry && near(s) ? ITEM[p.carry].t : 0.9; K.rect(px - 24, FLOOR - 110, 48, 6, '#000', 3); K.rect(px - 24, FLOOR - 110, 48 * Math.min(1, p.act / t), 6, '#ffd93a', 3); }
+    // light
+    K.darkness([{ x: px + p.face * 16, y: FLOOR - 40, r: 270 }, ...(s.flashD > 0 ? [{ x: 40, y: 340, r: 160 }] : []), ...(s.flashC > 0 ? [{ x: CHUTE + 14, y: 165, r: 120 }] : []), ...(a.st === 'warn' ? [{ x: a.where === 'door' ? 40 : CHUTE + 14, y: a.where === 'door' ? FLOOR - 4 : 165, r: 46 }] : [])], 0.86);
+    // HUD
+    const bar = (x, label, v, max, col) => { K.text(label, x, 22, 11, '#b8a890', 'left', 'd'); K.rect(x, 30, 150, 10, '#1a1410', 5); K.rect(x, 30, 150 * K.clamp(v / max, 0, 1), 10, col, 5); };
+    bar(20, 'DOOR', s.door.hp, 100, s.door.hp < 35 ? '#ff3355' : '#d8a050'); bar(190, 'BARRICADE', s.door.bar, 130, '#8ac86a');
+    if (s.n >= 1) bar(360, 'CHUTE', s.chute.bar, 70, s.chute.bar < 10 ? '#ff8a3a' : '#8ac86a');
+    K.text(`NIGHT ${Math.min(NIGHTS, s.n + 1)} / ${NIGHTS}`, 940, 22, 13, '#e8d8b8', 'right', 'd'); K.text(`dawn in ${Math.max(0, Math.ceil(s.nt))}s`, 940, 42, 12, '#a89878', 'right', 'd');
+    if (p.carry) K.text(`carrying ${ITEM[p.carry].name} · take it to the ${s.n >= 1 ? 'door or chute' : 'door'}, hold E`, 480, 520, 14, '#ffd93a', 'center', 'u');
+    else if (near(s) === 'door' && !K.attract) K.text('hold E to lean on the door', 480, 520, 14, '#9ad8ff', 'center', 'u');
+    if (s.crawl > 0) K.text(`SHOVE IT BACK · ${4 - s.shoves} more (at the chute, tap E)`, 480, 90, 20, '#ff3355', 'center', 'd', 10);
+    if (s.msgT > 0) K.text(s.msg, 480, 90, 22, '#e8d8b8', 'center', 'd', 8);
+    K.vignette(0.5);
+  },
+  ai(s) {
+    const p = s.p, go = (x) => { K.vhold('KeyE', false); if (Math.abs(p.x - x) > 12) K.vhold(p.x < x ? 'ArrowRight' : 'ArrowLeft'); };
+    ['ArrowLeft', 'ArrowRight'].forEach((k) => K.vhold(k, false));
+    if (s.crawl > 0) { if (p.x < CHUTE - 50) go(CHUTE); else { K.vhold('KeyE'); if (Math.random() < 0.3) K.vtap('KeyE'); } return; }
+    const want = s.n >= 1 && s.chute.bar < 30 && s.door.bar > 40 ? 'chute' : 'door';
+    if (p.carry) { if (near(s) === want) K.vhold('KeyE'); else go(want === 'door' ? DOOR + 30 : CHUTE); return; }
+    if (s.atk.st === 'warn' && s.atk.where === 'door' && p.x < DOOR + 75) { K.vhold('KeyE'); return; }
+    const pile = s.piles.filter((q) => q.stock > 0).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
+    if (!pile) { if (near(s) !== 'door') go(DOOR + 30); else K.vhold('KeyE'); return; }
+    if (Math.abs(pile.x - p.x) < 40) K.vhold('KeyE'); else go(pile.x);
+  },
+});
+function lose(s, title, text) { s.drone?.(); K.sfx('scare'); K.flash('#fff', 0.5); K.shake(30); return K.end(s, { score: Math.floor(s.time), won: false, title, text }); }
+</script></body></html>

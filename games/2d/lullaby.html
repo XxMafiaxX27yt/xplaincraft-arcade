@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lullaby</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"lullaby","n":179,"title":"LULLABY","genre":"horror","desc":"3 AM. The baby monitor crackles and something in the crib is waking up. Sing it back to sleep: hit the falling notes on the beat to play the music box lullaby. Missed notes wake it a little more - and it must NOT wake up. Later verses slip in sour red notes. Never play those.","controls":"A / S / D (or ← ↓ →) for the three lanes · click / tap a lane · skip the red notes","scoreLabel":"NOTES","tasks":[{"stat":"score","target":150,"text":"Hit 150 notes in Lullaby"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// twinkle twinkle, the old way: [pitch, beats]
+const C4 = 261.6, D4 = 293.7, E4 = 329.6, F4 = 349.2, G4 = 392, A4 = 440;
+const TUNE = [[C4, 1], [C4, 1], [G4, 1], [G4, 1], [A4, 1], [A4, 1], [G4, 2], [F4, 1], [F4, 1], [E4, 1], [E4, 1], [D4, 1], [D4, 1], [C4, 2],
+  [G4, 1], [G4, 1], [F4, 1], [F4, 1], [E4, 1], [E4, 1], [D4, 2], [G4, 1], [G4, 1], [F4, 1], [F4, 1], [E4, 1], [E4, 1], [D4, 2],
+  [C4, 1], [C4, 1], [G4, 1], [G4, 1], [A4, 1], [A4, 1], [G4, 2], [F4, 1], [F4, 1], [E4, 1], [E4, 1], [D4, 1], [D4, 1], [C4, 2]];
+const LANE = (f) => (f < 300 ? 0 : f < 360 ? 1 : 2);
+const KEYS = [['KeyA', 'ArrowLeft'], ['KeyS', 'ArrowDown'], ['KeyD', 'ArrowRight']];
+const LX = [600, 720, 840], HIT = 450, SPEED = 260;   // lanes, hit line y, fall speed px/s
+function verse(s) {
+  const beat = [0.5, 0.45, 0.4, 0.36, 0.32][s.v], bad = [0, 0, 0.1, 0.16, 0.22][s.v];
+  s.notes = []; let t = 2;
+  TUNE.forEach(([f, b]) => { s.notes.push({ f, lane: LANE(f), t, hit: 0 }); if (s.v >= 2 && Math.random() < bad) s.notes.push({ f: f * 1.06, lane: K.pick([0, 1, 2].filter((l) => l !== LANE(f))), t: t + beat * 0.5, hit: 0, sour: true }); t += b * beat; });
+  s.t = 0; s.end = t + 1.5; s.beat = beat;
+}
+K.game({
+  bg: '#07060c', touch: { stick: false, buttons: [] },
+  init(s) { s.v = 0; s.sleep = 70; s.hits = 0; s.combo = 0; s.msg = 'VERSE 1'; s.msgT = 2; s.wake = 0; verse(s); },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(36.7, 0.03);
+    s.t += dt; s.msgT -= dt; s.wake = Math.max(0, s.wake - dt);
+    const press = [0, 1, 2].map((l) => K.tap(...KEYS[l]) || (K.mouse.clicked && Math.abs(K.mouse.x - LX[l]) < 60 && K.mouse.y > 80));
+    press.forEach((p, l) => {
+      if (!p) return; s.flash = s.flash || []; s.flash[l] = 0.15;
+      const n = s.notes.filter((q) => !q.hit && q.lane === l && Math.abs(q.t - s.t) < 0.16).sort((a, b) => Math.abs(a.t - s.t) - Math.abs(b.t - s.t))[0];
+      if (!n) { s.sleep -= 2; s.combo = 0; K.tone(LX[l] / 3, 0.15, 'sawtooth', 0.02); return; }
+      n.hit = 1;
+      if (n.sour) { s.sleep -= 14; s.combo = 0; s.wake = 1; K.tone(n.f * 0.94, 0.5, 'sawtooth', 0.05, -40); K.shake(8); return; }
+      const perfect = Math.abs(n.t - s.t) < 0.06; s.hits++; s.combo++; s.sleep = Math.min(100, s.sleep + (perfect ? 2.5 : 1.5));
+      K.tone(n.f, s.beat * 0.9, 'triangle', 0.07); K.tone(n.f * 2, s.beat * 0.6, 'sine', 0.02);
+      K.floatText(perfect ? 'PERFECT' : 'GOOD', LX[l], HIT - 40, perfect ? '#ffd93a' : '#9ad8ff', 14);
+    });
+    for (const n of s.notes) if (!n.hit && s.t - n.t > 0.16) { n.hit = 2; if (!n.sour) { s.sleep -= 7; s.combo = 0; s.wake = 0.8; K.tone(n.f * 0.5, 0.3, 'sawtooth', 0.03, -30); } }
+    s.sleep -= dt * (0.6 + s.v * 0.3);
+    if (s.sleep <= 0) { s.drone?.(); K.sfx('scare'); K.flash('#fff', 0.4); K.shake(25); return K.end(s, { score: s.hits, won: false, title: 'IT WOKE UP', text: `Verse ${s.v + 1}. It is standing in the crib now. It is looking at you.` }); }
+    if (s.t > s.end) { s.v++; if (s.v >= 5) { s.drone?.(); return K.end(s, { score: s.hits, won: true, stats: { won: 1 }, title: 'SLEEPING', text: 'Finally quiet. You put the monitor down and remember: you do not have a baby.' }); } verse(s); s.msg = `VERSE ${s.v + 1}`; s.msgT = 2; K.sfx('creak'); }
+  },
+  draw(s) {
+    const sl = s.sleep / 100, eerie = 1 - sl;
+    // nursery: moonlit window, crib, mobile
+    K.rect(0, 0, 520, 540, '#0e0c16');
+    K.rect(70, 70, 150, 190, '#1a2a44'); K.circle(170, 120, 26, '#d8e0f0'); K.rect(140, 70, 8, 190, '#0e0c16'); K.rect(70, 160, 150, 8, '#0e0c16');
+    K.alpha(0.18); K.poly([[70, 260], [220, 260], [380, 520], [120, 540]], '#9ab0d8'); K.alpha(1);
+    const sx = Math.sin(K.time() * 40) * s.wake * 6;
+    K.rect(250 + sx, 330, 220, 120, '#1c1624', 6); for (let i = 0; i < 9; i++) K.rect(256 + sx + i * 25, 300, 6, 150, '#2a2234'); K.rect(250 + sx, 296, 220, 10, '#2a2234', 4);
+    // the thing in the crib sits up as it wakes
+    const up = Math.max(0, (0.55 - sl) * 2.2);
+    K.circle(360 + sx, 400 - up * 70, 22 + up * 6, '#3a3040'); K.rect(338 + sx, 400 - up * 70, 44, 40 + up * 70, '#3a3040', 10);
+    if (up > 0.25) { K.glow('#ff3355', 10 + up * 20); K.circle(352 + sx, 396 - up * 70, 3, '#ff3355'); K.circle(368 + sx, 396 - up * 70, 3, '#ff3355'); K.noGlow(); }
+    // mobile spins with the music
+    const a0 = K.time() * (0.6 + s.combo * 0.04);
+    K.line(360, 150, 360, 200, '#555'); for (let i = 0; i < 4; i++) { const a = a0 + (i * Math.PI) / 2, mx = 360 + Math.cos(a) * 60, my = 205 + Math.sin(a) * 10; K.line(360, 200, mx, my, '#555', 1); K.text(['☾', '★', '♥', '☁'][i], mx, my + 18, 16, i === 1 && eerie > 0.6 ? '#ff3355' : '#c8c0d8'); }
+    // the lanes
+    K.rect(540, 0, 420, 540, '#0a0912');
+    LX.forEach((x, l) => { K.rect(x - 50, 0, 100, 540, '#12101c'); const f = s.flash?.[l] > 0; if (f) s.flash[l] -= 1 / 60; K.circle(x, HIT, 30, f ? '#5a4a8a' : '#1e1a30'); K.ring(x, HIT, 30, '#8b7cc6', 2); K.text(['A', 'S', 'D'][l], x, HIT + 48, 12, '#5a5078'); });
+    s.notes.forEach((n) => {
+      if (n.hit === 1) return; const y = HIT - (n.t - s.t) * SPEED; if (y < -30 || y > 560) return;
+      const col = n.sour ? '#ff3355' : n.hit === 2 ? '#3a3448' : '#e8dcff';
+      K.glow(col, n.sour ? 14 : 8); K.circle(LX[n.lane], y, 18, col); K.noGlow(); K.text(n.sour ? '✕' : '♪', LX[n.lane], y + 1, 18, n.sour ? '#fff' : '#2a1a40', 'center', 'd');
+    });
+    // sleep meter
+    K.text('SLEEP', 30, 500, 12, '#8a80a8', 'left', 'd'); K.rect(90, 492, 380, 14, '#1e1a2a', 7); K.rect(90, 492, 380 * K.clamp(sl, 0, 1), 14, sl < 0.3 ? '#ff3355' : sl < 0.55 ? '#ff8a3a' : '#7a9cff', 7);
+    if (s.combo >= 5) K.text(`${s.combo} in a row`, 720, 40, 16, '#ffd93a', 'center', 'd');
+    if (s.msgT > 0) K.text(s.msg, 260, 40, 26, '#e8dcff', 'center', 'd', 10);
+    K.vignette(0.6 + eerie * 0.35);
+    if (eerie > 0.5 && Math.random() < eerie * 0.05) { K.alpha(0.5); K.rect(0, 0, 960, 540, '#000'); K.alpha(1); }
+  },
+  ai(s) { for (const n of s.notes) if (!n.hit && !n.sour && Math.abs(n.t - s.t) < 0.03) K.vtap(KEYS[n.lane][0]); },
+});
+</script></body></html>

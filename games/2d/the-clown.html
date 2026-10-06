@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Clown</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"the-clown","n":180,"title":"THE CLOWN","genre":"horror","desc":"The circus closed years ago, but someone is still in the tent, and he LOVES balloons. Keep his balloons in the air - tap them to bop them up. Every balloon that touches the floor pops, and every pop, he takes one step closer out of the dark. More balloons keep coming. He throws pins too. Last until the sun comes up.","controls":"Click / tap a balloon to bop it upwards · click a flying pin to swat it away","scoreLabel":"SECONDS","tasks":[{"stat":"score","target":120,"text":"Last 120 seconds with The Clown"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COLS = ['#ff3355', '#ffd93a', '#22e6ff', '#3dffa0', '#c45cff', '#ff8a3a'];
+const FLOOR = 480, DAWN = 150;
+const balloon = (x) => ({ x, y: -40, vx: K.rand(-30, 30), vy: 40, col: K.pick(COLS), r: 30, wob: K.rand(0, 6) });
+K.game({
+  bg: '#0a0608', touch: { stick: false, buttons: [] },
+  init(s) { s.b = [balloon(360), balloon(600)]; s.steps = 0; s.t = 0; s.next = 18; s.pins = []; s.pinT = 30; s.bops = 0; s.honk = 0; },
+  update(s, dt) {
+    if (!s.drone && !K.attract) s.drone = K.drone(46.2, 0.025, 'triangle');
+    s.t += dt; s.next -= dt; s.pinT -= dt; s.honk -= dt;
+    if (s.next <= 0 && s.b.length < 6) { s.b.push(balloon(K.rand(200, 760))); s.next = Math.max(10, 22 - s.t * 0.06); K.tone(900, 0.2, 'sine', 0.03, 400); }
+    if (s.pinT <= 0) { const left = Math.random() < 0.5; s.pins.push({ x: left ? -20 : 980, y: K.rand(120, 360), vx: left ? 260 : -260 }); s.pinT = Math.max(5, 16 - s.t * 0.06); K.sfx('whoosh'); }
+    const m = K.mouse, g = 120 + s.t * 0.5;
+    if (m.clicked) {
+      const pin = s.pins.find((p) => Math.hypot(p.x - m.x, p.y - m.y) < 40); if (pin) { pin.dead = true; K.sfx('click'); K.burst(pin.x, pin.y, '#c8c8d0', 8); }
+      else { const b = s.b.filter((q) => Math.hypot(q.x - m.x, q.y - m.y) < q.r + 18).sort((p, q) => q.y - p.y)[0]; if (b) { b.vy = -340 - Math.random() * 40; b.vx = K.clamp((b.x - m.x) * 6, -160, 160) + K.rand(-20, 20); s.bops++; K.tone(260 + Math.random() * 80, 0.08, 'sine', 0.05, 120); } }
+    }
+    for (const b of s.b) {
+      b.vy += g * dt; b.vy = Math.min(b.vy, 170); b.vx *= Math.pow(0.6, dt); b.x += b.vx * dt + Math.sin(K.time() * 1.5 + b.wob) * 12 * dt; b.y += b.vy * dt;
+      if (b.x < 40 || b.x > 920) { b.vx *= -1; b.x = K.clamp(b.x, 40, 920); }
+      if (b.y < 40 && b.vy < 0) b.vy *= -0.3;
+      for (const o of s.b) if (o !== b) { const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < 56 && d > 0) { b.vx -= ((o.x - b.x) / d) * 40; o.vx += ((o.x - b.x) / d) * 40; } }
+      for (const p of s.pins) if (!p.dead && Math.hypot(p.x - b.x, p.y - b.y) < b.r) { b.pop = true; p.dead = true; }
+      if (b.y > FLOOR - b.r) b.pop = true;
+    }
+    for (const p of s.pins) { p.x += p.vx * dt; if (p.x < -40 || p.x > 1000) p.dead = true; }
+    s.pins = s.pins.filter((p) => !p.dead);
+    const popped = s.b.filter((b) => b.pop);
+    if (popped.length) {
+      popped.forEach((b) => { K.burst(b.x, b.y, b.col, 24); K.sfx('pop'); s.steps++; s.honk = 0.6; });
+      K.tone(110, 0.4, 'square', 0.05, -30); K.shake(10);
+      s.b = s.b.filter((b) => !b.pop); while (s.b.length < Math.min(6, 2 + Math.floor(s.t / 40))) s.b.push(balloon(K.rand(200, 760)));
+      if (s.steps >= 6) { s.drone?.(); K.sfx('scare'); K.flash('#fff', 0.5); K.shake(30); return K.end(s, { score: Math.floor(s.t), won: false, title: 'HONK HONK', text: `He is right behind you. ${Math.floor(s.t)} seconds.` }); }
+    }
+    if (s.t >= DAWN) { s.drone?.(); return K.end(s, { score: Math.floor(s.t), won: true, stats: { won: 1 }, title: 'SUNRISE', text: `The tent is empty in the daylight. ${s.bops} bops. Only a red nose on the floor.` }); }
+  },
+  draw(s) {
+    const c = K.ctx(), near = s.steps / 6;
+    // tent stripes
+    for (let i = 0; i < 12; i++) { c.fillStyle = i % 2 ? '#1a0a10' : '#140810'; c.beginPath(); c.moveTo(480, -60); c.lineTo(i * 90 - 60, 540); c.lineTo(i * 90 + 30, 540); c.fill(); }
+    // the clown, getting closer out of the dark (bigger, lower, brighter)
+    const cx = 480 + Math.sin(K.time() * 0.7) * (40 - near * 30), sc = 0.35 + near * 1.15, cy = 250 + near * 120;
+    K.alpha(0.25 + near * 0.75);
+    K.rect(cx - 50 * sc, cy, 100 * sc, 200 * sc, '#2a1a3a', 20 * sc);
+    K.circle(cx, cy - 20 * sc, 60 * sc, '#e8e0d8');
+    K.circle(cx - 55 * sc, cy - 40 * sc, 30 * sc, '#c43a2a'); K.circle(cx + 55 * sc, cy - 40 * sc, 30 * sc, '#c43a2a');
+    K.circle(cx - 22 * sc, cy - 32 * sc, 10 * sc, '#111'); K.circle(cx + 22 * sc, cy - 32 * sc, 10 * sc, '#111');
+    if (near > 0.3) { K.circle(cx - 22 * sc, cy - 32 * sc, 3 * sc, '#fff'); K.circle(cx + 22 * sc, cy - 32 * sc, 3 * sc, '#fff'); }
+    K.circle(cx, cy - 12 * sc, 12 * sc, s.honk > 0 ? '#ff6a7a' : '#e82a3a');
+    c.strokeStyle = '#a01a2a'; c.lineWidth = 6 * sc; c.beginPath(); c.arc(cx, cy + 5 * sc, 30 * sc, 0.15, Math.PI - 0.15); c.stroke();
+    K.alpha(1);
+    K.rect(0, FLOOR, 960, 60, '#1a1210'); for (let i = 0; i < 20; i++) K.rect(i * 50, FLOOR, 4, 60, '#120c0a');
+    // balloons
+    s.b.forEach((b) => {
+      c.strokeStyle = '#aaa8'; c.lineWidth = 1; c.beginPath(); c.moveTo(b.x, b.y + b.r); c.quadraticCurveTo(b.x + Math.sin(K.time() * 3 + b.wob) * 10, b.y + b.r + 30, b.x, b.y + b.r + 55); c.stroke();
+      K.glow(b.col, 10); c.fillStyle = b.col; c.beginPath(); c.ellipse(b.x, b.y, b.r * 0.85, b.r, 0, 0, 6.28); c.fill(); K.noGlow();
+      K.circle(b.x - 9, b.y - 11, 6, '#ffffff55'); K.poly([[b.x - 5, b.y + b.r + 4], [b.x + 5, b.y + b.r + 4], [b.x, b.y + b.r - 3]], b.col);
+      if (b.y > FLOOR - 140) { K.alpha(0.5); K.circle(b.x, FLOOR + 6, 24 * (1 - (FLOOR - b.y) / 140), '#000'); K.alpha(1); }
+    });
+    s.pins.forEach((p) => { K.line(p.x - 18 * Math.sign(p.vx), p.y, p.x + 12 * Math.sign(p.vx), p.y, '#d8d8e0', 3); K.circle(p.x - 18 * Math.sign(p.vx), p.y, 5, '#ff3355'); });
+    K.vignette(0.85 - near * 0.2);
+    // dawn coming in through the flap
+    const dawn = s.t / DAWN; K.alpha(dawn * 0.25); K.rect(0, 0, 960, 540, '#ffb070'); K.alpha(1);
+    K.text(`${Math.floor(s.t)}s`, 30, 30, 18, '#e8d8c8', 'left', 'd'); K.text('STEPS', 870, 30, 12, '#a88', 'right', 'd');
+    for (let i = 0; i < 6; i++) K.circle(890 + (i % 3) * 20, 22 + Math.floor(i / 3) * 18, 6, i < s.steps ? '#ff3355' : '#3a2a2a');
+    if (s.t < 4 && !K.attract) K.text('keep his balloons in the air', 480, 520, 16, '#e8d8c8', 'center', 'u');
+  },
+  ai(s) { const b = s.b.filter((q) => q.vy > 0 && q.y > 300).sort((p, q) => q.y - p.y)[0]; if (b) K.vmouse(b.x + K.rand(-8, 8), b.y + 10, true); const p = s.pins.find((q) => q.x > 100 && q.x < 860); if (p && Math.random() < 0.05) K.vmouse(p.x, p.y, true); },
+});
+</script></body></html>

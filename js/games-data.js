@@ -885,6 +885,138 @@ export const GAME_LIST = [
 "cover": "games/covers/chalk-circle.png"
 },
 {
+"id": "lullaby",
+"n": 179,
+"title": "LULLABY",
+"genre": "horror",
+"desc": "3 AM. The baby monitor crackles and something in the crib is waking up. Sing it back to sleep: hit the falling notes on the beat to play the music box lullaby. Missed notes wake it a little more - and it must NOT wake up. Later verses slip in sour red notes. Never play those.",
+"controls": "A / S / D (or ← ↓ →) for the three lanes · click / tap a lane · skip the red notes",
+"scoreLabel": "NOTES",
+"tasks": [
+{
+"stat": "score",
+"target": 150,
+"text": "Hit 150 notes in Lullaby"
+}
+],
+"file": "games/2d/lullaby.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/lullaby.png"
+},
+{
+"id": "the-clown",
+"n": 180,
+"title": "THE CLOWN",
+"genre": "horror",
+"desc": "The circus closed years ago, but someone is still in the tent, and he LOVES balloons. Keep his balloons in the air - tap them to bop them up. Every balloon that touches the floor pops, and every pop, he takes one step closer out of the dark. More balloons keep coming. He throws pins too. Last until the sun comes up.",
+"controls": "Click / tap a balloon to bop it upwards · click a flying pin to swat it away",
+"scoreLabel": "SECONDS",
+"tasks": [
+{
+"stat": "score",
+"target": 120,
+"text": "Last 120 seconds with The Clown"
+}
+],
+"file": "games/2d/the-clown.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-clown.png"
+},
+{
+"id": "breathing",
+"n": 181,
+"title": "BREATHING",
+"genre": "horror",
+"desc": "You are hiding in the wardrobe. Through the slats you can see it walking around your bedroom, and it is listening. Hold your breath when it comes close - but your lungs only last so long, and if you run out you gasp. Breathe while it is far away, hold when it leans in. Eight visits until morning.",
+"controls": "Hold Space (or hold the mouse / HOLD button) to hold your breath · let go to breathe",
+"scoreLabel": "VISITS",
+"tasks": [
+{
+"stat": "score",
+"target": 8,
+"text": "Survive all 8 visits in Breathing"
+}
+],
+"file": "games/2d/breathing.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/breathing.png"
+},
+{
+"id": "cellar-door",
+"n": 182,
+"title": "CELLAR DOOR",
+"genre": "horror",
+"desc": "You ran down into the cellar and something followed you to the door. Now it is hammering to get in. Search the shelves, boxes and the old wardrobe for anything you can use - planks to nail, chairs to wedge, crates to stack - and barricade the door before it gives. Lean on the door to soften the blows. From the second night it also tries the coal chute. Three nights.",
+"controls": "A / D or ← → to walk · hold E (or Space / USE) to search, to nail what you carry onto the door or chute, or to lean on the door",
+"scoreLabel": "SECONDS",
+"tasks": [
+{
+"stat": "score",
+"target": 200,
+"text": "Hold out 200 seconds in Cellar Door"
+}
+],
+"file": "games/2d/cellar-door.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/cellar-door.png"
+},
+{
+"id": "the-masks",
+"n": 183,
+"title": "THE MASKS",
+"genre": "horror",
+"desc": "In this village nobody opens the door with a bare face. Someone knocks - look through the peephole, then take the right mask off the wall and open up. The rules are on the card, and every night there is one more: red eyes, three knocks, cracked masks, visitors with no shadow. The top rule always wins. Wear the wrong one and it comes inside. Five nights.",
+"controls": "Click / tap a mask (or keys 1 - 6) to wear it and open · KEEP SHUT button (or X) to leave the door closed · follow the rules card, top rule first",
+"scoreLabel": "VISITORS",
+"tasks": [
+{
+"stat": "score",
+"target": 25,
+"text": "Answer 25 visitors correctly in The Masks"
+}
+],
+"file": "games/2d/the-masks.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/the-masks.png"
+},
+{
+"id": "spirit-board",
+"n": 184,
+"title": "SPIRIT BOARD",
+"genre": "horror",
+"desc": "Fingers on the planchette. Ask it a question and it answers - sliding over the letters, stopping on the ones it means. Read what it spells and type it back so it knows you are listening. It glides past letters it does not mean, later it speaks backwards, and then it starts to lie. Every wrong answer makes it angrier. Ten questions, then let it say goodbye.",
+"controls": "1 / 2 / 3 or tap to ask a question · type the word it spelled + Enter (phone: tap to open your keyboard) · Y / N or tap YES / NO for yes-or-no questions · ASK AGAIN replays it (it does not like that)",
+"scoreLabel": "LETTERS",
+"tasks": [
+{
+"stat": "score",
+"target": 30,
+"text": "Read 30 letters on the Spirit Board"
+}
+],
+"file": "games/2d/spirit-board.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/spirit-board.png"
+},
+{
 "id": "breakout",
 "n": 1,
 "title": "BREAKOUT",
@@ -2648,7 +2780,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/bridges.png"
 },
 {
 "id": "akari",
@@ -2669,7 +2802,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/akari.png"
 },
 {
 "id": "kenken",
@@ -2690,7 +2824,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/kenken.png"
 },
 {
 "id": "word-ladder",
@@ -2711,7 +2846,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/word-ladder.png"
 },
 {
 "id": "anagram-blitz",
@@ -2732,7 +2868,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/anagram-blitz.png"
 },
 {
 "id": "cryptogram",
@@ -2753,7 +2890,8 @@ export const GAME_LIST = [
 "dim": "2d",
 "modes": [
 "sp"
-]
+],
+"cover": "games/covers/cryptogram.png"
 },
 {
 "id": "match-3",
