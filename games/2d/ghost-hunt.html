@@ -1,0 +1,244 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ghost Hunt</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"ghost-hunt","n":200,"title":"GHOST HUNT","genre":"horror","modes":["sp","online"],"minPlayers":1,"maxPlayers":4,"desc":"Paranormal investigators, alone or with up to 3 friends. Something haunts one room of this house - find which room, then find out WHAT it is. Six tools: EMF reader, thermometer, spirit box, UV torch for fingerprints, a camera that sees ghost orbs, and a book it might write in. Three pieces of evidence name the ghost. Your sanity drains in the dark, and when it gets low the ghost HUNTS - run, or hide in a wardrobe. Mark the journal, pick the ghost, and get everyone back to the van.","controls":"WASD / stick to walk · Shift to run · mouse aims your torch · F torch on/off · 1-6 or Q (TOOL) switch tool · Space (USE) uses it · E: hide in a wardrobe / room light / take pills + leave at the van · J (JOURNAL)","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Name the ghost correctly and escape in Ghost Hunt"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 40, MAP = [
+  'oooooooooooooooooooooooooooooooooooooooo',
+  'oooooo##################################',
+  'oooooo#lllllllll#kkkkkkkkk#dddddddddddd#',
+  'oooooo#Wllllllll#kkkkkkkkk#ddddddddddWd#',
+  'oooooo#lllllllll#kkkkkkkkk#dddddddddddd#',
+  'oooooo#lllllllllDkkkkkkkkkDdddddddddddd#',
+  'oooooo#lllllllll#kkkkkkkkk#dddddddddddd#',
+  'oooooo#lllllllll#kkkkkkkkk#dddddddddddd#',
+  'oooooo###D##########D##########D########',
+  'oooooo#ffffff#hhhhhhhhhhhhhhhhhhhhhhhhh#',
+  'vvvvooDffffffDhhhhhhhhhhhhhhhhhhhhhhhhh#',
+  'vvvvoo#ffffff#hhhhhhhhhhhhhhhhhhhhhhhhh#',
+  'oooooo########D###D########D######D#####',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#ccccccWc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggW#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#Wbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo#bbbbbbbbb#tttttt#cccccccc#gggggg#',
+  'oooooo##################################',
+];
+const MW = 40, MH = MAP.length;
+const ROOMS = { l: 'Living Room', k: 'Kitchen', d: 'Dining Room', f: 'Foyer', h: 'Hallway', b: 'Bedroom', t: 'Bathroom', c: "Kid's Room", g: 'Garage' }, HAUNTABLE = 'lkdbtcg';
+const EV = ['EMF 5', 'Spirit Box', 'Fingerprints', 'Ghost Orbs', 'Ghost Writing', 'Freezing'];
+const TYPES = [['Spirit', [0, 1, 4], 50], ['Wraith', [0, 1, 5], 50], ['Phantom', [1, 2, 3], 50], ['Poltergeist', [1, 2, 4], 50], ['Banshee', [2, 3, 5], 50], ['Jinn', [0, 2, 5], 50], ['Mare', [1, 3, 4], 60], ['Revenant', [3, 4, 5], 50], ['Shade', [0, 4, 5], 35], ['Demon', [2, 4, 5], 70]];
+const TOOLS = ['EMF', 'THERMO', 'SPIRIT BOX', 'UV', 'CAMERA', 'BOOK'];
+const ch = (x, y) => (MAP[y] && MAP[y][x]) || '#';
+const solidT = (x, y) => '#W'.includes(ch(x, y));
+const roomOf = (px, py) => { const c = ch(Math.floor(px / T), Math.floor(py / T)); return ROOMS[c] ? c : null; };
+const inVan = (px, py) => ch(Math.floor(px / T), Math.floor(py / T)) === 'v';
+const roomTiles = {}; MAP.forEach((r, y) => [...r].forEach((c, x) => { if (ROOMS[c]) (roomTiles[c] = roomTiles[c] || []).push([x, y]); }));
+const doorsOf = (rm) => { const out = []; MAP.forEach((r, y) => [...r].forEach((c, x) => { if (c === 'D' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => ch(x + a, y + b) === rm)) out.push([x, y]); })); return out; };
+const wardrobeNear = (px, py) => { const x = Math.floor(px / T), y = Math.floor(py / T); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (ch(x + a, y + b) === 'W') return [x + a, y + b]; return null; };
+function blocked(x, y, r) { for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (solidT(Math.floor((x + ox) / T), Math.floor((y + oy) / T))) return true; return false; }
+function path(sx, sy, tx, ty) {   // BFS over tiles, returns next tile centre to walk to
+  const k = (x, y) => y * MW + x, prev = new Map([[k(sx, sy), -1]]), q = [[sx, sy]];
+  while (q.length) { const [x, y] = q.shift(); if (x === tx && y === ty) break; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + a, Y = y + b; if (X < 0 || Y < 0 || X >= MW || Y >= MH || solidT(X, Y) || prev.has(k(X, Y))) continue; prev.set(k(X, Y), k(x, y)); q.push([X, Y]); } }
+  if (!prev.has(k(tx, ty))) return null; let c = k(tx, ty); while (prev.get(c) !== k(sx, sy) && prev.get(c) !== -1) c = prev.get(c);
+  return [(c % MW) * T + T / 2, Math.floor(c / MW) * T + T / 2];
+}
+const tempOf = (s, rm, t) => (!rm ? 11 : rm === s.groom ? (s.type[1].includes(5) ? -2.5 + Math.sin(t * 0.7) * 2 : 7.5 + Math.sin(t * 0.6) * 1.2) : 15 + ('lkdfhbtcg'.indexOf(rm) % 4) + Math.sin(t * 0.3 + rm.charCodeAt(0)) * 0.6);
+const meP = (s) => s.p.find((p) => p.me);
+const sfxAt = (s, name, x, y) => { const me = meP(s); if (me && Math.hypot(me.x - x, me.y - y) < 700) K.sfx(name); };
+function setup(s, room, type) { s.groom = room; s.type = TYPES[type]; s.typeI = type; const tiles = roomTiles[room], c = K.pick(tiles); s.g = { x: c[0] * T + 20, y: c[1] * T + 20, tx: 0, ty: 0, vis: 0 }; s.orbs = [0, 1, 2].map((i) => { const t = tiles[(i * 7 + type * 3) % tiles.length]; return { x: t[0] * T + 20, y: t[1] * T + 20, a: i * 2 }; }); s.ready = true; }
+function ghostEvent(s, kind, x, y, extra = {}) { s.events.push({ kind, x, y, ...extra }); }
+function hostTick(s, dt) {
+  const g = s.g, has = (e) => s.type[1].includes(e), alive = s.p.filter((p) => p.alive);
+  // sanity
+  for (const p of alive) { if (inVan(p.x, p.y) || p.hid) continue; const rm = roomOf(p.x, p.y); p.san = Math.max(0, p.san - (rm && s.lights[rm] ? 0.07 : 0.2) * dt); }
+  // the ghost wanders, does things, hunts
+  if (s.hunt > 0) {
+    s.hunt -= dt; g.vis = Math.sin(K.time() * 18) > -0.2 ? 1 : 0;
+    const targets = alive.filter((p) => !p.hid && !inVan(p.x, p.y)); const tg = targets.sort((a, b) => Math.hypot(a.x - g.x, a.y - g.y) - Math.hypot(b.x - g.x, b.y - g.y))[0];
+    s.repath -= dt; if (tg && s.repath <= 0) { s.next = path(Math.floor(g.x / T), Math.floor(g.y / T), Math.floor(tg.x / T), Math.floor(tg.y / T)); s.repath = 0.25; }
+    if (s.next) { const dx = s.next[0] - g.x, dy = s.next[1] - g.y, d = Math.hypot(dx, dy) || 1, sp = 96 + (tg && tg.fl ? 14 : 0); g.x += (dx / d) * Math.min(d, sp * dt); g.y += (dy / d) * Math.min(d, sp * dt); }
+    for (const p of targets) if (Math.hypot(p.x - g.x, p.y - g.y) < 24) { p.alive = false; ghostEvent(s, 'kill', p.x, p.y, { who: p.name }); }
+    if (s.hunt <= 0) { g.vis = 0; s.huntCd = 30; ghostEvent(s, 'huntEnd', g.x, g.y); }
+    return;
+  }
+  s.huntCd -= dt; g.vis = Math.max(0, g.vis - dt);
+  const avg = alive.length ? alive.reduce((a, p) => a + p.san, 0) / alive.length : 100;
+  s.huntRoll -= dt; if (s.huntRoll <= 0) { s.huntRoll = 1; if (avg < s.type[2] && s.huntCd <= 0 && Math.random() < 0.07 && alive.some((p) => !inVan(p.x, p.y))) { s.hunt = 24; s.repath = 0; ghostEvent(s, 'hunt', g.x, g.y); } }
+  const gr = roomOf(g.x, g.y) || s.groom;
+  if (Math.hypot(g.tx - g.x, g.ty - g.y) < 6 || !g.tx) { const rm = Math.random() < 0.8 ? s.groom : 'h', t = K.pick(roomTiles[rm]); g.tx = t[0] * T + 20; g.ty = t[1] * T + 20; }
+  const nx = path(Math.floor(g.x / T), Math.floor(g.y / T), Math.floor(g.tx / T), Math.floor(g.ty / T)); if (nx) { const dx = nx[0] - g.x, dy = nx[1] - g.y, d = Math.hypot(dx, dy) || 1; g.x += (dx / d) * Math.min(d, 38 * dt); g.y += (dy / d) * Math.min(d, 38 * dt); }
+  s.act -= dt;
+  if (s.act <= 0) {
+    s.act = K.rand(5, 11) * (avg < 50 ? 0.7 : 1); const r = Math.random(), emf = (base) => (has(0) && Math.random() < 0.4 ? 5 : base);
+    if (r < 0.3) { s.emf.push({ x: g.x, y: g.y, lv: emf(K.irand(2, 3)), t: 20 }); ghostEvent(s, 'throw', g.x, g.y); }
+    else if (r < 0.55) { const dr = K.pick(doorsOf(s.groom)); if (dr) { const x = dr[0] * T + 20, y = dr[1] * T + 20; s.emf.push({ x, y, lv: emf(2), t: 20 }); if (has(2) && Math.random() < 0.7) s.fp.push({ x: x + K.rand(-10, 10), y: y + K.rand(-10, 10), t: 70 }); ghostEvent(s, 'door', x, y); } }
+    else if (r < 0.75) { if (s.lights[gr]) { s.lights[gr] = false; ghostEvent(s, 'light', g.x, g.y); } if (has(2) && Math.random() < 0.5) { const dr = doorsOf(s.groom)[0]; if (dr) s.fp.push({ x: dr[0] * T + 20, y: dr[1] * T + 20 - 14, t: 70 }); } s.emf.push({ x: g.x, y: g.y, lv: emf(2), t: 15 }); }
+    else { g.vis = 1.6; s.emf.push({ x: g.x, y: g.y, lv: emf(4), t: 20 }); for (const p of alive) if (Math.hypot(p.x - g.x, p.y - g.y) < 350) p.san = Math.max(0, p.san - 12); ghostEvent(s, 'appear', g.x, g.y); }
+  }
+  s.emf.forEach((e) => (e.t -= dt)); s.emf = s.emf.filter((e) => e.t > 0); s.fp.forEach((f) => (f.t -= dt)); s.fp = s.fp.filter((f) => f.t > 0);
+  for (const b of s.books) if (!b.w && has(4) && roomOf(b.x, b.y) === s.groom && Math.random() < dt * 0.05) { b.w = 1; s.emf.push({ x: b.x, y: b.y, lv: 2, t: 12 }); ghostEvent(s, 'write', b.x, b.y); }
+}
+function spiritBox(s, p) { const g = s.g, near = roomOf(p.x, p.y) === s.groom || Math.hypot(p.x - g.x, p.y - g.y) < 300, dark = !s.lights[roomOf(p.x, p.y)]; if (s.type[1].includes(1) && near && dark && Math.random() < 0.45) return K.pick(['HERE', 'BEHIND', 'AWAY', 'DEATH', 'CHILD', 'OLD', 'NEAR', 'KILL']); return near && !dark ? 'too bright...' : '...static...'; }
+function act(s, p, a, d = {}) {
+  if (!p.alive) return;
+  if (a === 'light') { const rm = roomOf(p.x, p.y); if (rm) { s.lights[rm] = !s.lights[rm]; ghostEvent(s, 'switch', p.x, p.y); } }
+  if (a === 'hide') p.hid = !p.hid;
+  if (a === 'pills' && !p.pills) { p.pills = 1; p.san = Math.min(100, p.san + 40); }
+  if (a === 'book' && s.books.filter((b) => b.by === p.id).length < 1) s.books.push({ x: p.x, y: p.y, w: 0, by: p.id });
+  if (a === 'sb') { const r = spiritBox(s, p); if (p.me) { s.sb = r; s.sbT = 2.5; } else K.net.send({ t: 'sb', r }, p.id); }
+  if (a === 'leave' && s.jr.pick < 0) return ghostEvent(s, 'noPick', p.x, p.y);
+  if (a === 'leave') { const out = s.p.filter((q) => q.alive && !inVan(q.x, q.y)); if (out.length) ghostEvent(s, 'notAll', p.x, p.y, { n: out.length }); else s.leave = true; }
+}
+function result(s) {
+  if (s.over) return; s.over = true;
+  const right = s.jr.pick === s.typeI, alive = s.p.filter((p) => p.alive).length, score = (right ? 100 : 0) + alive * (right ? 25 : 10);
+  K.end(s, { score, won: right && alive > 0, stats: { won: right && alive > 0 ? 1 : 0 }, title: !alive ? 'NOBODY MADE IT' : right ? `IT WAS A ${s.type[0].toUpperCase()}` : 'WRONG GHOST', text: `${right ? 'Correct!' : `It was a ${s.type[0]}.`} Evidence: ${s.type[1].map((e) => EV[e]).join(', ')} · haunted room: ${ROOMS[s.groom]} · ${alive}/${s.p.length} got out.` });
+}
+K.game({
+  bg: '#05050a', touch: { buttons: [['Space', 'USE'], ['KeyQ', 'TOOL'], ['KeyE', 'E'], ['KeyJ', 'JOURNAL']] },
+  init(s) {
+    const roster = K.net ? K.net.players.map((p) => ({ id: p.id, name: p.username, me: p.id === K.net.me })) : [{ id: 'me', name: 'YOU', me: true }];
+    s.p = roster.map((p, i) => ({ ...p, x: 60 + (i % 2) * 40, y: 420 + Math.floor(i / 2) * 40, fa: 0, tool: i % 6, fl: true, hid: false, alive: true, san: 100, col: ['#22e6ff', '#ffd93a', '#3dffa0', '#ff8a3a'][i] }));
+    s.lights = {}; s.emf = []; s.fp = []; s.books = []; s.events = []; s.jr = { ev: [0, 0, 0, 0, 0, 0], pick: -1 }; s.hunt = 0; s.huntCd = 45; s.huntRoll = 1; s.act = 6; s.repath = 0; s.time = 0; s.sendT = 0; s.sb = ''; s.sbT = 0; s.msg = ''; s.msgT = 0; s.journal = false;
+    if (K.isHost()) { const room = K.pick([...HAUNTABLE]), type = K.irand(0, TYPES.length - 1); setup(s, room, type); if (K.net) s.setupMsg = { t: 'setup', room, type }; }
+    s.msg = 'find the haunted room · 3 pieces of evidence name the ghost'; s.msgT = 6;
+  },
+  onNet(s, d, from) {
+    const host = K.net.isHost, p = s.p.find((q) => q.id === from);
+    if (d.t === 'setup' && !host && !s.ready) setup(s, d.room, d.type);
+    if (d.t === 'me' && host && p && p.alive) Object.assign(p, { x: d.x, y: d.y, fa: d.fa, tool: d.tool, fl: d.fl });
+    if (d.t === 'act' && host && p) act(s, p, d.a, d);
+    if (d.t === 'jr') { s.jr = d.jr; if (host) K.net.send({ t: 'jr', jr: s.jr }); }
+    if (d.t === 'sb' && !host) { s.sb = d.r; s.sbT = 2.5; }
+    if (d.t === 'st' && !host && s.ready) {
+      s.g.x = d.g[0]; s.g.y = d.g[1]; s.g.vis = d.g[2]; s.hunt = d.h; s.lights = d.l; s.emf = d.e; s.fp = d.fp; s.books = d.b;
+      d.p.forEach((o, i) => { const q = s.p[i]; if (!q) return; if (!q.me) Object.assign(q, { x: o[0], y: o[1], fa: o[2], tool: o[3], fl: !!o[4] }); q.hid = !!o[5]; q.alive = !!o[6]; q.san = o[7]; });
+      (d.ev || []).forEach((e) => onEvent(s, e)); if (d.done) result(s);
+    }
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.alive = false; },
+  update(s, dt) {
+    if (!s.ready) { if (K.net && !K.net.isHost) { s.waitT = (s.waitT || 0) + dt; } return; }
+    s.time += dt; s.msgT -= dt; s.sbT -= dt;
+    const me = meP(s), m = K.mouse, host = K.isHost();
+    if (host && s.setupMsg && (s.setupT = (s.setupT || 0) - dt) <= 0) { K.net.send(s.setupMsg); s.setupT = 1; if (s.time > 6) s.setupMsg = null; }
+    // ---- journal ----
+    if (K.tap('KeyJ') || (m.clicked && K.inRect(m.x, m.y, { x: 850, y: 8, w: 100, h: 30 }))) s.journal = !s.journal;
+    if (s.journal) {
+      if (m.clicked) {
+        EV.forEach((e, i) => { if (K.inRect(m.x, m.y, { x: 180, y: 120 + i * 40, w: 220, h: 34 })) { s.jr.ev[i] = (s.jr.ev[i] + 1) % 3; sendJr(s); } });
+        TYPES.forEach((t, i) => { if (K.inRect(m.x, m.y, { x: 470 + (i % 2) * 160, y: 120 + Math.floor(i / 2) * 50, w: 150, h: 40 })) { s.jr.pick = s.jr.pick === i ? -1 : i; sendJr(s); } });
+      }
+      if (K.tap('Escape')) s.journal = false;
+    }
+    // ---- me ----
+    if (me && me.alive && !s.journal) {
+      const d = K.dir(), run = K.down('ShiftLeft') && (d.x || d.y), sp = (run ? 160 : 104) * dt, L = Math.hypot(d.x, d.y) || 1;
+      if (!me.hid) {   // walking, with a little help lining up with doorways
+        const vx = (d.x / L) * sp, vy = (d.y / L) * sp, nx = me.x + vx, ny = me.y + vy, tx = Math.floor(me.x / T), ty = Math.floor(me.y / T);
+        if (!blocked(nx, me.y, 11)) me.x = nx; else if (vx && !solidT(Math.floor((me.x + Math.sign(vx) * 24) / T), ty)) me.y += K.clamp(ty * T + 20 - me.y, -sp, sp);
+        if (!blocked(me.x, ny, 11)) me.y = ny; else if (vy && !solidT(tx, Math.floor((me.y + Math.sign(vy) * 24) / T))) me.x += K.clamp(tx * T + 20 - me.x, -sp, sp);
+      }
+      if (!K.isTouch) me.fa = Math.atan2(m.y - 270, m.x - 480); else if (d.x || d.y) me.fa = Math.atan2(d.y, d.x);
+      if (K.tap('KeyF')) me.fl = !me.fl;
+      for (let i = 0; i < 6; i++) if (K.tap('Digit' + (i + 1))) me.tool = i;
+      if (K.tap('KeyQ')) me.tool = (me.tool + 1) % 6;
+      const doAct = (a) => (host ? act(s, me, a) : K.net.send({ t: 'act', a }));
+      if (K.tap('KeyE')) { if (inVan(me.x, me.y)) doAct(me.san < 70 && !me.pills ? 'pills' : 'leave'); else if (wardrobeNear(me.x, me.y) || me.hid) doAct('hide'); else doAct('light'); }
+      if (K.tap('KeyL')) doAct('light');
+      if (K.tap('Space') || (m.clicked && K.isTouch && false)) { if (me.tool === 2) { s.sb = '...listening'; s.sbT = 1; doAct('sb'); K.noise(0.5, 0.03, 2500); } if (me.tool === 5) doAct('book'); }
+    }
+    if (!host) { s.sendT -= dt; if (s.sendT <= 0 && me) { K.net.send({ t: 'me', x: Math.round(me.x), y: Math.round(me.y), fa: +me.fa.toFixed(2), tool: me.tool, fl: me.fl }); s.sendT = 0.08; } return; }
+    hostTick(s, dt);
+    const ev = s.events.splice(0); ev.forEach((e) => onEvent(s, e));
+    const done = s.leave || s.p.every((p) => !p.alive);
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || ev.length || done) { K.net.send({ t: 'st', g: [Math.round(s.g.x), Math.round(s.g.y), +s.g.vis.toFixed(1)], h: +s.hunt.toFixed(1), l: s.lights, e: s.emf, fp: s.fp, b: s.books, p: s.p.map((p) => [Math.round(p.x), Math.round(p.y), +p.fa.toFixed(2), p.tool, p.fl ? 1 : 0, p.hid ? 1 : 0, p.alive ? 1 : 0, Math.round(p.san)]), ev, done }); s.sendT = 0.1; } }
+    if (done) result(s);
+  },
+  draw(s) {
+    if (!s.ready) { K.text('getting the van ready...', 480, 270, 18, '#8e88b8', 'center', 'u'); return; }
+    const c = K.ctx(), me = meP(s) || s.p[0], cx = K.clamp(me.x - 480, 0, MW * T - 960), cy = K.clamp(me.y - 270, 0, MH * T - 540);
+    c.save(); c.translate(-cx, -cy);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const t = ch(x, y), X = x * T, Y = y * T;
+      if (t === '#') { K.rect(X, Y, T, T, '#3a3442'); K.rect(X + 2, Y + 2, T - 4, T - 4, '#2e2836'); }
+      else if (t === 'o') K.rect(X, Y, T, T, (x * 7 + y * 3) % 5 ? '#14200f' : '#18260f');
+      else if (t === 'v') K.rect(X, Y, T, T, '#222228');
+      else if (t === 'D') K.rect(X, Y, T, T, '#5a3e28');
+      else if (t === 'W') { K.rect(X, Y, T, T, '#4a3020'); K.rect(X + 4, Y + 4, T - 8, T - 8, '#5a3a26'); K.line(X + T / 2, Y + 4, X + T / 2, Y + T - 4, '#2a1a10', 2); }
+      else { const base = { l: '#3a2a22', k: '#2e3238', d: '#3a2e1e', f: '#2a2a30', h: '#2e2620', b: '#2a2238', t: '#26323a', c: '#2e2a1e', g: '#2a2a2a' }[t] || '#222'; K.rect(X, Y, T, T, base); if ((x + y) % 2) { K.alpha(0.12); K.rect(X, Y, T, T, '#000'); K.alpha(1); } }
+    }
+    K.rect(20, 395, 140, 90, '#d8d8e0', 10); K.rect(26, 401, 128, 30, '#3a4a6a', 6); K.text('VAN', 90, 460, 14, '#2a2a3a', 'center', 'd');
+    Object.entries(ROOMS).forEach(([k, nm]) => { const t = roomTiles[k][0]; K.text(nm.toUpperCase(), t[0] * T + 6, t[1] * T + 12, 10, '#ffffff22', 'left', 'd'); });
+    s.books.forEach((b) => { K.rect(b.x - 10, b.y - 7, 20, 14, '#e8dcc0', 2); if (b.w) for (let i = 0; i < 3; i++) K.line(b.x - 7, b.y - 3 + i * 3, b.x + 7 - i * 3, b.y - 3 + i * 3, '#8a1010', 1); });
+    // UV fingerprints + camera orbs only through the right tool
+    if (me.alive && me.tool === 3 && me.fl) s.fp.forEach((f) => { const a = Math.atan2(f.y - me.y, f.x - me.x), d = Math.hypot(f.x - me.x, f.y - me.y); if (d < 230 && Math.abs(Math.atan2(Math.sin(a - me.fa), Math.cos(a - me.fa))) < 0.6) { K.glow('#6aff6a', 8); for (let i = 0; i < 5; i++) K.circle(f.x - 6 + i * 3, f.y - 4 - (i % 2) * 3, 2, '#7aff7a'); K.circle(f.x, f.y + 3, 5, '#7aff7a'); K.noGlow(); } });
+    // players
+    s.p.forEach((p) => { if (p.hid) return; K.alpha(p.alive ? 1 : 0.35); K.circle(p.x, p.y, 11, p.col); K.circle(p.x + Math.cos(p.fa) * 7, p.y + Math.sin(p.fa) * 7, 3, '#fff'); K.alpha(1); });
+    c.restore();
+    // darkness: lit rooms, torches, the van
+    const lights = [{ x: 90 - cx, y: 440 - cy, r: 140 }];
+    s.p.forEach((p) => { if (!p.alive || p.hid) return; lights.push({ x: p.x - cx, y: p.y - cy, r: 46 }); if (p.fl && !(s.hunt > 0 && Math.sin(K.time() * 30) > 0.3)) for (let k = 1; k <= 4; k++) lights.push({ x: p.x - cx + Math.cos(p.fa) * k * 55, y: p.y - cy + Math.sin(p.fa) * k * 55, r: 30 + k * 16 }); });
+    Object.keys(s.lights).forEach((rm) => { if (!s.lights[rm] || (s.hunt > 0 && Math.sin(K.time() * 25) > 0)) return; roomTiles[rm].forEach(([x, y], i) => { if (i % 3 === 0) lights.push({ x: x * T + 20 - cx, y: y * T + 20 - cy, r: 70 }); }); });
+    if (me.alive) K.darkness(lights, 0.95); else { K.alpha(0.35); K.rect(0, 0, 960, 540, '#000'); K.alpha(1); }
+    // the ghost glows in the dark when it shows itself (the dead can always see it)
+    if (s.g.vis > 0 || !me.alive) { const gx = s.g.x - cx, gy = s.g.y - cy; K.alpha(me.alive ? 0.7 : 0.35); K.glow('#c8e8ff', 16); K.circle(gx, gy - 10, 13, '#c8d8e8'); K.poly([[gx - 13, gy - 10], [gx - 15, gy + 22], [gx - 5, gy + 14], [gx + 5, gy + 22], [gx + 15, gy + 14], [gx + 13, gy - 10]], '#c8d8e8'); K.noGlow(); K.circle(gx - 5, gy - 12, 3, '#111'); K.circle(gx + 5, gy - 12, 3, '#111'); K.alpha(1); }
+    // camera: night vision window
+    if (me.alive && me.tool === 4) { const vx = 480 + (me.x - cx - 480) + Math.cos(me.fa) * 110, vy = 270 + (me.y - cy - 270) + Math.sin(me.fa) * 110; c.save(); c.beginPath(); c.arc(vx, vy, 90, 0, 6.28); c.clip(); K.alpha(0.55); K.rect(vx - 90, vy - 90, 180, 180, '#1a4a1a'); K.alpha(1); if (s.type[1].includes(3)) s.orbs.forEach((o, i) => { const ox = o.x - cx + Math.sin(s.time * 0.7 + o.a) * 30, oy = o.y - cy + Math.cos(s.time * 0.5 + o.a) * 22; K.glow('#e8ffe8', 10); K.circle(ox, oy, 3, '#f0fff0'); K.noGlow(); }); c.restore(); K.ring(vx, vy, 90, '#6aff6a', 2); K.text('REC ●', vx - 60, vy - 72, 10, '#ff4a4a', 'left', 'd'); }
+    if (s.hunt > 0 && me.alive) { K.alpha(0.15 + 0.1 * Math.sin(K.time() * 9)); K.rect(0, 0, 960, 540, '#ff0000'); K.alpha(1); K.text('IT IS HUNTING - RUN OR HIDE', 480, 70, 22, '#ff4a4a', 'center', 'd', 12); }
+    // HUD: tool readout
+    const rm = roomOf(me.x, me.y);
+    K.rect(0, 0, 960, 44, '#000a'); K.text(rm ? ROOMS[rm] : inVan(me.x, me.y) ? 'THE VAN' : 'OUTSIDE', 14, 22, 15, '#e8e0f0', 'left', 'd');
+    K.text(`sanity ${Math.round(me.san)}%`, 250, 22, 13, me.san < 40 ? '#ff6a7a' : '#c8c0e8', 'left', 'd');
+    TOOLS.forEach((t, i) => { const on = me.tool === i; K.rect(380 + i * 76, 8, 70, 28, on ? '#2a6a8a' : '#1a1a28', 6); K.text(`${i + 1} ${t}`, 415 + i * 76, 22, 9, on ? '#fff' : '#8a88a8', 'center', 'd'); });
+    K.rect(850, 8, 100, 30, s.journal ? '#5a4a2a' : '#2a2238', 6); K.text('JOURNAL (J)', 900, 23, 10, '#ffd93a', 'center', 'd');
+    const box = (txt, col = '#c8f0ff') => { K.rect(380, 470, 200, 56, '#0a0a14e8', 8); K.text(txt, 480, 498, 18, col, 'center', 'd'); };
+    if (me.alive) {
+      if (me.tool === 0) { const lv = s.emf.reduce((a, e) => Math.max(a, Math.hypot(e.x - me.x, e.y - me.y) < 130 ? e.lv : 1), 1); K.rect(380, 470, 200, 56, '#0a0a14e8', 8); for (let i = 0; i < 5; i++) K.rect(396 + i * 36, 482, 28, 30, i < lv ? ['#3dffa0', '#9aff4a', '#ffd93a', '#ff8a3a', '#ff2a2a'][i] : '#2a2a34', 4); if (lv >= 5) K.text('EMF 5!', 480, 462, 14, '#ff4a4a', 'center', 'd'); }
+      if (me.tool === 1) { const t = tempOf(s, rm, s.time); box(`${t.toFixed(1)} °C`, t < 0 ? '#9ad8ff' : t < 10 ? '#c8e8ff' : '#e8e0d0'); }
+      if (me.tool === 2) box(s.sbT > 0 ? s.sb : 'Space: ask', s.sbT > 0 && s.sb.length < 7 && s.sb === s.sb.toUpperCase() ? '#ff6a6a' : '#c8c0e8');
+      if (me.tool === 3) box(me.fl ? 'UV on - look at doors' : 'turn your torch on (F)', '#c89aff');
+      if (me.tool === 4) box('looking for orbs...', '#6aff6a');
+      if (me.tool === 5) box(s.books.some((b) => b.by === me.id) ? 'book placed' : 'Space: put the book down', '#e8dcc0');
+    } else box('you died · you can see it now', '#ff8a8a');
+    const hint = inVan(me.x, me.y) ? (me.san < 70 && !me.pills ? 'E: take sanity pills' : 'E: LEAVE (everyone alive must be in the van)') : wardrobeNear(me.x, me.y) ? 'E: hide in the wardrobe' : rm ? `E: lights ${s.lights[rm] ? 'off' : 'on'}` : '';
+    if (hint) K.text(hint, 480, 452, 13, '#ffffffcc', 'center', 'u');
+    if (s.msgT > 0) K.text(s.msg, 480, 100, 16, '#ffd93a', 'center', 'u', 8);
+    if (me.hid) K.text('hiding... (E to come out)', 480, 270, 18, '#c8c0e8', 'center', 'u');
+    // journal page
+    if (s.journal) {
+      K.rect(150, 70, 680, 420, '#e8dcc0', 12); K.text('JOURNAL', 490, 96, 20, '#3a2a1a', 'center', 'd');
+      EV.forEach((e, i) => { const v = s.jr.ev[i]; K.rect(180, 120 + i * 40, 220, 34, v === 1 ? '#7ab87a' : v === 2 ? '#c88a7a' : '#f4ecd8', 6); K.text(`${v === 1 ? '✔' : v === 2 ? '✘' : '·'}  ${e}`, 196, 137 + i * 40, 15, '#2a1a10', 'left', 'u'); });
+      K.text('click: found ✔ / ruled out ✘', 290, 372, 11, '#6a5a4a', 'center', 'u');
+      TYPES.forEach((t, i) => { const fits = t[1].every((e) => s.jr.ev[e] !== 2) && s.jr.ev.every((v, e) => v !== 1 || t[1].includes(e)), x = 470 + (i % 2) * 160, y = 120 + Math.floor(i / 2) * 50; K.rect(x, y, 150, 40, s.jr.pick === i ? '#3a2a1a' : fits ? '#f4ecd8' : '#d8ccb0', 6); K.text(t[0], x + 75, y + 14, 14, s.jr.pick === i ? '#ffd93a' : fits ? '#2a1a10' : '#a89878', 'center', 'd'); K.text(t[1].map((e) => ['EMF 5', 'Spirit Box', 'Prints', 'Orbs', 'Writing', 'Freezing'][e]).join(' · '), x + 75, y + 30, 8, s.jr.pick === i ? '#e8dcc0' : '#7a6a5a', 'center', 'u'); });
+      K.text(s.jr.pick >= 0 ? `your answer: ${TYPES[s.jr.pick][0]} - now get everyone to the van and press E` : 'pick the ghost when you are sure', 490, 470, 13, '#3a2a1a', 'center', 'u');
+    }
+  },
+  ai(s, dt) {
+    const me = meP(s); if (!me || !s.ready) return; ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].forEach((k) => K.vhold(k, false));
+    if (!s.aiT || Math.hypot(s.aiT[0] - me.x, s.aiT[1] - me.y) < 20) { const t = K.pick(roomTiles[Math.random() < 0.5 ? s.groom : 'h']); s.aiT = [t[0] * T + 20, t[1] * T + 20]; }
+    const nx = path(Math.floor(me.x / T), Math.floor(me.y / T), Math.floor(s.aiT[0] / T), Math.floor(s.aiT[1] / T)); if (!nx) return;
+    if (Math.abs(nx[0] - me.x) > 4) K.vhold(nx[0] > me.x ? 'ArrowRight' : 'ArrowLeft'); if (Math.abs(nx[1] - me.y) > 4) K.vhold(nx[1] > me.y ? 'ArrowDown' : 'ArrowUp');
+    K.vmouse(480 + (nx[0] - me.x) * 5, 270 + (nx[1] - me.y) * 5); if (Math.random() < dt * 0.3) me.tool = K.irand(0, 4);
+  },
+});
+function sendJr(s) { if (K.net) K.net.send({ t: 'jr', jr: s.jr }); K.sfx('click'); }
+function onEvent(s, e) {
+  if (e.kind === 'throw') sfxAt(s, 'knock', e.x, e.y);
+  if (e.kind === 'door') sfxAt(s, 'creak', e.x, e.y);
+  if (e.kind === 'light' || e.kind === 'switch') sfxAt(s, 'click', e.x, e.y);
+  if (e.kind === 'appear') { sfxAt(s, 'whisper', e.x, e.y); }
+  if (e.kind === 'write') sfxAt(s, 'whisper', e.x, e.y);
+  if (e.kind === 'hunt') { K.sfx('scare'); K.shake(10); s.msg = 'the lights are flickering... IT IS HUNTING'; s.msgT = 3; }
+  if (e.kind === 'huntEnd') { s.msg = 'it has stopped hunting'; s.msgT = 2.5; }
+  if (e.kind === 'kill') { K.sfx('scare'); K.flash('#fff', 0.3); s.msg = `${e.who} was killed`; s.msgT = 3; }
+  if (e.kind === 'noPick') { s.msg = 'pick the ghost in the JOURNAL (J) before you leave'; s.msgT = 2.5; }
+  if (e.kind === 'notAll') { s.msg = `${e.n} still inside - everyone alive must be in the van`; s.msgT = 2.5; }
+}
+</script></body></html>

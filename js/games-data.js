@@ -1017,6 +1017,31 @@ export const GAME_LIST = [
 "cover": "games/covers/spirit-board.png"
 },
 {
+"id": "ghost-hunt",
+"n": 200,
+"title": "GHOST HUNT",
+"genre": "horror",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 4,
+"desc": "Paranormal investigators, alone or with up to 3 friends. Something haunts one room of this house - find which room, then find out WHAT it is. Six tools: EMF reader, thermometer, spirit box, UV torch for fingerprints, a camera that sees ghost orbs, and a book it might write in. Three pieces of evidence name the ghost. Your sanity drains in the dark, and when it gets low the ghost HUNTS - run, or hide in a wardrobe. Mark the journal, pick the ghost, and get everyone back to the van.",
+"controls": "WASD / stick to walk · Shift to run · mouse aims your torch · F torch on/off · 1-6 or Q (TOOL) switch tool · Space (USE) uses it · E: hide in a wardrobe / room light / take pills + leave at the van · J (JOURNAL)",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Name the ghost correctly and escape in Ghost Hunt"
+}
+],
+"file": "games/2d/ghost-hunt.html",
+"dim": "2d",
+"cover": "games/covers/ghost-hunt.png"
+},
+{
 "id": "breakout",
 "n": 1,
 "title": "BREAKOUT",
@@ -1947,6 +1972,29 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/sheep-herder.png"
+},
+{
+"id": "mini-golf",
+"n": 197,
+"title": "MINI GOLF",
+"genre": "fun",
+"desc": "Nine holes of crazy golf: bank shots off the walls, a spinning windmill, sand traps, a pond, sloped greens that pull your ball sideways, pinball bumpers, a zig-zag maze and a sliding gate. Pull back and let go to putt. Fewest strokes wins - try to beat par.",
+"controls": "Drag back from anywhere and let go to putt (further = harder) · or ← → to aim, hold Space for power, release to putt",
+"scoreLabel": "STROKES",
+"lowerIsBetter": true,
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Finish all 9 holes of Mini Golf at par or better"
+}
+],
+"file": "games/2d/mini-golf.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/mini-golf.png"
 },
 {
 "id": "2048",
@@ -4459,5 +4507,30 @@ export const GAME_LIST = [
 "sp"
 ],
 "cover": "games/covers/walls-move.png"
+},
+{
+"id": "paint-hide",
+"n": 199,
+"title": "PAINT & HIDE",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Hide and seek where you ARE the hiding spot. Hiders get 45 seconds to walk somewhere and paint their own body to match it - pick colours straight off the room with the eyedropper. Then the lights go down and the hunter sweeps a spotlight around with a few shots. Your eyes give you away when you blink... unless you close them, but then you cannot see either. Everyone gets a turn as hunter.",
+"controls": "HIDER: WASD / stick to walk · click the room to pick a colour · click / drag on your body panel to paint · FILL paints it all · hold Shift / E (EYES) to close your eyes. HUNTER: aim with the mouse (or stick), click (or Space) to shoot.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Paint & Hide"
+}
+],
+"file": "games/2d/paint-hide.html",
+"dim": "2d",
+"cover": "games/covers/paint-hide.png"
 }
 ];

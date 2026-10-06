@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mini Golf</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"mini-golf","n":197,"title":"MINI GOLF","genre":"fun","desc":"Nine holes of crazy golf: bank shots off the walls, a spinning windmill, sand traps, a pond, sloped greens that pull your ball sideways, pinball bumpers, a zig-zag maze and a sliding gate. Pull back and let go to putt. Fewest strokes wins - try to beat par.","controls":"Drag back from anywhere and let go to putt (further = harder) · or ← → to aim, hold Space for power, release to putt","scoreLabel":"STROKES","lowerIsBetter":true,"tasks":[{"stat":"won","target":1,"text":"Finish all 9 holes of Mini Golf at par or better"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const BR = 7, MAXP = 820;
+const rect = (x1, y1, x2, y2) => [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+const HOLES = [
+  { par: 2, poly: rect(120, 200, 840, 340), tee: [180, 270], cup: [780, 270] },
+  { par: 2, poly: [[100, 380], [640, 380], [640, 80], [800, 80], [800, 480], [100, 480]], tee: [160, 430], cup: [720, 140] },
+  { par: 3, poly: rect(100, 120, 860, 420), tee: [160, 270], cup: [800, 270], walls: [[340, 120, 340, 320], [620, 220, 620, 420]] },
+  { par: 3, poly: rect(120, 180, 840, 360), tee: [180, 270], cup: [780, 270], mill: { x: 480, y: 270, len: 88, sp: 1.6 } },
+  { par: 3, poly: rect(100, 100, 860, 440), tee: [160, 380], cup: [800, 160], water: [rect(360, 170, 600, 370)], sand: [rect(700, 220, 860, 300), rect(700, 100, 760, 220)] },
+  { par: 3, poly: rect(100, 150, 860, 390), tee: [160, 200], cup: [800, 200], slope: [{ r: [300, 150, 660, 390], f: [0, 260] }] },
+  { par: 3, poly: rect(100, 100, 860, 440), tee: [160, 270], cup: [800, 270], bump: [[380, 200, 26], [380, 340, 26], [540, 270, 30], [660, 170, 22], [660, 370, 22]] },
+  { par: 5, poly: rect(80, 80, 880, 460), tee: [150, 420], cup: [810, 120], walls: [[240, 80, 240, 360], [400, 180, 400, 460], [560, 80, 560, 360], [720, 180, 720, 460]] },
+  { par: 3, poly: rect(120, 160, 840, 380), tee: [180, 270], cup: [780, 270], gate: { x: 480, w: 30, h: 110, y1: 160, y2: 270, sp: 1.2 } },
+];
+function segsOf(H) { const s = []; H.poly.forEach((p, i) => { const q = H.poly[(i + 1) % H.poly.length]; s.push([p[0], p[1], q[0], q[1]]); }); (H.walls || []).forEach((w) => s.push(w)); return s; }
+const inPoly = (pts, x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+function hole(s) { const H = HOLES[s.h]; s.H = H; s.segs = segsOf(H); s.b = { x: H.tee[0], y: H.tee[1], vx: 0, vy: 0 }; s.last = { x: H.tee[0], y: H.tee[1] }; s.strokes = 0; s.state = 'aim'; s.aimA = Math.atan2(H.cup[1] - H.tee[1], H.cup[0] - H.tee[0]); s.pow = 0; s.drag = null; s.t = 0; }
+function collideSeg(b, x1, y1, x2, y2, vx = 0, vy = 0) {
+  const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy, t = K.clamp(((b.x - x1) * dx + (b.y - y1) * dy) / L2, 0, 1), px = x1 + dx * t, py = y1 + dy * t, ex = b.x - px, ey = b.y - py, d = Math.hypot(ex, ey);
+  if (d >= BR || d === 0) return false;
+  const nx = ex / d, ny = ey / d; b.x = px + nx * BR; b.y = py + ny * BR;
+  const rvx = b.vx - vx, rvy = b.vy - vy, vn = rvx * nx + rvy * ny; if (vn < 0) { b.vx -= 1.75 * vn * nx; b.vy -= 1.75 * vn * ny; if (vn < -80) K.tone(300, 0.04, 'square', Math.min(0.04, -vn / 15000)); }
+  return true;
+}
+const blade = (H, t) => { const a = t * H.mill.sp; return [0, 1].map((k) => { const aa = a + k * Math.PI / 2; return [H.mill.x - Math.cos(aa) * H.mill.len, H.mill.y - Math.sin(aa) * H.mill.len, H.mill.x + Math.cos(aa) * H.mill.len, H.mill.y + Math.sin(aa) * H.mill.len]; }); };
+const gateY = (H, t) => K.lerp(H.gate.y1, H.gate.y2, 0.5 - 0.5 * Math.cos(t * H.gate.sp));
+function shoot(s, a, p) { s.b.vx = Math.cos(a) * p * MAXP; s.b.vy = Math.sin(a) * p * MAXP; s.last = { x: s.b.x, y: s.b.y }; s.strokes++; s.state = 'roll'; K.tone(180 + p * 200, 0.08, 'triangle', 0.08); }
+K.game({
+  bg: '#2a5a3a',
+  init(s) { s.h = 0; s.total = 0; s.card = []; hole(s); },
+  update(s, dt) {
+    s.t += dt; const H = s.H, b = s.b, m = K.mouse;
+    if (s.state === 'sunk') { s.sunkT -= dt; if (s.sunkT <= 0) { s.h++; if (s.h >= HOLES.length) { const par = HOLES.reduce((a, q) => a + q.par, 0), d = s.total - par; return K.end(s, { score: s.total, won: d <= 0, stats: { won: d <= 0 ? 1 : 0 }, title: d < 0 ? `${-d} UNDER PAR!` : d === 0 ? 'LEVEL PAR' : `${d} OVER PAR`, text: `${s.total} strokes over 9 holes (par ${par}).` }); } hole(s); } return; }
+    if (s.state === 'aim') {
+      if (K.down('ArrowLeft', 'KeyA')) s.aimA -= dt * 1.8; if (K.down('ArrowRight', 'KeyD')) s.aimA += dt * 1.8;
+      if (K.down('Space')) { s.charge = (s.charge || 0) + dt; s.pow = 0.5 - 0.5 * Math.cos(s.charge * 2.4); } else if (s.charge) { if (s.pow > 0.04) shoot(s, s.aimA, s.pow); s.charge = 0; s.pow = 0; }
+      if (m.clicked) s.drag = { x: m.x, y: m.y };
+      if (s.drag && m.down) { const dx = s.drag.x - m.x, dy = s.drag.y - m.y, L = Math.hypot(dx, dy); if (L > 6) { s.aimA = Math.atan2(dy, dx); s.pow = Math.min(1, L / 170); } }
+      if (s.drag && !m.down) { if (s.pow > 0.05) shoot(s, s.aimA, s.pow); s.drag = null; s.pow = 0; }
+      return;
+    }
+    // rolling
+    for (let t = dt; t > 0; t -= 1 / 240) {
+      const h = Math.min(t, 1 / 240), sand = (H.sand || []).some((p) => inPoly(p, b.x, b.y));
+      (H.slope || []).forEach((z) => { if (b.x > z.r[0] && b.x < z.r[2] && b.y > z.r[1] && b.y < z.r[3]) { b.vx += z.f[0] * h; b.vy += z.f[1] * h; } });
+      const sp = Math.hypot(b.vx, b.vy), dec = (sand ? 1100 : 210) * h; if (sp <= dec) { b.vx = 0; b.vy = 0; } else { b.vx -= (b.vx / sp) * dec; b.vy -= (b.vy / sp) * dec; }
+      b.x += b.vx * h; b.y += b.vy * h;
+      for (const sg of s.segs) collideSeg(b, ...sg);
+      (H.bump || []).forEach(([x, y, r]) => { const d = Math.hypot(b.x - x, b.y - y); if (d < r + BR) { const nx = (b.x - x) / d, ny = (b.y - y) / d; b.x = x + nx * (r + BR); b.y = y + ny * (r + BR); const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 2.3 * vn * nx; b.vy -= 2.3 * vn * ny; K.tone(700, 0.06, 'square', 0.04); s.bumpT = 0.15; } } });
+      if (H.mill) { const a = s.t * H.mill.sp; blade(H, s.t).forEach((sg) => { const cx = (b.x - H.mill.x), cy = (b.y - H.mill.y); collideSeg(b, ...sg, -cy * H.mill.sp, cx * H.mill.sp); }); }
+      if (H.gate) { const gy = gateY(H, s.t), gv = (H.gate.y2 - H.gate.y1) * 0.5 * Math.sin(s.t * H.gate.sp) * H.gate.sp, x1 = H.gate.x - H.gate.w / 2, x2 = H.gate.x + H.gate.w / 2, y2 = gy + H.gate.h; [[x1, gy, x2, gy], [x2, gy, x2, y2], [x2, y2, x1, y2], [x1, y2, x1, gy]].forEach((sg) => collideSeg(b, ...sg, 0, gv)); }
+      if (!inPoly(H.poly, b.x, b.y)) { b.x = s.last.x; b.y = s.last.y; b.vx = b.vy = 0; }
+      const dc = Math.hypot(b.x - H.cup[0], b.y - H.cup[1]);
+      if (dc < 10) { if (Math.hypot(b.vx, b.vy) < 520) { s.state = 'sunk'; s.sunkT = 1.6; s.total += s.strokes; s.card.push(s.strokes); K.sfx('coin'); K.tone(200, 0.15, 'sine', 0.08, -60, 0.1); K.burst(H.cup[0], H.cup[1], ['#fff', '#ffd93a'], 20); return; } else { b.vx *= 0.85; b.vy *= 0.85; b.vx += (b.x - H.cup[0]) * 4; b.vy += (b.y - H.cup[1]) * 4; } }
+      if ((H.water || []).some((p) => inPoly(p, b.x, b.y))) { K.sfx('splash'); K.burst(b.x, b.y, '#7ac8ff', 16); s.strokes++; b.x = s.last.x; b.y = s.last.y; b.vx = b.vy = 0; s.msg = 'SPLASH! +1'; s.msgT = 1.2; break; }
+    }
+    s.msgT = (s.msgT || 0) - dt; s.bumpT = (s.bumpT || 0) - dt;
+    // a ball that is only wobbling against a wall (on a slope) counts as stopped
+    if (s.state === 'roll' && Math.hypot(b.vx, b.vy) < 14) { s.slow = (s.slow || 0) + dt; if (s.slow > 0.35) { b.vx = b.vy = 0; } } else s.slow = 0;
+    if (!b.vx && !b.vy && s.state === 'roll') { s.state = 'aim'; s.aimA = Math.atan2(H.cup[1] - b.y, H.cup[0] - b.x); if (s.strokes >= 8) { s.state = 'sunk'; s.sunkT = 1.4; s.total += 8; s.card.push(8); s.msg = 'picked up (8)'; s.msgT = 1.4; } }
+  },
+  draw(s) {
+    const H = s.H, c = K.ctx(), b = s.b;
+    for (let i = 0; i < 20; i++) K.circle((i * 211) % 960, (i * 97) % 540, 30 + (i % 4) * 10, '#2e6440');
+    // the green
+    c.fillStyle = '#0f2a1a'; c.beginPath(); H.poly.forEach(([x, y], i) => (i ? c.lineTo(x + 6, y + 8) : c.moveTo(x + 6, y + 8))); c.fill();
+    c.fillStyle = '#4ab860'; c.beginPath(); H.poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.fill();
+    c.save(); c.clip(); for (let x = 0; x < 960; x += 40) K.rect(x, 0, 20, 540, '#48b05c'); c.restore();
+    (H.sand || []).forEach((p) => K.poly(p, '#e8d49a'));
+    (H.water || []).forEach((p) => { K.poly(p, '#3a8ad8'); for (let i = 0; i < 6; i++) K.ring(p[0][0] + 30 + i * 37, p[0][1] + 40 + (i % 3) * 60, 6 + ((s.t * 10 + i * 4) % 12), '#9ad8ff55', 1.5); });
+    (H.slope || []).forEach((z) => { K.alpha(0.18); K.rect(z.r[0], z.r[1], z.r[2] - z.r[0], z.r[3] - z.r[1], '#1a6a2a'); K.alpha(0.5); for (let x = z.r[0] + 30; x < z.r[2]; x += 60) for (let y = z.r[1] + 20; y < z.r[3]; y += 60) { const o = (s.t * 30) % 60; K.text('⬇', x, y + o, 18, '#2a7a3a'); } K.alpha(1); });
+    s.segs.forEach(([x1, y1, x2, y2]) => K.line(x1, y1, x2, y2, '#c8743a', 8)); s.segs.forEach(([x1, y1, x2, y2]) => K.line(x1, y1, x2, y2, '#e89a5a', 3));
+    (H.bump || []).forEach(([x, y, r]) => { K.circle(x, y, r, s.bumpT > 0 ? '#ffe86a' : '#e84a6a'); K.circle(x, y, r * 0.6, '#ff8aa0'); K.ring(x, y, r, '#fff', 2); });
+    if (H.mill) { K.rect(H.mill.x - 22, H.mill.y - 22, 44, 44, '#8a5a3a', 6); blade(H, s.t).forEach(([x1, y1, x2, y2]) => { K.line(x1, y1, x2, y2, '#f4ece0', 9); K.line(x1, y1, x2, y2, '#c84a3a', 3); }); K.circle(H.mill.x, H.mill.y, 8, '#3a2a1a'); }
+    if (H.gate) { const gy = gateY(H, s.t); K.rect(H.gate.x - H.gate.w / 2, gy, H.gate.w, H.gate.h, '#6a6a7a', 4); for (let i = 0; i < 4; i++) K.rect(H.gate.x - H.gate.w / 2, gy + 10 + i * 26, H.gate.w, 8, '#ffd93a'); }
+    // cup + flag
+    K.circle(H.cup[0], H.cup[1], 11, '#1a1a1a'); K.line(H.cup[0], H.cup[1], H.cup[0], H.cup[1] - 60, '#eee', 3); K.poly([[H.cup[0], H.cup[1] - 60], [H.cup[0] + 30, H.cup[1] - 50], [H.cup[0], H.cup[1] - 40]], '#ff3355');
+    K.rect(H.tee[0] - 12, H.tee[1] - 12, 24, 24, '#3a9a4a', 4);
+    // ball + aim
+    if (s.state === 'aim') {
+      const p = s.pow, L = 30 + p * 170;
+      for (let i = 1; i <= 10; i++) { const k = i / 10; K.circle(b.x + Math.cos(s.aimA) * L * k, b.y + Math.sin(s.aimA) * L * k, 2.5, p > 0.75 ? '#ff6a5a' : '#ffffff'); }
+      if (p > 0) { K.rect(b.x - 30, b.y + 20, 60, 6, '#0006', 3); K.rect(b.x - 30, b.y + 20, 60 * p, 6, p > 0.75 ? '#ff6a5a' : '#ffd93a', 3); }
+    }
+    if (s.state !== 'sunk') { K.circle(b.x + 2, b.y + 3, BR, '#0004'); K.circle(b.x, b.y, BR, '#fff'); K.circle(b.x - 2, b.y - 2, 2, '#ddd'); }
+    // card
+    K.text(`HOLE ${s.h + 1}/9 · PAR ${H.par}`, 20, 26, 16, '#fff', 'left', 'd'); K.text(`strokes ${s.strokes}`, 20, 50, 14, '#e8f8e8', 'left', 'u');
+    const par = HOLES.slice(0, s.h).reduce((a, q) => a + q.par, 0), d = s.total - par; K.text(`total ${s.total}${s.h ? ` (${d > 0 ? '+' : ''}${d})` : ''}`, 940, 26, 16, '#fff', 'right', 'd');
+    if (s.msgT > 0) K.text(s.msg, 480, 60, 22, '#ffd93a', 'center', 'd', 8);
+    if (s.state === 'sunk' && s.card.length === s.h + 1) { const n = s.card[s.h], dd = n - H.par, name = n === 1 ? 'HOLE IN ONE!' : ({ '-3': 'ALBATROSS', '-2': 'EAGLE!', '-1': 'BIRDIE!', 0: 'PAR', 1: 'BOGEY', 2: 'DOUBLE BOGEY' })[dd] || `+${dd}`; K.text(name, 480, 270, 40, '#ffd93a', 'center', 'd', 16); }
+    if (s.h === 0 && s.strokes === 0 && !K.attract) K.text('drag back and let go to putt', 480, 520, 16, '#e8f8e8', 'center', 'u');
+  },
+  ai(s, dt) {
+    if (s.state !== 'aim') return; s.aw = (s.aw || 0) + dt; if (s.aw < 0.8) return; s.aw = 0;
+    const H = s.H, d = Math.hypot(H.cup[0] - s.b.x, H.cup[1] - s.b.y); shoot(s, Math.atan2(H.cup[1] - s.b.y, H.cup[0] - s.b.x) + K.rand(-0.08, 0.08), K.clamp(Math.sqrt(2 * 210 * d) / MAXP * 1.15, 0.15, 1));
+  },
+});
+</script></body></html>
