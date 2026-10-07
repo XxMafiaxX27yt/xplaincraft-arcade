@@ -2120,6 +2120,31 @@ export const GAME_LIST = [
 "cover": "games/covers/redline.png"
 },
 {
+"id": "bomb-squad",
+"n": 211,
+"title": "BOMB SQUAD",
+"genre": "fun",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "One player is the DEFUSER: they see the bomb but not the manual. Everyone else is an EXPERT: they have the manual but cannot see the bomb. Talk it through before the clock runs out - wires to cut, a big button to tap or hold until the right digit, a symbol keypad, flash pads that change their rules with every strike, letter wheels that spell one word. The serial number, batteries and the indicator light change the rules, so the defuser has to read everything out. Three strikes and it blows. The defuser changes every round. Solo: practice with the manual one tap away.",
+"controls": "Defuser: click / tap wires to cut, press or hold the big button, tap keys and pads, arrows turn the letter wheels. Experts: tabs flip the manual pages. Talk in the party CHAT or on voice. Solo: MANUAL button (or M) flips to the manual.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Defuse most of the bombs in Bomb Squad"
+}
+],
+"file": "games/2d/bomb-squad.html",
+"dim": "2d",
+"cover": "games/covers/bomb-squad.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",

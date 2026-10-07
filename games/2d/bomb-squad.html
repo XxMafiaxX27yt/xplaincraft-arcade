@@ -1,0 +1,404 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bomb Squad</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"bomb-squad","n":211,"title":"BOMB SQUAD","genre":"fun","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"One player is the DEFUSER: they see the bomb but not the manual. Everyone else is an EXPERT: they have the manual but cannot see the bomb. Talk it through before the clock runs out - wires to cut, a big button to tap or hold until the right digit, a symbol keypad, flash pads that change their rules with every strike, letter wheels that spell one word. The serial number, batteries and the indicator light change the rules, so the defuser has to read everything out. Three strikes and it blows. The defuser changes every round. Solo: practice with the manual one tap away.","controls":"Defuser: click / tap wires to cut, press or hold the big button, tap keys and pads, arrows turn the letter wheels. Experts: tabs flip the manual pages. Talk in the party CHAT or on voice. Solo: MANUAL button (or M) flips to the manual.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Defuse most of the bombs in Bomb Squad"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+// ---------------------------------------------------------------- the bomb's rules (the manual) ----------------------------------------------------------------
+const ROLE_T = 7, RES_T = 9, HOLD_T = 0.45;
+const WCOL = { red: '#ff3355', blue: '#3b7bff', yellow: '#ffd93a', white: '#f2f0ff', black: '#2a2838' };
+const BCOL = { red: '#e8263c', blue: '#2a64f0', yellow: '#f0c020', white: '#e8e6f0' };
+const STRIP = { cyan: ['#22e6ff', '3'], pink: ['#ff5cc8', '7'], green: ['#3dffa0', '0'], amber: ['#ffa21a', '5'] };
+const PADS = ['red', 'blue', 'green', 'yellow'], PADC = { red: '#ff3355', blue: '#3b7bff', green: '#3dffa0', yellow: '#ffd93a' };
+// flash pads: what to press for each flash, by "serial has a vowel" and strikes so far
+const FLASH = {
+  vowel: [{ red: 'blue', blue: 'yellow', green: 'red', yellow: 'green' }, { red: 'green', blue: 'red', green: 'yellow', yellow: 'blue' }, { red: 'yellow', blue: 'green', green: 'blue', yellow: 'red' }],
+  none: [{ red: 'green', blue: 'blue', green: 'yellow', yellow: 'red' }, { red: 'red', blue: 'yellow', green: 'blue', yellow: 'green' }, { red: 'blue', blue: 'green', green: 'red', yellow: 'yellow' }],
+};
+const VS = '︎';
+const SYMS = ['★', '☆', '♠', '♣', '♥', '♦', '♪', '♫', '☼', '☾', '✿', '⚓', '✂', '☯', '❄', 'Ω', 'Ψ', 'λ', 'Σ', 'Ж', 'Ф', '§', '¶', '¥', '©', '∞', '¿', 'Æ'];
+const KCOLS = [['★', 'Ω', '♪', 'Ж', '☾', '¶', '✿'], ['☆', '★', 'λ', '♣', '¶', '⚓', 'Σ'], ['Ψ', '♥', 'Ж', '∞', '✂', '★', '¿'], ['♦', '☼', 'Σ', 'Ψ', '©', '♪', 'Æ'], ['¥', '☯', '♣', '♦', 'Ф', '∞', 'Ω'], ['❄', 'Æ', '§', '☆', '♥', 'Ф', '☯']];
+const WORDS = 'PIXEL LASER ROBOT GHOST CABLE POWER SPARK TIMER BLAST ALARM RADAR VAULT PANEL CHIPS NERVE SHOCK RELAY ORBIT PULSE QUARK VIRUS TOXIC STORM FLAME CRANE DRONE MAGIC LEVER BRAKE TRACK'.split(' ');
+const LABELS = ['NVX', 'CTR', 'FRQ', 'SIG', 'PWR', 'BOB', 'MSA'];
+const MODNAME = { wires: 'WIRES', button: 'THE BUTTON', keypad: 'KEYPAD', flash: 'FLASH PADS', wheels: 'LETTER WHEELS' };
+
+const hasVowel = (b) => /[AEIOU]/.test(b.serial);
+const lastDigit = (b) => +b.serial[b.serial.length - 1];
+const count = (arr, c) => arr.filter((x) => x === c).length;
+const lastOf = (arr, c) => arr.lastIndexOf(c);
+// WIRES: which wire to cut (0 = top)
+function wireAnswer(w, b) {
+  const n = w.length;
+  if (n === 3) { if (!w.includes('yellow')) return 0; if (w[0] === 'black') return 2; return 1; }
+  if (n === 4) { if (count(w, 'red') >= 2 && lastDigit(b) % 2 === 0) return lastOf(w, 'red'); if (!w.includes('blue')) return 0; if (count(w, 'white') === 1) return w.indexOf('white'); return 3; }
+  if (n === 5) { if (w[4] === 'yellow' && b.batteries >= 2) return 0; if (count(w, 'black') === 1) return 1; if (count(w, 'blue') > count(w, 'red')) return lastOf(w, 'blue'); return 4; }
+  if (!w.includes('white') && hasVowel(b)) return 2; if (count(w, 'yellow') === 2) return w.indexOf('yellow'); if (!w.includes('black')) return 5; return 3;
+}
+// THE BUTTON: 'tap' or 'hold'
+function buttonAnswer(bt, b) {
+  if (bt.label === 'BOOM' && b.batteries >= 2) return 'tap';
+  if (bt.color === 'blue' && bt.label === 'ABORT') return 'hold';
+  if (b.lit && bt.color === 'white') return 'tap';
+  if (bt.label === 'HOLD') return 'tap';
+  if (bt.color === 'red' && b.batteries < 2) return 'hold';
+  return 'hold';
+}
+
+// ---------------------------------------------------------------- making a bomb ----------------------------------------------------------------
+function makeBomb(nMods, rnd = Math.random) {
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const L = 'ABCDEFGHJKLMNPQRSTUVWXZ', D = '0123456789';   // no I or O: they look like 1 and 0
+  let serial = ''; for (let i = 0; i < 5; i++) serial += rnd() < 0.55 ? pick(L) : pick(D); serial += pick(D);
+  const b = { serial, batteries: Math.floor(rnd() * 5), label: pick(LABELS), lit: rnd() < 0.5, mods: [] };
+  const kinds = ['wires', 'button', 'keypad', 'flash', 'wheels'].sort(() => rnd() - 0.5).slice(0, nMods);
+  for (const k of ['wires', 'button', 'keypad', 'flash', 'wheels']) if (kinds.includes(k)) b.mods.push(makeMod(k, b, rnd, pick));
+  b.time = { 3: 210, 4: 270, 5: 330 }[nMods];
+  return b;
+}
+function makeMod(kind, b, rnd, pick) {
+  if (kind === 'wires') { const n = 3 + Math.floor(rnd() * 4), w = Array.from({ length: n }, () => pick(Object.keys(WCOL))); return { kind, w, cut: w.map(() => false), ans: wireAnswer(w, b), done: false }; }
+  if (kind === 'button') return { kind, color: pick(Object.keys(BCOL)), label: pick(['PUSH', 'HOLD', 'ABORT', 'BOOM']), strip: pick(Object.keys(STRIP)), done: false };
+  if (kind === 'keypad') {
+    for (;;) {
+      const col = pick(KCOLS), four = col.slice().sort(() => rnd() - 0.5).slice(0, 4);
+      if (KCOLS.filter((c) => four.every((x) => c.includes(x))).length !== 1) continue;
+      return { kind, syms: four, order: col.filter((x) => four.includes(x)), got: 0, done: false };
+    }
+  }
+  if (kind === 'flash') return { kind, seq: [0, 1, 2, 3, 4].map(() => pick(PADS)), stage: 0, input: 0, done: false };
+  // letter wheels: the target letter + 4 others on every wheel, and no other word on the list can be spelled
+  for (;;) {
+    const word = pick(WORDS), A = 'ABCDEFGHIJKLMNOPRSTUVWXY';
+    const cols = word.split('').map((ch) => { const s = new Set([ch]); while (s.size < 5) s.add(pick(A.split(''))); return [...s].sort(() => rnd() - 0.5); });
+    if (WORDS.some((w) => w !== word && w.split('').every((ch, i) => cols[i].includes(ch)))) continue;
+    return { kind: 'wheels', word, cols, pos: cols.map((c, i) => (c.indexOf(word[i]) + 1 + Math.floor(rnd() * 4)) % 5), done: false };
+  }
+}
+// one action on a module: 'ok' | 'strike' | 'solved' (the host runs this; the defuser too, for instant feedback)
+function act(st, m, a) {
+  const M = st.bomb.mods[m]; if (!M || M.done) return 'ok';
+  const B = st.bomb;
+  if (M.kind === 'wires') { if (M.cut[a.i]) return 'ok'; M.cut[a.i] = true; if (a.i === M.ans) { M.done = true; return 'solved'; } return 'strike'; }
+  if (M.kind === 'button') {
+    const want = buttonAnswer(M, B);
+    if (a.how !== want) return 'strike';
+    if (want === 'tap') { M.done = true; return 'solved'; }
+    if (String(a.digits || '').includes(STRIP[M.strip][1])) { M.done = true; return 'solved'; }
+    return 'strike';
+  }
+  if (M.kind === 'keypad') { if (M.syms[a.i] === M.order[M.got]) { M.got++; if (M.got >= 4) { M.done = true; return 'solved'; } return 'ok'; } return M.order.indexOf(M.syms[a.i]) < M.got ? 'ok' : 'strike'; }
+  if (M.kind === 'flash') {
+    const table = FLASH[hasVowel(B) ? 'vowel' : 'none'][Math.min(2, st.strikes)];
+    if (a.c !== table[M.seq[M.input]]) { M.input = 0; return 'strike'; }
+    M.input++;
+    if (M.input > M.stage) { M.stage++; M.input = 0; if (M.stage >= 3) { M.done = true; return 'solved'; } }
+    return 'ok';
+  }
+  if (M.kind === 'wheels') { if (a.word === M.word) { M.done = true; return 'solved'; } return 'strike'; }
+  return 'ok';
+}
+const fmtT = (t) => { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+const SOLO_ROUNDS = [3, 4, 5];
+
+// ---------------------------------------------------------------- the game ----------------------------------------------------------------
+K.game({
+  bg: '#0b0a16', touch: { stick: false, buttons: [] }, noTitleSim: true,
+  init(s) {
+    if (!K.net) PK.setFake([{ id: 'me', name: 'YOU' }]);
+    window.__bs = s;   // tests
+    s.pts = {}; s.round = 0; s.page = 0; s.manual = false; s.over = false; s.defused = 0;
+    s.onPhase = (s) => {
+      if (s.ph === 'bomb') { s.st = { bomb: JSON.parse(JSON.stringify(s.pd.bomb)), strikes: 0, left: s.pd.bomb.time, acts: 0 }; s.sent = 0; s.page = 0; s.manual = false; s.hold = null; s.flashT = 0; s.boomT = 0; s.solvedT = {}; }
+      if (s.ph === 'res') { s.st = s.pd.st || s.st; if (s.pd.win) K.sfx('win'); else { K.sfx('boom'); K.shake(20); K.flash('#ff8a3a', 0.4); } }
+      if (s.ph === 'end') finish(s);
+    };
+    s.ph = 'start'; s.t = 1.2;
+    // title / cover picture: a live bomb
+    if (K.attract) { s.round = 1; s.pd = { def: 'me', bomb: makeBomb(5), round: 1 }; s.ph = 'bomb'; s.t = 9999; s.onPhase(s); s.st.left = 187; s.st.strikes = 1; }
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    // the host's bomb state (everyone): timer, strikes, modules
+    if (d.t === 'st' && !PK.host() && s.ph === 'bomb') {
+      // the defuser's own moves the host has not seen yet stay on screen (only the clock + strikes update meanwhile)
+      if ((d.st.acts || 0) < (s.sent || 0)) { s.st.left = d.st.left; s.st.strikes = Math.max(s.st.strikes, d.st.strikes); return; }
+      const was = s.st.strikes, mine = s.pd.def === PK.me(), old = s.st.bomb.mods;
+      s.st = d.st;
+      if (mine) s.st.bomb.mods.forEach((M, i) => { if (M.kind === 'wheels' && old[i]) M.pos = old[i].pos; });   // wheels turn here, only SUBMIT goes to the host
+      if (d.st.strikes > was && !(mine && K.time() - (s.actT || -9) < 1.5)) strikeFx(s);
+      for (const [i, M] of s.st.bomb.mods.entries()) if (M.done && !s.solvedT[i]) { s.solvedT[i] = 1; if (!mine) K.sfx('chime'); }
+      return;
+    }
+    if (!PK.host()) return;
+    if (d.t === 'act' && s.ph === 'bomb' && from === s.pd.def) hostAct(s, d.m, d.a);
+  },
+  onLeave(s, id) {
+    if (!PK.host()) return;
+    if (PK.players().length < 2) PK.go(s, 'end', 99, { pts: s.pts, defused: s.defused, rounds: s.round });
+    else if (s.pd && s.pd.def === id && (s.ph === 'bomb' || s.ph === 'role')) PK.go(s, 'res', RES_T, { ...s.pd, win: false, why: 'left', st: s.st });
+  },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const me = PK.me(), host = PK.host();
+    if (s.ph === 'bomb') {
+      const st = s.st, def = s.pd.def === me;
+      st.left -= dt * (1 + 0.25 * st.strikes);
+      if (!K.net && K.tap('KeyM', 'Tab')) s.manual = !s.manual;
+      if (def && !s.manual) defuserInput(s, dt);
+      else if (!def || s.manual) manualInput(s);
+      s.flashT += dt; s.boomT = Math.max(0, s.boomT - dt);
+      // a ticking clock that gets louder near the end
+      const sec = Math.ceil(st.left); if (sec !== s.lastSec) { s.lastSec = sec; if (sec <= 30 || sec % 2 === 0) K.tone(sec <= 10 ? 1400 : 900, 0.03, 'square', sec <= 30 ? 0.035 : 0.015); }
+      if (host) {
+        s.sync = (s.sync || 0) - dt;
+        if (s.sync <= 0) { s.sync = 1; PK.send({ t: 'st', st }); }
+        if (st.bomb.mods.every((M) => M.done)) { s.defused++; score(s, true); PK.go(s, 'res', RES_T, { ...s.pd, win: true, st: s.st, pts: { ...s.pts } }); }
+        else if (st.left <= 0 || st.strikes >= 3) { score(s, false); PK.go(s, 'res', RES_T, { ...s.pd, win: false, why: st.strikes >= 3 ? 'strikes' : 'time', st: s.st, pts: { ...s.pts } }); }
+      }
+    }
+    if (!host) return;
+    if (s.ph === 'start' && s.t <= 0) newRound(s);
+    else if (s.ph === 'role' && s.t <= 0) PK.go(s, 'bomb', 9999, { ...s.pd });
+    else if (s.ph === 'res' && s.t <= 0) { if (s.round >= rounds()) PK.go(s, 'end', 99, { pts: s.pts, defused: s.defused, rounds: s.round }); else newRound(s); }
+  },
+  draw(s) {
+    const me = PK.me();
+    if (s.ph === 'start' || s.ph === 'end' || !s.pd) { K.text('BOMB SQUAD', 480, 250, 56, '#fff', 'center', 'd', 20); if (!K.net) K.text('PRACTICE · you get the bomb AND the manual (M)', 480, 310, 16, '#8e88b8', 'center', 'u'); return; }
+    const d = s.pd, def = d.def === me;
+    if (s.ph === 'role') {
+      K.text(`BOMB ${d.round || s.round} / ${rounds()}`, 480, 110, 18, '#8e88b8', 'center', 'd');
+      K.rect(200, 140, 560, 280, def ? '#2a1014' : '#0e2030', 18); K.stroke(200, 140, 560, 280, def ? '#ff3355' : '#22e6ff', 3, 18);
+      K.text(def ? 'YOU ARE THE DEFUSER' : `${PK.name(d.def)} IS THE DEFUSER`, 480, 190, 30, def ? '#ff6a7c' : '#22e6ff', 'center', 'd', 14);
+      K.wrapText(!K.net ? 'Practice: read the bomb, then flip to the MANUAL (button top right, or M) to work out what to do. The clock does not wait.'
+        : def ? 'You see the bomb - they have the manual. Tell them EVERYTHING: the serial number, the batteries, the light, then each module. Do what they say. Use the party CHAT or voice.'
+        : 'You have the manual - you cannot see the bomb. Ask the defuser what they see (serial, batteries, the light, each module) and tell them what to do.', 480, 250, 480, 17, '#e8e6ff', 1.35);
+      K.text(`${d.bomb.mods.length} modules · ${fmtT(d.bomb.time)} on the clock`, 480, 380, 15, '#ffd93a', 'center', 'd');
+      return;
+    }
+    if (s.ph === 'bomb' || s.ph === 'res') {
+      header(s, def);
+      if (s.ph === 'res') return results(s);
+      if (def && !s.manual) drawBomb(s); else drawManual(s, def);
+    }
+  },
+});
+const rounds = () => (K.net ? Math.max(2, Math.min(PK.players().length, 5)) : SOLO_ROUNDS.length);
+function newRound(s) {
+  const pl = PK.players(), n = s.round;
+  s.round++;
+  const mods = K.net ? Math.min(5, 3 + Math.floor(n / 2)) : SOLO_ROUNDS[n];
+  PK.go(s, 'role', ROLE_T, { def: pl[n % pl.length].id, bomb: makeBomb(mods), round: s.round });
+}
+function hostAct(s, m, a) {
+  s.st.acts = (s.st.acts || 0) + 1;
+  const r = act(s.st, m, a);
+  if (r === 'strike') { s.st.strikes++; strikeFx(s); }
+  if (r === 'solved') K.sfx('chime');
+  PK.send({ t: 'st', st: s.st });
+}
+// the defuser does something: instant feedback here, the host's copy decides
+function doAct(s, m, a) {
+  K.sfx('click');
+  if (PK.host()) return hostAct(s, m, a);
+  s.sent = (s.sent || 0) + 1; s.actT = K.time();
+  const r = act(s.st, m, a);
+  if (r === 'strike') strikeFx(s); else if (r === 'solved') { s.solvedT[m] = 1; K.sfx('chime'); }
+  PK.send({ t: 'act', m, a });
+}
+function strikeFx(s) { s.boomT = 0.5; K.sfx('wrong'); K.shake(10); K.flash('#ff3355', 0.18); }
+function score(s, win) {
+  const st = s.st, n = st.bomb.mods.length;
+  PK.players().forEach((p) => { s.pts[p.id] = (s.pts[p.id] || 0) + (win ? 60 + n * 20 + Math.floor(Math.max(0, st.left) / 2) + (p.id === s.pd.def ? 40 : 0) : st.bomb.mods.filter((M) => M.done).length * 10); });
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const d = s.pd || {}, me = PK.me(), defused = d.defused ?? s.defused, total = d.rounds ?? s.round, pts = d.pts || s.pts;
+  const won = defused > total / 2;
+  K.end(s, { score: pts[me] || 0, won, stats: { won: won ? 1 : 0 }, title: `${defused} / ${total} BOMBS DEFUSED`, text: PK.players().map((p) => `${p.id === me ? 'YOU' : p.name} ${pts[p.id] || 0}`).join(' · ') });
+}
+
+// ---------------------------------------------------------------- drawing: shared header ----------------------------------------------------------------
+function header(s, def) {
+  const st = s.st, d = s.pd;
+  K.rect(0, 0, 960, 50, '#120f24');
+  K.text(`BOMB ${d.round || s.round} / ${rounds()}`, 16, 25, 13, '#8e88b8', 'left', 'd');
+  K.text(K.net ? (def ? 'YOU: DEFUSER' : `DEFUSER: ${PK.name(d.def)}`) : 'PRACTICE', 16, 41, 11, def ? '#ff6a7c' : '#22e6ff', 'left', 'd');
+  const low = st.left < 30;
+  K.rect(400, 6, 160, 38, '#05040a', 8); K.stroke(400, 6, 160, 38, low ? '#ff3355' : '#3a1a20', 2, 8);
+  K.text(fmtT(st.left), 480, 27, 28, low && Math.sin(K.time() * 12) > 0 ? '#ff8a8a' : '#ff3355', 'center', 'd', low ? 12 : 6);
+  for (let i = 0; i < 3; i++) { const x = 600 + i * 30; K.rect(x, 13, 24, 24, '#1a1626', 5); if (i < st.strikes) K.text('✕', x + 12, 26, 20, '#ff3355', 'center', 'd', 8); }
+  const done = st.bomb.mods.filter((M) => M.done).length;
+  K.text(`${done}/${st.bomb.mods.length} SOLVED`, 700, 25, 12, done ? '#3dffa0' : '#8e88b8', 'left', 'd');
+  if (!K.net && s.ph === 'bomb') { if (K.button(820, 7, 128, 36, s.manual ? 'BOMB' : 'MANUAL', { color: s.manual ? '#ff3355' : '#22e6ff' })) s.manual = !s.manual; }
+}
+function results(s) {
+  const d = s.pd, st = d.st || s.st, win = d.win;
+  K.rect(180, 90, 600, 380, win ? '#0e2620' : '#2a0c10', 18); K.stroke(180, 90, 600, 380, win ? '#3dffa0' : '#ff3355', 3, 18);
+  K.text(win ? 'BOMB DEFUSED!' : 'BOOM', 480, 150, win ? 44 : 64, win ? '#3dffa0' : '#ff8a3a', 'center', 'd', 18);
+  K.text(win ? `${fmtT(st.left)} left on the clock` : d.why === 'strikes' ? 'three strikes' : d.why === 'left' ? 'the defuser left' : 'the clock ran out', 480, 200, 18, '#e8e6ff', 'center', 'u');
+  st.bomb.mods.forEach((M, i) => K.text(`${M.done ? '✓' : '✕'} ${MODNAME[M.kind]}`, 480, 240 + i * 26, 16, M.done ? '#3dffa0' : '#ff8a8a', 'center', 'd'));
+  const pts = d.pts || s.pts;
+  K.text(PK.players().map((p) => `${p.id === PK.me() ? 'YOU' : p.name} ${pts[p.id] || 0}`).join('   '), 480, 440, 14, '#ffd93a', 'center', 'd');
+}
+
+// ---------------------------------------------------------------- drawing + input: the bomb (defuser) ----------------------------------------------------------------
+const SLOT = (i) => ({ x: 18 + (i % 3) * 312, y: 108 + Math.floor(i / 3) * 212, w: 300, h: 200 });
+function drawBomb(s) {
+  const st = s.st, B = st.bomb;
+  // the case: serial plate, batteries, indicator
+  K.rect(18, 56, 924, 44, '#1c1a2a', 8);
+  K.rect(30, 62, 190, 32, '#e8e6d8', 4); K.text('SERIAL', 40, 70, 9, '#555', 'left', 'm'); K.text(B.serial, 125, 82, 20, '#111', 'center', 'm');
+  K.text('BATTERIES', 250, 70, 9, '#8e88b8', 'left', 'd');
+  for (let i = 0; i < 4; i++) { const x = 250 + i * 34; K.rect(x, 76, 28, 16, i < B.batteries ? '#ffd93a' : '#2a2838', 3); if (i < B.batteries) K.rect(x + 28, 80, 3, 8, '#ffd93a'); }
+  K.text(B.batteries ? `× ${B.batteries}` : 'NONE', 392, 84, 14, '#fff', 'left', 'd');
+  K.rect(470, 62, 150, 32, '#111', 5); K.circle(492, 78, 9, B.lit ? '#fff7b0' : '#3a3828'); if (B.lit) K.circle(492, 78, 13, 'rgba(255,247,176,.25)');
+  K.text(B.label, 560, 79, 18, '#fff', 'center', 'd'); K.text(B.lit ? 'LIT' : 'UNLIT', 640, 79, 12, B.lit ? '#fff7b0' : '#6a6880', 'left', 'd');
+  K.text('read all of this out to your experts!', 930, 79, 12, '#8e88b8', 'right', 'u');
+  // timer slot + modules
+  const tSlot = SLOT(0); panel(tSlot, '', false);
+  K.rect(tSlot.x + 40, tSlot.y + 50, 220, 80, '#05040a', 8); K.text(fmtT(st.left), tSlot.x + 150, tSlot.y + 92, 52, '#ff3355', 'center', 'd', 10);
+  K.text(`STRIKES ${st.strikes} / 3${st.strikes ? ' · clock runs faster' : ''}`, tSlot.x + 150, tSlot.y + 158, 13, st.strikes ? '#ff8a8a' : '#8e88b8', 'center', 'd');
+  B.mods.forEach((M, i) => { const r = SLOT(i + 1); panel(r, MODNAME[M.kind], M.done); DRAW[M.kind](s, M, r, i); });
+  for (let i = B.mods.length + 1; i < 6; i++) { const r = SLOT(i); K.rect(r.x, r.y, r.w, r.h, '#15131f', 10); K.text('· · ·', r.x + r.w / 2, r.y + r.h / 2, 20, '#2a2838', 'center', 'd'); }
+  if (s.boomT > 0) K.rect(0, 0, 960, 540, `rgba(255,40,60,${s.boomT * 0.25})`);
+}
+function panel(r, title, done) {
+  K.rect(r.x, r.y, r.w, r.h, '#24222f', 10); K.stroke(r.x, r.y, r.w, r.h, done ? '#3dffa0' : '#3a3850', 2, 10);
+  if (title) { K.text(title, r.x + 12, r.y + 16, 11, '#8e88b8', 'left', 'd'); K.circle(r.x + r.w - 16, r.y + 16, 7, done ? '#3dffa0' : '#3a1418'); }
+}
+const DRAW = {
+  wires(s, M, r) {
+    const n = M.w.length, top = r.y + 38, gap = (r.h - 50) / n;
+    M.w.forEach((c, k) => {
+      const y = top + gap * (k + 0.5);
+      K.rect(r.x + 18, y - 7, 14, 14, '#888', 3); K.rect(r.x + r.w - 32, y - 7, 14, 14, '#888', 3);
+      K.text(String(k + 1), r.x + 10, y + 1, 10, '#6a6880', 'center', 'd');
+      if (M.cut[k]) { K.line(r.x + 30, y, r.x + r.w / 2 - 14, y + 6, WCOL[c], 7); K.line(r.x + r.w / 2 + 14, y - 6, r.x + r.w - 30, y, WCOL[c], 7); }
+      else { K.line(r.x + 30, y, r.x + r.w - 30, y, c === 'black' ? '#4a4858' : '#00000055', 9); K.line(r.x + 30, y, r.x + r.w - 30, y, WCOL[c], 6); }
+    });
+  },
+  button(s, M, r) {
+    const cx = r.x + 120, cy = r.y + 112, held = s.hold && s.hold.m === M && s.hold.t > HOLD_T;
+    K.circle(cx, cy + 4, 62, '#111'); K.circle(cx, cy, 60, BCOL[M.color]); K.circle(cx - 14, cy - 16, 22, 'rgba(255,255,255,.16)');
+    K.text(M.label, cx, cy + 2, 20, M.color === 'white' || M.color === 'yellow' ? '#222' : '#fff', 'center', 'd');
+    K.rect(r.x + 222, r.y + 50, 40, 124, '#111', 6);
+    if (held) K.rect(r.x + 228, r.y + 56, 28, 112, STRIP[M.strip][0], 4);
+    K.text(held ? 'let go at the right time' : 'tap or hold', r.x + 242, r.y + 188, 10, '#8e88b8', 'center', 'u');
+  },
+  keypad(s, M, r) {
+    M.syms.forEach((sym, k) => {
+      const x = r.x + 40 + (k % 2) * 115, y = r.y + 34 + Math.floor(k / 2) * 82, on = M.order.indexOf(sym) < M.got;
+      K.rect(x, y, 105, 74, on ? '#1d3a2c' : '#e8e4d4', 8); K.stroke(x, y, 105, 74, on ? '#3dffa0' : '#888', 2, 8);
+      K.circle(x + 92, y + 12, 4, on ? '#3dffa0' : '#444');
+      K.text(sym + VS, x + 52, y + 40, 40, on ? '#3dffa0' : '#111', 'center', 'u');
+    });
+  },
+  flash(s, M, r) {
+    // the sequence so far plays every 3.2 s (flash, flash, ...)
+    const n = M.stage + 1, t = s.flashT % 3.2, k = Math.floor(t / 0.55), lit = M.done ? null : k < n && t % 0.55 < 0.38 ? M.seq[k] : null;
+    PADS.forEach((c, i) => { const p = padRect(r, i); K.rect(p.x, p.y, p.w, p.h, lit === c ? PADC[c] : shade(PADC[c]), 10); if (lit === c) K.stroke(p.x - 3, p.y - 3, p.w + 6, p.h + 6, '#fff', 3, 12); });
+    K.text(M.done ? 'done' : `stage ${M.stage + 1} / 3 · ${M.input}/${n} pressed`, r.x + r.w / 2, r.y + r.h - 12, 11, '#8e88b8', 'center', 'd');
+  },
+  wheels(s, M, r) {
+    M.cols.forEach((col, i) => {
+      const x = r.x + 22 + i * 54, y = r.y + 40;
+      K.rect(x, y + 34, 44, 58, '#0a1a10', 6); K.stroke(x, y + 34, 44, 58, '#3dffa0', 2, 6);
+      K.text(col[M.pos[i]], x + 22, y + 64, 32, '#3dffa0', 'center', 'm', 6);
+      K.text('▲', x + 22, y + 16, 22, '#c8c0e8', 'center', 'u'); K.text('▼', x + 22, y + 114, 22, '#c8c0e8', 'center', 'u');
+    });
+    K.rect(r.x + 90, r.y + 168, 120, 26, M.done ? '#1d3a2c' : '#3a3850', 6); K.text('SUBMIT', r.x + 150, r.y + 182, 13, '#fff', 'center', 'd');
+  },
+};
+const shade = (hex) => { const n = parseInt(hex.slice(1), 16); return `rgb(${((n >> 16) & 255) * 0.35 | 0},${((n >> 8) & 255) * 0.35 | 0},${(n & 255) * 0.35 | 0})`; };
+const padRect = (r, i) => ({ x: r.x + 40 + (i % 2) * 115, y: r.y + 32 + Math.floor(i / 2) * 76, w: 105, h: 68 });
+function defuserInput(s, dt) {
+  const st = s.st, mx = K.mouse.x, my = K.mouse.y;
+  // the big button: hold timing
+  if (s.hold) {
+    s.hold.t += dt;
+    if (!K.mouse.down) { const H = s.hold; s.hold = null; doAct(s, H.i, H.t > HOLD_T ? { how: 'hold', digits: fmtT(st.left).replace(':', '') } : { how: 'tap' }); }
+    return;
+  }
+  if (!K.mouse.clicked) return;
+  st.bomb.mods.forEach((M, i) => {
+    if (M.done) return;
+    const r = SLOT(i + 1); if (!K.inRect(mx, my, r)) return;
+    if (M.kind === 'wires') { const n = M.w.length, top = r.y + 38, gap = (r.h - 50) / n; const k = Math.floor((my - top) / gap); if (k >= 0 && k < n && mx > r.x + 30 && mx < r.x + r.w - 30 && !M.cut[k]) doAct(s, i, { i: k }); }
+    if (M.kind === 'button' && Math.hypot(mx - (r.x + 120), my - (r.y + 112)) < 62) { s.hold = { m: M, i, t: 0 }; K.sfx('click'); }
+    if (M.kind === 'keypad') M.syms.forEach((sym, k) => { const x = r.x + 40 + (k % 2) * 115, y = r.y + 34 + Math.floor(k / 2) * 82; if (K.inRect(mx, my, { x, y, w: 105, h: 74 }) && M.order.indexOf(sym) >= M.got) doAct(s, i, { i: k }); });
+    if (M.kind === 'flash') PADS.forEach((c, k) => { if (K.inRect(mx, my, padRect(r, k))) { s.flashT = 2.4; doAct(s, i, { c }); } });
+    if (M.kind === 'wheels') {
+      M.cols.forEach((col, k) => { const x = r.x + 22 + k * 54, y = r.y + 40; if (K.inRect(mx, my, { x, y: y - 4, w: 44, h: 36 })) { M.pos[k] = (M.pos[k] + 4) % 5; K.sfx('tick'); } if (K.inRect(mx, my, { x, y: y + 94, w: 44, h: 36 })) { M.pos[k] = (M.pos[k] + 1) % 5; K.sfx('tick'); } });
+      if (K.inRect(mx, my, { x: r.x + 90, y: r.y + 164, w: 120, h: 34 })) doAct(s, i, { word: M.cols.map((c, k) => c[M.pos[k]]).join('') });
+    }
+  });
+}
+
+// ---------------------------------------------------------------- drawing + input: the manual (experts) ----------------------------------------------------------------
+const PAGES = ['START', 'WIRES', 'BUTTON', 'KEYPAD', 'FLASH', 'WHEELS'];
+const TAB = (i) => ({ x: 18 + i * 154, y: 58, w: 146, h: 36 });
+function manualInput(s) {
+  if (K.mouse.clicked) PAGES.forEach((p, i) => { if (K.inRect(K.mouse.x, K.mouse.y, TAB(i))) { s.page = i; K.sfx('click'); } });
+  for (let i = 0; i < 6; i++) if (K.tap('Digit' + (i + 1))) s.page = i;
+  if (K.tap('ArrowRight')) s.page = (s.page + 1) % 6; if (K.tap('ArrowLeft')) s.page = (s.page + 5) % 6;
+}
+function drawManual(s, def) {
+  PAGES.forEach((p, i) => { const r = TAB(i), on = s.page === i, here = i > 0 && s.st.bomb.mods.some((M) => M.kind === ['', 'wires', 'button', 'keypad', 'flash', 'wheels'][i]); K.rect(r.x, r.y, r.w, r.h, on ? '#f0ead8' : '#1c1a2a', 8); K.text(`${i + 1} ${p}`, r.x + r.w / 2, r.y + 19, 13, on ? '#1a1410' : here || i === 0 ? '#e8e6ff' : '#5d5a80', 'center', 'd'); });
+  // paper
+  K.rect(18, 100, 924, 428, '#f0ead8', 10);
+  const P = (t, y, size = 16, col = '#2a2018', x = 40, w = 880) => K.wrapText(t, x, y, w, size, col, 1.3, 'left', 'u');
+  const H = (t, y) => K.text(t, 40, y, 20, '#8a1a10', 'left', 'd');
+  const pg = PAGES[s.page];
+  if (pg === 'START') {
+    H('BOMB DEFUSAL MANUAL', 128);
+    P(`You are an EXPERT. The defuser can see the bomb but not this manual - you can read the manual but not the bomb. Ask them what they see, find the right page, tell them what to do. Use the party CHAT (top right) or voice.`, 156);
+    P(`FIRST ASK FOR THE BOMB'S CASE:`, 222, 16, '#8a1a10');
+    P(`• the SERIAL NUMBER - 6 characters, the last one is always a digit (does it have a vowel - A, E or U? is the last digit even?)`, 248);
+    P(`• how many BATTERIES (0 to 4)`, 300);
+    P(`• the INDICATOR light: its 3-letter label and whether it is LIT or UNLIT`, 326);
+    P(`Every mistake is a STRIKE. Three strikes and the bomb explodes. Every strike makes the clock run 25% faster. Each module has a light that turns green when it is solved.`, 352);
+    P(`Modules: WIRES · THE BUTTON · KEYPAD · FLASH PADS · LETTER WHEELS (the tabs that are bright are on this bomb). Keys 1-6 or ← → flip pages.`, 420, 15, '#5a4a38');
+    if (def) P('(PRACTICE: press BOMB or M to go back to the bomb)', 486, 15, '#8a1a10');
+  }
+  if (pg === 'WIRES') {
+    H('WIRES · cut exactly one', 128);
+    P('Count the wires (3 to 6) and read their colours from the TOP down. Use the list for that number. Take the FIRST rule that is true.', 154, 15, '#5a4a38');
+    const col = (x, y, title, lines) => { K.text(title, x, y, 16, '#8a1a10', 'left', 'd'); lines.forEach((l, i) => K.wrapText((i ? '' : '') + l, x, y + 24 + i * 33, 430, 14, '#2a2018', 1.15, 'left', 'u')); };
+    col(40, 196, '3 WIRES', ['No yellow wire → cut the FIRST wire.', 'Otherwise, if the first wire is black → cut the THIRD wire.', 'Otherwise → cut the SECOND wire.']);
+    col(490, 196, '4 WIRES', ['2+ red wires AND the serial ends in an even digit → cut the LAST red wire.', 'Otherwise, no blue wire → cut the FIRST wire.', 'Otherwise, exactly one white wire → cut the white wire.', 'Otherwise → cut the FOURTH wire.']);
+    col(40, 372, '5 WIRES', ['Last wire is yellow AND 2+ batteries → cut the FIRST wire.', 'Otherwise, exactly one black wire → cut the SECOND wire.', 'Otherwise, more blue than red → cut the LAST blue wire.', 'Otherwise → cut the FIFTH wire.']);
+    col(490, 372, '6 WIRES', ['No white wire AND the serial has a vowel → cut the THIRD wire.', 'Otherwise, exactly two yellow wires → cut the FIRST yellow wire.', 'Otherwise, no black wire → cut the SIXTH wire.', 'Otherwise → cut the FOURTH wire.']);
+  }
+  if (pg === 'BUTTON') {
+    H('THE BUTTON · tap it, or hold it', 128);
+    P('Ask for the button\'s COLOUR and its LABEL. Take the FIRST rule that is true:', 154, 15, '#5a4a38');
+    ['1. The label says BOOM and the bomb has 2 or more batteries → TAP (press and let go at once).', '2. The button is BLUE and the label says ABORT → HOLD.', '3. The indicator is LIT and the button is WHITE → TAP.', '4. The label says HOLD → TAP.', '5. The button is RED and the bomb has fewer than 2 batteries → HOLD.', '6. Anything else → HOLD.'].forEach((t, i) => P(t, 186 + i * 30, 16));
+    K.text('HOLDING THE BUTTON', 40, 392, 18, '#8a1a10', 'left', 'd');
+    P('Keep holding: a light strip next to the button turns on. Let go when the bomb\'s clock shows this digit ANYWHERE (minutes or seconds):', 414, 15);
+    Object.entries(STRIP).forEach(([k, [c, dg]], i) => { const x = 60 + i * 220; K.rect(x, 468, 30, 36, c, 4); K.text(`${k.toUpperCase()} → ${dg}`, x + 42, 487, 18, '#2a2018', 'left', 'd'); });
+  }
+  if (pg === 'KEYPAD') {
+    H('KEYPAD · four symbols', 128);
+    P('Only ONE of these columns has all four symbols on the keypad. Press the four keys in the order they appear in that column, top to bottom.', 154, 15, '#5a4a38');
+    KCOLS.forEach((col, c) => { const x = 70 + c * 140; K.rect(x, 196, 110, 320, '#e4dcc4', 8); col.forEach((sym, k) => K.text(sym + VS, x + 55, 220 + k * 44, 32, '#1a1410', 'center', 'u')); });
+  }
+  if (pg === 'FLASH') {
+    H('FLASH PADS · copy the flashes, but translated', 128);
+    P('The pads flash a sequence - one flash at first, one more each stage, 3 stages. For EACH flash press the colour from the table. The table depends on the serial number and on the strikes so far - it changes the moment you get a strike!', 154, 15, '#5a4a38');
+    const table = (x, y, title, T) => {
+      K.text(title, x, y, 15, '#8a1a10', 'left', 'd');
+      K.text('FLASH →', x, y + 30, 12, '#5a4a38', 'left', 'd'); PADS.forEach((c, i) => { K.rect(x + 100 + i * 78, y + 18, 66, 24, PADC[c], 5); K.text(c.toUpperCase(), x + 133 + i * 78, y + 31, 11, '#111', 'center', 'd'); });
+      T.forEach((row, k) => { K.text(`${k} STRIKE${k === 1 ? '' : 'S'}`, x, y + 64 + k * 32, 13, '#2a2018', 'left', 'd'); PADS.forEach((c, i) => K.text(row[c].toUpperCase(), x + 133 + i * 78, y + 64 + k * 32, 14, PADC[row[c]] === '#ffd93a' ? '#9a7a00' : PADC[row[c]] === '#3dffa0' ? '#108a50' : PADC[row[c]], 'center', 'd')); });
+    };
+    table(40, 222, 'SERIAL HAS A VOWEL (A, E or U)', FLASH.vowel);
+    table(40, 382, 'NO VOWEL IN THE SERIAL', FLASH.none);
+    K.wrapText('Example: no vowel, no strikes, the pads flash RED then BLUE → press GREEN then BLUE.', 520, 430, 400, 14, '#5a4a38', 1.3, 'left', 'u');
+  }
+  if (pg === 'WHEELS') {
+    H('LETTER WHEELS · spell the word', 128);
+    P('Five wheels, five letters each (▲ ▼ turn them). Exactly ONE word from this list can be spelled. Ask which letters each wheel has, set the wheels to that word, press SUBMIT. A wrong word is a strike.', 154, 15, '#5a4a38');
+    WORDS.forEach((w, i) => K.text(w, 80 + (i % 6) * 145, 240 + Math.floor(i / 6) * 52, 24, '#1a1410', 'left', 'm'));
+  }
+}
+</script></body></html>
