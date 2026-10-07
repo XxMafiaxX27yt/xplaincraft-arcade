@@ -4752,5 +4752,30 @@ export const GAME_LIST = [
 "file": "games/2d/odd-word.html",
 "dim": "2d",
 "cover": "games/covers/odd-word.png"
+},
+{
+"id": "cat-astrophe",
+"n": 209,
+"title": "CAT-ASTROPHE",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 6,
+"desc": "A card game of cats and bombs. Somewhere in the deck are BOOM CATS - draw one and you are out, unless you calm it with a YARN BALL and sneak it back into the deck wherever you like. Play cards to dodge your turn (CAT NAP), make the next player take two turns (POUNCE), peek at the top three (CRYSTAL CAT), shuffle (ZOOMIES), reverse the table (TAIL CHASE), beg a card or steal one with a pair of cats. Anyone can HISS to cancel a move - even another hiss. The deck's heartbeat gets faster as the odds of a boom go up. Last cat standing wins. Solo against three bots or online for up to 6.",
+"controls": "Click / tap cards to pick them, PLAY to play them, click the deck to draw (that ends your turn). HISS button appears when you can cancel a move.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Be the last cat standing in Cat-astrophe"
+}
+],
+"file": "games/2d/cat-astrophe.html",
+"dim": "2d",
+"cover": "games/covers/cat-astrophe.png"
 }
 ];

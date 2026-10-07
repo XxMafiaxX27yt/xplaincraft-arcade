@@ -1,0 +1,354 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cat-astrophe</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"cat-astrophe","n":209,"title":"CAT-ASTROPHE","genre":"mystery","modes":["sp","online"],"minPlayers":2,"maxPlayers":6,"desc":"A card game of cats and bombs. Somewhere in the deck are BOOM CATS - draw one and you are out, unless you calm it with a YARN BALL and sneak it back into the deck wherever you like. Play cards to dodge your turn (CAT NAP), make the next player take two turns (POUNCE), peek at the top three (CRYSTAL CAT), shuffle (ZOOMIES), reverse the table (TAIL CHASE), beg a card or steal one with a pair of cats. Anyone can HISS to cancel a move - even another hiss. The deck's heartbeat gets faster as the odds of a boom go up. Last cat standing wins. Solo against three bots or online for up to 6.","controls":"Click / tap cards to pick them, PLAY to play them, click the deck to draw (that ends your turn). HISS button appears when you can cancel a move.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Be the last cat standing in Cat-astrophe"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// ---------- the cards ----------
+const C = {
+  boom: { n: 'BOOM CAT', i: '💣', c: '#ff3355', d: 'draw it and you are OUT (unless you have a yarn ball)' },
+  yarn: { n: 'YARN BALL', i: '🧶', c: '#3dffa0', d: 'calms a boom cat - then hide it back in the deck' },
+  nap: { n: 'CAT NAP', i: '💤', c: '#22e6ff', d: 'end your turn without drawing' },
+  pounce: { n: 'POUNCE', i: '🐾', c: '#ff8a3a', d: 'end your turn - the next player takes 2 turns' },
+  crystal: { n: 'CRYSTAL CAT', i: '🔮', c: '#c45cff', d: 'peek at the top 3 cards of the deck' },
+  zoom: { n: 'ZOOMIES', i: '🌀', c: '#4f8bff', d: 'shuffle the deck' },
+  tail: { n: 'TAIL CHASE', i: '🔄', c: '#ffd93a', d: 'reverse the table and end your turn' },
+  beg: { n: 'BEG', i: '🎁', c: '#ff9af0', d: 'someone must give you a card of their choice' },
+  hiss: { n: 'HISS', i: '😾', c: '#e8e8f0', d: 'cancel any move (even another hiss)' },
+  loaf: { n: 'LOAF CAT', i: '🍞', c: '#c8a070', d: 'play 2 matching cats to steal a card', cat: 1 },
+  void: { n: 'VOID CAT', i: '🐈‍⬛', c: '#8a8aa0', d: 'play 2 matching cats to steal a card', cat: 1 },
+  sock: { n: 'SOCK CAT', i: '🧦', c: '#ff6a9a', d: 'play 2 matching cats to steal a card', cat: 1 },
+  box: { n: 'BOX CAT', i: '📦', c: '#d8a050', d: 'play 2 matching cats to steal a card', cat: 1 },
+  melon: { n: 'MELON CAT', i: '🍉', c: '#5ae07a', d: 'play 2 matching cats to steal a card', cat: 1 },
+};
+const ACTIONS = ['nap', 'pounce', 'crystal', 'zoom', 'tail', 'beg'];
+const COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff'];
+const TURN_T = 30, HISS_T = 3, PICK_T = 12;
+
+function newDeck(n) {
+  const d = [];
+  const put = (k, x) => { for (let i = 0; i < x; i++) d.push(k); };
+  const big = n >= 4;
+  put('nap', big ? 4 : 3); put('pounce', big ? 4 : 3); put('crystal', big ? 5 : 3); put('zoom', big ? 4 : 2); put('tail', big ? 3 : 2); put('beg', big ? 4 : 2); put('hiss', big ? 5 : 3);
+  for (const c of ['loaf', 'void', 'sock', 'box', 'melon']) put(c, big ? 4 : 3);
+  return K.shuffle(d);
+}
+
+// ---------- host: the rules ----------
+function deal(s) {
+  const n = s.p.length;
+  s.deck = newDeck(n);
+  s.p.forEach((p) => { p.hand = ['yarn', ...s.deck.splice(0, 7)]; p.alive = true; p.place = 0; });
+  for (let i = 0; i < n - 1; i++) s.deck.push('boom');
+  for (let i = 0; i < Math.max(1, 6 - n - 2); i++) s.deck.push('yarn');
+  K.shuffle(s.deck);
+  s.disc = []; s.turn = K.irand(0, n - 1); s.dir = 1; s.extra = 1; s.ph = 'turn'; s.t = TURN_T; s.pend = null; s.log = ['A new game - watch out for the BOOM CATS!']; s.peekFor = null; s.known = {};
+  sendHands(s); sync(s);
+}
+const alive = (s) => s.p.filter((p) => p.alive);
+const nextAlive = (s, i, dir = s.dir) => { const n = s.p.length; for (let k = 1; k <= n; k++) { const j = (((i + dir * k) % n) + n) % n; if (s.p[j].alive) return j; } return i; };
+const say = (s, t) => { s.log.unshift(t); s.log = s.log.slice(0, 4); };
+const nm = (s, i) => (s.p[i].me && !K.net ? 'YOU' : s.p[i].name);
+function sendHands(s) { if (!K.net) return; s.p.forEach((p) => { if (!p.bot && !p.me) K.net.send({ t: 'hand', h: p.hand }, p.id); }); }
+// one snapshot for everyone (no hands, no deck order)
+function sync(s) {
+  if (!K.net) return;
+  K.net.send({ t: 'st', ph: s.ph, turn: s.turn, dir: s.dir, extra: s.extra, tt: +s.t.toFixed(1), dn: s.deck.length, bn: s.deck.filter((c) => c === 'boom').length, disc: s.disc.slice(-3),
+    p: s.p.map((p) => [p.hand.length, p.alive ? 1 : 0, p.place]), pend: s.pend && { kind: s.pend.kind, by: s.pend.by, target: s.pend.target, hiss: s.pend.hiss, cards: s.pend.cards }, log: s.log, fx: s.fx.slice() });
+}
+function endTurn(s, drew = true) {
+  s.extra--;
+  if (s.extra <= 0 || !s.p[s.turn].alive) { s.turn = nextAlive(s, s.turn); s.extra = 1; }
+  s.ph = 'turn'; s.t = TURN_T; s.pend = null;
+  if (alive(s).length <= 1) finishGame(s);
+  sendHands(s); sync(s);
+}
+// the current player plays card(s): actions go into a short HISS window first
+function playCards(s, i, idx) {
+  if (s.ph !== 'turn' || s.turn !== i) return false;
+  const p = s.p[i]; idx = [...new Set(idx)].filter((k) => k >= 0 && k < p.hand.length);
+  const cards = idx.map((k) => p.hand[k]);
+  let kind = null;
+  if (cards.length === 1 && ACTIONS.includes(cards[0])) kind = cards[0];
+  else if (cards.length === 2 && cards[0] === cards[1] && C[cards[0]].cat) kind = 'pair';
+  if (!kind) return false;
+  p.hand = p.hand.filter((_, k) => !idx.includes(k)); s.disc.push(...cards);
+  s.pend = { kind, by: i, cards, hiss: 0, target: null };
+  say(s, `${nm(s, i)} plays ${kind === 'pair' ? 'a pair of ' + C[cards[0]].n + 'S' : C[kind].n}`);
+  s.fx.push('play');
+  if (kind === 'beg' || kind === 'pair') { const opts = alive(s).filter((q) => q !== p && q.hand.length); if (!opts.length) { say(s, 'nobody has cards to take'); s.pend = null; sendHands(s); sync(s); return true; } s.ph = 'target'; s.t = PICK_T; }
+  else { s.ph = 'hiss'; s.t = HISS_T; }
+  sendHands(s); sync(s);
+  return true;
+}
+function chooseTarget(s, i, who) {
+  if (s.ph !== 'target' || s.pend.by !== i) return;
+  const q = s.p[who]; if (!q || !q.alive || who === i || !q.hand.length) return;
+  s.pend.target = who; s.ph = 'hiss'; s.t = HISS_T; say(s, `...at ${nm(s, who)}`); sync(s);
+}
+function hiss(s, i, k) {
+  if (s.ph !== 'hiss' || s.p[i].hand[k] !== 'hiss' || !s.p[i].alive) return;
+  s.p[i].hand.splice(k, 1); s.disc.push('hiss'); s.pend.hiss++; s.t = HISS_T; s.fx.push('hiss');
+  say(s, `${nm(s, i)} HISSES! ${s.pend.hiss % 2 ? 'the move is cancelled' : 'the move is back on'}`);
+  sendHands(s); sync(s);
+}
+function resolve(s) {
+  const P = s.pend, i = P.by, p = s.p[i];
+  if (P.hiss % 2) { s.ph = 'turn'; s.t = Math.max(s.t, 12); s.pend = null; sendHands(s); sync(s); return; }
+  if (P.kind === 'nap') { say(s, `${nm(s, i)} naps through the turn`); return endTurn(s, false); }
+  if (P.kind === 'tail') { s.dir *= -1; say(s, `${nm(s, i)} reverses the table`); return endTurn(s, false); }
+  if (P.kind === 'pounce') { const left = s.extra - 1, nxt = nextAlive(s, i); s.turn = nxt; s.extra = left + 2; say(s, `${nm(s, nxt)} must take ${s.extra} turns!`); s.ph = 'turn'; s.t = TURN_T; s.pend = null; s.fx.push('pounce'); sendHands(s); sync(s); return; }
+  if (P.kind === 'zoom') { K.shuffle(s.deck); s.known = {}; say(s, 'the deck is shuffled'); s.fx.push('shuffle'); }
+  if (P.kind === 'crystal') { const top = s.deck.slice(-3).reverse(); s.known[i] = top.slice(); if (p.me) s.peek = { cards: top, t: 3.5 }; else if (!p.bot && K.net) K.net.send({ t: 'peek', c: top }, p.id); }
+  if (P.kind === 'pair') { const q = s.p[P.target]; if (q.hand.length) { const k = K.irand(0, q.hand.length - 1), c = q.hand.splice(k, 1)[0]; p.hand.push(c); say(s, `${nm(s, i)} steals a card from ${nm(s, P.target)}`); s.fx.push('steal'); } }
+  if (P.kind === 'beg') { s.ph = 'give'; s.t = PICK_T; s.giver = P.target; say(s, `${nm(s, P.target)} has to give ${nm(s, i)} a card`); sendHands(s); sync(s); return; }
+  s.ph = 'turn'; s.t = Math.max(s.t, 12); s.pend = null; sendHands(s); sync(s);
+}
+function give(s, i, k) {
+  if (s.ph !== 'give' || s.giver !== i) return;
+  const q = s.p[i], p = s.p[s.pend.by]; if (k < 0 || k >= q.hand.length) k = K.irand(0, q.hand.length - 1);
+  if (q.hand.length) p.hand.push(q.hand.splice(k, 1)[0]);
+  s.fx.push('steal'); s.ph = 'turn'; s.t = 12; s.pend = null; sendHands(s); sync(s);
+}
+function draw(s, i) {
+  if (s.ph !== 'turn' || s.turn !== i) return;
+  const p = s.p[i], c = s.deck.pop();
+  for (const k in s.known) { s.known[k].shift(); }   // whoever peeked: their knowledge moves down one
+  if (c !== 'boom') { p.hand.push(c); say(s, `${nm(s, i)} draws a card`); s.fx.push('draw'); return endTurn(s); }
+  s.fx.push('boom');
+  const y = p.hand.indexOf('yarn');
+  if (y >= 0) { p.hand.splice(y, 1); s.disc.push('yarn'); say(s, `${nm(s, i)} drew a BOOM CAT... and calms it with yarn!`); s.ph = 'place'; s.t = PICK_T; s.boomBy = i; sendHands(s); sync(s); return; }
+  // out!
+  s.disc.push('boom'); p.alive = false; p.place = alive(s).length + 1; s.disc.push(...p.hand); p.hand = [];
+  say(s, `💥 KA-BOOM! ${nm(s, i)} is out`);
+  s.extra = 1; endTurn(s);
+}
+// hide the boom cat back in the deck: 0 = bottom ... deck.length = top
+function placeBoom(s, i, pos) {
+  if (s.ph !== 'place' || s.boomBy !== i) return;
+  pos = Math.max(0, Math.min(s.deck.length, Math.round(pos)));
+  s.deck.splice(pos, 0, 'boom'); s.known = {};
+  say(s, `${nm(s, i)} hides the boom cat back in the deck...`);
+  endTurn(s);
+}
+function finishGame(s) {
+  if (s.ph === 'over') return;
+  const w = alive(s)[0]; if (w) w.place = 1;
+  s.ph = 'over'; s.t = 99; say(s, `${w ? nm(s, s.p.indexOf(w)) : 'nobody'} is the last cat standing!`); sync(s);
+  setTimeout(() => endGame(s), 2500);
+}
+function endGame(s) {
+  if (s.ended) return; s.ended = true;
+  const me = s.p.find((p) => p.me), won = me && me.place === 1, n = s.p.length;
+  K.end(s, { score: me ? (n - me.place + 1) * 100 + (won ? 400 : 0) : 0, won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST CAT STANDING!' : `#${me ? me.place : '?'} OF ${n}`, text: s.p.slice().sort((a, b) => a.place - b.place).map((p) => `#${p.place} ${p.me ? 'YOU' : p.name}`).join(' · ') });
+}
+
+// ---------- bots ----------
+function botTurn(s, i) {
+  const p = s.p[i], h = p.hand, risk = s.deck.filter((c) => c === 'boom').length / Math.max(1, s.deck.length);
+  const knowTop = s.known[i] && s.known[i].length ? s.known[i][0] : null;
+  const has = (c) => h.indexOf(c);
+  const dodge = () => { for (const c of ['nap', 'pounce', 'tail', 'zoom']) { const k = has(c); if (k >= 0) return playCards(s, i, [k]); } return false; };
+  if (knowTop === 'boom' && has('yarn') < 0) { if (dodge()) return; }
+  if (knowTop !== 'boom' && knowTop) { if (Math.random() < 0.8) return draw(s, i); }
+  if (risk > 0.15 && !knowTop && has('crystal') >= 0 && Math.random() < 0.7) return playCards(s, i, [has('crystal')]);
+  if (risk > 0.3 && has('yarn') < 0 && Math.random() < 0.75 && dodge()) return;
+  // steal with a pair / beg now and then
+  const pairs = Object.keys(C).filter((c) => C[c].cat && h.filter((x) => x === c).length >= 2);
+  if (pairs.length && Math.random() < 0.45) { const c = pairs[0], a = h.indexOf(c), b = h.indexOf(c, a + 1); if (playCards(s, i, [a, b])) return; }
+  if (has('beg') >= 0 && h.length < 5 && Math.random() < 0.35 && playCards(s, i, [has('beg')])) return;
+  draw(s, i);
+}
+function botTarget(s, i) { const opts = alive(s).filter((q) => q !== s.p[i] && q.hand.length).sort((a, b) => b.hand.length - a.hand.length); chooseTarget(s, i, s.p.indexOf(opts[0])); }
+function botGive(s, i) { const h = s.p[i].hand; let k = h.findIndex((c) => C[c].cat); if (k < 0) k = h.findIndex((c) => c !== 'yarn' && c !== 'hiss'); give(s, i, k < 0 ? 0 : k); }
+function botPlace(s, i) { const top = Math.random() < 0.6; placeBoom(s, i, top ? s.deck.length : K.irand(0, s.deck.length)); }
+function botsReact(s) {
+  if (s.ph !== 'hiss' || !s.pend) return;
+  // a bot hisses a move that hurts it (and sometimes just to be a cat)
+  for (const [i, p] of s.p.entries()) {
+    if (!p.bot || !p.alive || p.hand.indexOf('hiss') < 0 || s.botHissT > 0) continue;
+    const hurtsMe = (s.pend.target === i) || (s.pend.kind === 'pounce' && nextAlive(s, s.pend.by) === i);
+    const mine = s.pend.by === i;
+    const wantCancel = !mine && hurtsMe && s.pend.hiss % 2 === 0, wantRestore = mine && s.pend.hiss % 2 === 1;
+    if ((wantCancel && Math.random() < 0.65) || (wantRestore && Math.random() < 0.5)) { hiss(s, i, p.hand.indexOf('hiss')); s.botHissT = 0.6; return; }
+  }
+}
+
+// ---------- the game ----------
+const meI = (s) => Math.max(0, s.p.findIndex((p) => p.me));
+K.game({
+  bg: '#140d24', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.p = K.seats(4, 'CAT').slice(0, 6).map((p, i) => ({ ...p, name: p.bot ? ['WHISKERS', 'MOCHI', 'NOODLE', 'PIXEL', 'BEANS'][i % 5] : p.name, col: COL[i], alive: true, hand: [], place: 0 }));
+    s.fx = []; s.sel = []; s.peek = null; s.botT = 0; s.botHissT = 0; s.beat = 0; s.anim = []; s.shake = 0;
+    if (K.isHost()) deal(s); else { s.ph = 'wait'; s.deck = []; s.disc = []; s.log = ['waiting for the host...']; s.p.forEach((p) => (p.hand = [])); }
+  },
+  onNet(s, d, from) {
+    const host = K.net.isHost, i = s.p.findIndex((p) => p.id === from);
+    if (!host) {
+      if (d.t === 'hand') { const me = s.p[meI(s)]; if (JSON.stringify(me.hand) !== JSON.stringify(d.h)) { me.hand = d.h; s.sel = []; } }
+      if (d.t === 'peek') s.peek = { cards: d.c, t: 3.5 };
+      if (d.t === 'st') { Object.assign(s, { ph: d.ph, turn: d.turn, dir: d.dir, extra: d.extra, t: d.tt, dn: d.dn, bn: d.bn, disc: d.disc, pend: d.pend, log: d.log }); d.p.forEach((o, k) => { const p = s.p[k]; if (p) { p.n = o[0]; p.alive = !!o[1]; p.place = o[2]; } }); (d.fx || []).forEach((f) => sound(s, f)); if (d.ph === 'over') setTimeout(() => endGame(s), 2500); }
+      return;
+    }
+    if (d.t !== 'act' || i < 0) return;
+    if (d.a === 'play') playCards(s, i, d.idx || []);
+    if (d.a === 'draw') draw(s, i);
+    if (d.a === 'target') chooseTarget(s, i, d.who);
+    if (d.a === 'hiss') hiss(s, i, d.k);
+    if (d.a === 'give') give(s, i, d.k);
+    if (d.a === 'place') placeBoom(s, i, d.pos);
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    const host = K.isHost(), me = meI(s), my = s.p[me], m = K.mouse;
+    s.t -= dt; s.botHissT -= dt; if (s.peek) { s.peek.t -= dt; if (s.peek.t <= 0) s.peek = null; }
+    if (s.shake > 0) s.shake -= dt;
+    // heartbeat: faster as the odds of a boom go up
+    const dn = host ? s.deck.length : s.dn || 0, bn = host ? s.deck.filter((c) => c === 'boom').length : s.bn || 0, risk = bn / Math.max(1, dn);
+    s.risk = risk; s.beat -= dt;
+    if (s.ph !== 'over' && s.ph !== 'wait' && risk > 0.08 && s.beat <= 0) { s.beat = Math.max(0.35, 1.4 - risk * 3); K.tone(55, 0.09, 'sine', 0.05 + risk * 0.1); setTimeout(() => K.tone(48, 0.08, 'sine', 0.04 + risk * 0.08), 140); }
+    const act = (a, extra = {}) => { if (host) { if (a === 'play') playCards(s, me, extra.idx); if (a === 'draw') draw(s, me); if (a === 'target') chooseTarget(s, me, extra.who); if (a === 'hiss') hiss(s, me, extra.k); if (a === 'give') give(s, me, extra.k); if (a === 'place') placeBoom(s, me, extra.pos); } else K.net.send({ t: 'act', a, ...extra }); };
+    // my input
+    if (m.clicked && my && my.alive) {
+      const L = layout(s);
+      const card = L.hand.findIndex((r) => K.inRect(m.x, m.y, r));
+      if (s.ph === 'give' && (host ? s.giver === me : s.pend && s.pend.target === me)) { if (card >= 0) { act('give', { k: card }); K.sfx('click'); } }
+      else if (card >= 0) { s.sel = s.sel.includes(card) ? s.sel.filter((k) => k !== card) : [...s.sel, card].slice(-2); K.sfx('click'); }
+      if (s.ph === 'turn' && s.turn === me && K.inRect(m.x, m.y, L.deck)) { act('draw'); s.sel = []; }
+      if (s.ph === 'turn' && s.turn === me && K.inRect(m.x, m.y, L.play) && canPlay(s, my)) { act('play', { idx: s.sel.slice() }); s.sel = []; K.sfx('select'); }
+      if (s.ph === 'target' && s.pend && s.pend.by === me) L.seats.forEach((r, k) => { if (k !== me && s.p[k].alive && K.inRect(m.x, m.y, r)) act('target', { who: k }); });
+      if (s.ph === 'hiss' && K.inRect(m.x, m.y, L.hiss) && my.hand.includes('hiss')) { act('hiss', { k: my.hand.indexOf('hiss') }); s.sel = []; }
+      if (s.ph === 'place' && (host ? s.boomBy === me : s.turn === me)) { const pl = L.place; if (K.inRect(m.x, m.y, pl.top)) act('place', { pos: 1e9 }); if (K.inRect(m.x, m.y, pl.mid)) act('place', { pos: Math.floor(dn / 2) }); if (K.inRect(m.x, m.y, pl.bot)) act('place', { pos: 0 }); if (K.inRect(m.x, m.y, pl.rnd)) act('place', { pos: K.irand(0, dn) }); }
+    }
+    if (!host) return;
+    // host: timers, bots
+    for (const f of s.fx) sound(s, f);
+    s.fx = [];
+    if (s.ph === 'hiss') { botsReact(s); if (s.t <= 0) resolve(s); }
+    else if (s.ph === 'target' && s.t <= 0) { const opts = alive(s).filter((q, k) => s.p.indexOf(q) !== s.pend.by && q.hand.length); chooseTarget(s, s.pend.by, s.p.indexOf(K.pick(opts))); }
+    else if (s.ph === 'give' && s.t <= 0) give(s, s.giver, -1);
+    else if (s.ph === 'place' && s.t <= 0) placeBoom(s, s.boomBy, K.irand(0, s.deck.length));
+    else if (s.ph === 'turn' && s.t <= 0) draw(s, s.turn);
+    // bots think with a little delay
+    s.botT -= dt;
+    if (s.botT <= 0) {
+      s.botT = 0.9 + Math.random() * 0.8;
+      const P = s.p;
+      if (s.ph === 'turn' && P[s.turn].bot && P[s.turn].alive) botTurn(s, s.turn);
+      else if (s.ph === 'target' && P[s.pend.by].bot) botTarget(s, s.pend.by);
+      else if (s.ph === 'give' && P[s.giver].bot) botGive(s, s.giver);
+      else if (s.ph === 'place' && P[s.boomBy].bot) botPlace(s, s.boomBy);
+    }
+    s.syncT = (s.syncT || 0) - dt; if (s.syncT <= 0) { s.syncT = 0.5; sync(s); sendHands(s); }
+  },
+  draw(s) {
+    const c = K.ctx(), me = meI(s), my = s.p[me], L = layout(s), host = K.isHost();
+    if (s.shake > 0) c.translate((Math.random() - 0.5) * 12 * s.shake, (Math.random() - 0.5) * 12 * s.shake);
+    // cosy neon room
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#1c1236', '#0e0a1e']); c.fillRect(0, 0, 960, 540);
+    K.alpha(0.06); for (let k = 0; k < 12; k++) K.text('🐾', 60 + k * 80, 250 + Math.sin(k) * 30, 30, '#fff'); K.alpha(1);
+    c.fillStyle = 'rgba(80,40,140,.25)'; c.beginPath(); c.ellipse(480, 255, 330, 120, 0, 0, 7); c.fill();
+    if (s.ph === 'wait') { K.text('waiting for the host...', 480, 270, 20, '#fff'); return; }
+    // players around the table
+    s.p.forEach((p, k) => {
+      const r = L.seats[k], cur = s.turn === k && s.ph !== 'over', n = host ? p.hand.length : p.me ? p.hand.length : p.n || 0;
+      const pick = s.ph === 'target' && s.pend && s.pend.by === me && k !== me && p.alive && n > 0;
+      K.alpha(p.alive ? 1 : 0.35);
+      K.rect(r.x, r.y, r.w, r.h, cur ? '#2a1f50' : '#1a1430', 12); K.stroke(r.x, r.y, r.w, r.h, pick ? '#ffd93a' : cur ? p.col : '#3a3060', pick || cur ? 3 : 1, 12);
+      K.text(p.alive ? '🐱' : '💥', r.x + 26, r.y + r.h / 2, 26, '#fff');
+      K.text(p.me ? 'YOU' : p.name, r.x + 50, r.y + 20, 13, p.col, 'left', 'd');
+      K.text(p.alive ? `${n} cards${cur && s.extra > 1 ? ` · ${s.extra} turns` : ''}` : `OUT #${p.place}`, r.x + 50, r.y + 40, 12, p.alive ? '#c8c0e8' : '#ff6a7a', 'left', 'u');
+      K.alpha(1);
+    });
+    // the deck: glows redder as the odds go up
+    const dn = host ? s.deck.length : s.dn || 0, risk = s.risk || 0, D = L.deck;
+    K.glow(`rgba(255,${Math.round(200 - risk * 400)},80,1)`, 10 + risk * 60);
+    for (let k = Math.min(5, Math.ceil(dn / 8)); k >= 0; k--) K.rect(D.x - k * 2, D.y - k * 2, D.w, D.h, '#2a1846', 10);
+    K.noGlow();
+    cardBack(D.x, D.y, D.w, D.h);
+    K.text(String(dn), D.x + D.w / 2, D.y + D.h + 16, 15, '#fff', 'center', 'd');
+    K.text(`boom odds ${Math.round(risk * 100)}%`, D.x + D.w / 2, D.y + D.h + 34, 11, risk > 0.25 ? '#ff3355' : '#c8c0e8', 'center', 'u');
+    if (s.ph === 'turn' && s.turn === me && my.alive) { K.alpha(0.6 + 0.4 * Math.sin(K.time() * 6)); K.stroke(D.x - 4, D.y - 4, D.w + 8, D.h + 8, '#ffd93a', 3, 12); K.alpha(1); K.text('DRAW', D.x + D.w / 2, D.y - 12, 12, '#ffd93a', 'center', 'd'); }
+    // discard
+    const top = (s.disc || []).slice(-1)[0];
+    if (top) drawCard(L.disc.x, L.disc.y, L.disc.w, L.disc.h, top); else K.stroke(L.disc.x, L.disc.y, L.disc.w, L.disc.h, '#3a3060', 2, 10);
+    // the log + whose turn
+    const lg = s.log || [];
+    K.text(lg[0] || '', 480, 352, 15, '#fff', 'center', 'u');
+    K.alpha(0.6); K.text(lg[1] || '', 480, 372, 12, '#c8c0e8', 'center', 'u'); K.alpha(1);
+    const tc = s.turn === me ? 'YOUR TURN' : `${s.p[s.turn]?.name || ''}'s turn`;
+    if (s.ph === 'turn') K.text(`${tc} · ${Math.max(0, Math.ceil(s.t))}s`, 480, 330, 13, s.turn === me ? '#ffd93a' : '#8e88b8', 'center', 'd');
+    K.text(s.dir > 0 ? '↻' : '↺', 700, 250, 30, '#5d5a80');
+    // my hand
+    if (my.alive) my.hand.forEach((code, k) => { const r = L.hand[k], up = s.sel.includes(k) ? 16 : 0; drawCard(r.x, r.y - up, r.w, r.h, code, s.sel.includes(k)); });
+    else K.text('you are out - watching', 480, 470, 18, '#ff6a7a', 'center', 'd');
+    // PLAY button
+    if (s.ph === 'turn' && s.turn === me && my.alive) {
+      const ok = canPlay(s, my), P = L.play; K.rect(P.x, P.y, P.w, P.h, ok ? '#c13bff' : '#2a2440', 10); K.text(ok ? 'PLAY' : s.sel.length ? 'NOT A MOVE' : 'PICK CARDS', P.x + P.w / 2, P.y + P.h / 2 + 1, 14, ok ? '#fff' : '#8e88b8', 'center', 'd');
+      if (s.sel.length === 1) K.wrapText(C[my.hand[s.sel[0]]]?.d || '', 480, 312, 520, 12, '#c8c0e8', 1.2);
+    }
+    // HISS window
+    if (s.ph === 'hiss' && s.pend) {
+      const H = L.hiss, can = my.alive && my.hand.includes('hiss');
+      K.rect(300, 120, 360, 64, '#000a', 12);
+      K.text(`${C[s.pend.kind]?.n || 'PAIR STEAL'}${s.pend.hiss % 2 ? ' (HISSED)' : ''}`, 480, 140, 16, '#fff', 'center', 'd');
+      K.rect(320, 168, 320 * Math.max(0, s.t / HISS_T), 6, '#ffd93a', 3);
+      if (can) { K.rect(H.x, H.y, H.w, H.h, '#e8e8f0', 12); K.text('😾 HISS!', H.x + H.w / 2, H.y + H.h / 2 + 1, 18, '#140d24', 'center', 'd'); }
+    }
+    if (s.ph === 'target' && s.pend && s.pend.by === me) K.text('pick a player to take a card from ↑', 480, 312, 16, '#ffd93a', 'center', 'd');
+    if (s.ph === 'give' && (host ? s.giver === me : s.pend && s.pend.target === me)) { K.rect(250, 290, 460, 36, '#000a', 10); K.text(`give ${s.p[s.pend.by].name} a card - tap one`, 480, 308, 16, '#ff9af0', 'center', 'd'); }
+    // hide the boom cat
+    if (s.ph === 'place' && (host ? s.boomBy === me : s.turn === me)) {
+      K.rect(200, 150, 560, 170, '#140a24f0', 16); K.stroke(200, 150, 560, 170, '#ff3355', 3, 16);
+      K.text('🧶 you calmed the BOOM CAT - hide it in the deck', 480, 178, 16, '#fff', 'center', 'd');
+      const pl = L.place; [['top', 'ON TOP'], ['mid', 'MIDDLE'], ['bot', 'BOTTOM'], ['rnd', 'RANDOM']].forEach(([k, l]) => { const r = pl[k]; K.rect(r.x, r.y, r.w, r.h, '#3a1424', 10); K.stroke(r.x, r.y, r.w, r.h, '#ff3355', 2, 10); K.text(l, r.x + r.w / 2, r.y + r.h / 2 + 1, 13, '#fff', 'center', 'd'); });
+      K.text('on top = the next player draws it!', 480, 300, 12, '#c8c0e8', 'center', 'u');
+    }
+    // peek
+    if (s.peek) { K.rect(220, 120, 520, 210, '#0a0618f0', 16); K.text('🔮 THE TOP 3 CARDS (next one first)', 480, 142, 15, '#c45cff', 'center', 'd'); s.peek.cards.forEach((code, k) => drawCard(300 + k * 130, 160, 100, 140, code)); }
+    if (s.ph === 'over') { K.rect(260, 200, 440, 90, '#000c', 14); K.text(lg[0] || 'GAME OVER', 480, 245, 20, '#ffd93a', 'center', 'd'); }
+  },
+  ai(s) { /* title screen: bots play themselves */ const me = meI(s); if (s.ph === 'turn' && s.turn === me && s.t < TURN_T - 1.2 && K.isHost()) botTurn(s, me); if (s.ph === 'place' && s.boomBy === me) botPlace(s, me); if (s.ph === 'give' && s.giver === me) botGive(s, me); if (s.ph === 'target' && s.pend && s.pend.by === me) botTarget(s, me); },
+});
+function canPlay(s, my) {
+  const cards = s.sel.map((k) => my.hand[k]);
+  return (cards.length === 1 && ACTIONS.includes(cards[0])) || (cards.length === 2 && cards[0] === cards[1] && C[cards[0]]?.cat);
+}
+function layout(s) {
+  const me = meI(s), my = s.p[me], n = s.p.length, h = my ? my.hand.length : 0;
+  const cw = 92, gap = Math.min(100, 860 / Math.max(1, h)), x0 = 480 - (gap * (h - 1) + cw) / 2;
+  const hand = Array.from({ length: h }, (_, k) => ({ x: x0 + k * gap, y: 400, w: cw, h: 128 }));
+  // others across the top, me at the bottom-left
+  const others = s.p.map((_, k) => k).filter((k) => k !== me);
+  const seats = [];
+  others.forEach((k, j) => { const w = Math.min(190, 900 / others.length - 10); seats[k] = { x: 480 - (others.length * (w + 10) - 10) / 2 + j * (w + 10), y: 18, w, h: 56 }; });
+  seats[me] = { x: 16, y: 330, w: 170, h: 56 };
+  return {
+    hand, seats, deck: { x: 300, y: 150, w: 110, h: 150 }, disc: { x: 550, y: 150, w: 110, h: 150 },
+    play: { x: 800, y: 330, w: 140, h: 48 }, hiss: { x: 400, y: 196, w: 160, h: 52 },
+    place: { top: { x: 220, y: 210, w: 120, h: 52 }, mid: { x: 350, y: 210, w: 120, h: 52 }, bot: { x: 480, y: 210, w: 120, h: 52 }, rnd: { x: 610, y: 210, w: 120, h: 52 } },
+  };
+}
+function cardBack(x, y, w, h) {
+  K.rect(x, y, w, h, '#3a1f6a', 10); K.stroke(x + 5, y + 5, w - 10, h - 10, '#c45cff', 2, 8);
+  K.text('🐱', x + w / 2, y + h / 2 - 8, 34, '#fff'); K.text('CAT-ASTROPHE', x + w / 2, y + h - 18, 8, '#e8d8ff', 'center', 'd');
+}
+function drawCard(x, y, w, h, code, sel = false) {
+  const d = C[code] || C.hiss;
+  K.rect(x, y, w, h, '#f6f0ff', 10); K.rect(x + 4, y + 4, w - 8, 26, d.c, 6);
+  K.text(d.n, x + w / 2, y + 17, w > 95 ? 11 : 9, '#140d24', 'center', 'd');
+  K.text(d.i, x + w / 2, y + h / 2 + 8, w * 0.42, '#000');
+  if (code === 'boom') { K.alpha(0.25); K.rect(x, y, w, h, '#ff3355', 10); K.alpha(1); }
+  K.stroke(x, y, w, h, sel ? '#ffd93a' : '#00000044', sel ? 4 : 1, 10);
+}
+function sound(s, f) {
+  if (f === 'boom') { K.sfx('boom'); s.shake = 0.6; K.flash('#ff3355', 0.25); }
+  if (f === 'draw') K.tone(520, 0.05, 'triangle', 0.04);
+  if (f === 'play') K.tone(660, 0.06, 'square', 0.03);
+  if (f === 'hiss') K.noise(0.35, 0.12, 3200);
+  if (f === 'steal') K.tone(300, 0.12, 'sawtooth', 0.04, 300);
+  if (f === 'shuffle') K.noise(0.4, 0.06, 1500);
+  if (f === 'pounce') K.tone(220, 0.2, 'square', 0.05, 440);
+}
+</script></body></html>
