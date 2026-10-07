@@ -4777,5 +4777,30 @@ export const GAME_LIST = [
 "file": "games/2d/cat-astrophe.html",
 "dim": "2d",
 "cover": "games/covers/cat-astrophe.png"
+},
+{
+"id": "wild-cards",
+"n": 210,
+"title": "WILD CARDS",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "The colour-matching card game, NOVEX style. Match the colour or the number, hit people with SKIP, REVERSE, +2 and WILD +4 - and stack a +2 on a +2 to pass the pain along. Two chaos cards change everything: HAND SWAP trades your whole hand with anyone, ROTATE makes everyone pass their hand along. Down to one card? Hit LAST CARD! within 3 seconds or draw two. First to empty their hand wins. Solo against three bots or online for up to 8.",
+"controls": "Click / tap a card to play it (only cards that fit light up) · click the deck to draw · pick a colour after a wild · LAST CARD! button when you are down to one",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Wild Cards"
+}
+],
+"file": "games/2d/wild-cards.html",
+"dim": "2d",
+"cover": "games/covers/wild-cards.png"
 }
 ];

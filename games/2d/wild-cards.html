@@ -1,0 +1,248 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wild Cards</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"wild-cards","n":210,"title":"WILD CARDS","genre":"mystery","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"The colour-matching card game, NOVEX style. Match the colour or the number, hit people with SKIP, REVERSE, +2 and WILD +4 - and stack a +2 on a +2 to pass the pain along. Two chaos cards change everything: HAND SWAP trades your whole hand with anyone, ROTATE makes everyone pass their hand along. Down to one card? Hit LAST CARD! within 3 seconds or draw two. First to empty their hand wins. Solo against three bots or online for up to 8.","controls":"Click / tap a card to play it (only cards that fit light up) · click the deck to draw · pick a colour after a wild · LAST CARD! button when you are down to one","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Wild Cards"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+// cards: 'r5' = red 5, 'gS' skip, 'bR' reverse, 'y2' +2 (written as 'yD'), 'W' wild, 'F' wild +4, 'X' hand swap, 'O' rotate
+const COLS = { r: '#ff3355', g: '#3dffa0', b: '#22b8ff', y: '#ffd93a' }, CN = { r: 'RED', g: 'GREEN', b: 'BLUE', y: 'YELLOW' };
+const PCOL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#f4f4f4'];
+const TURN_T = 25, LAST_T = 3;
+const isWild = (c) => 'WFXO'.includes(c);
+const colOf = (c) => (isWild(c) ? null : c[0]), valOf = (c) => (isWild(c) ? c : c.slice(1));
+const label = (c) => ({ W: 'WILD', F: '+4', X: 'SWAP', O: 'ROTATE' })[c] || ({ S: '⊘', R: '⇄', D: '+2' })[valOf(c)] || valOf(c);
+const points = (c) => (isWild(c) ? 50 : 'SRD'.includes(valOf(c)) ? 20 : +valOf(c));
+
+function newDeck() {
+  const d = [];
+  for (const c of 'rgby') { d.push(c + '0'); for (let n = 1; n <= 9; n++) d.push(c + n, c + n); for (const a of 'SRD') d.push(c + a, c + a); }
+  for (let i = 0; i < 4; i++) d.push('W', 'F');
+  d.push('X', 'X', 'O', 'O');
+  return K.shuffle(d);
+}
+const nm = (s, i) => (s.p[i].me && !K.net ? 'YOU' : s.p[i].name);
+const nextI = (s, i, k = 1) => { const n = s.p.length; return (((i + s.dir * k) % n) + n) % n; };
+// can card c go on the pile right now?
+function fits(s, c) {
+  if (s.stack > 0) return c === 'F' ? true : valOf(c) === 'D' && s.stackKind === 'D';   // only stack the same kind (+2 on +2, +4 on anything stacked)
+  if (isWild(c)) return true;
+  const top = s.disc[s.disc.length - 1];
+  return colOf(c) === s.color || valOf(c) === valOf(top);
+}
+function deal(s) {
+  s.deck = newDeck(); s.disc = [];
+  s.p.forEach((p) => { p.hand = s.deck.splice(0, 7); p.place = 0; p.called = false; });
+  let first; do { first = s.deck.pop(); if (isWild(first) || 'SRD'.includes(valOf(first))) s.deck.unshift(first); } while (isWild(first) || 'SRD'.includes(valOf(first)));
+  s.disc.push(first); s.color = colOf(first);
+  s.turn = K.irand(0, s.p.length - 1); s.dir = 1; s.stack = 0; s.stackKind = null; s.ph = 'turn'; s.t = TURN_T; s.log = ['first card: ' + CN[s.color] + ' ' + label(first)]; s.last = null; s.drewThisTurn = false;
+  sendHands(s); sync(s);
+}
+const youVerb = (t) => { if (!t.startsWith('YOU ')) return t; const V = { plays: 'play', draws: 'draw', swaps: 'swap', is: 'are', passes: 'pass', hisses: 'hiss', HISSES: 'HISS', steals: 'steal', hides: 'hide', naps: 'nap', reverses: 'reverse', has: 'have', drew: 'drew', forgot: 'forgot' }; const w = t.slice(4).split(' '); if (V[w[0]]) w[0] = V[w[0]]; return ('YOU ' + w.join(' ')).replace(' and passes', ' and pass'); };
+const say = (s, t) => { s.log.unshift(youVerb(t)); s.log = s.log.slice(0, 3); };
+function sendHands(s) { if (!K.net) return; s.p.forEach((p) => { if (!p.bot && !p.me) K.net.send({ t: 'hand', h: p.hand }, p.id); }); }
+function sync(s) {
+  if (!K.net) return;
+  K.net.send({ t: 'st', ph: s.ph, turn: s.turn, dir: s.dir, color: s.color, stack: s.stack, tt: +s.t.toFixed(1), dn: s.deck.length, top: s.disc[s.disc.length - 1], p: s.p.map((p) => [p.hand.length, p.place, p.called ? 1 : 0]), log: s.log, last: s.last, fx: s.fx.slice(), chooser: s.chooser });
+}
+function drawN(s, i, n) {
+  for (let k = 0; k < n; k++) { if (!s.deck.length) { const top = s.disc.pop(); s.deck = K.shuffle(s.disc.map((c) => c)); s.disc = [top]; if (!s.deck.length) break; } s.p[i].hand.push(s.deck.pop()); }
+  s.p[i].called = false;
+}
+function advance(s, steps = 1) { s.turn = nextI(s, s.turn, steps); s.ph = 'turn'; s.t = TURN_T; s.drewThisTurn = false; sendHands(s); sync(s); }
+// the current player plays hand[k]
+function playCard(s, i, k) {
+  if (s.ph !== 'turn' || s.turn !== i) return false;
+  const p = s.p[i], c = p.hand[k]; if (!c || !fits(s, c)) return false;
+  p.hand.splice(k, 1); s.disc.push(c); s.fx.push('play');
+  say(s, `${nm(s, i)} plays ${isWild(c) ? label(c) : CN[colOf(c)] + ' ' + label(c)}`);
+  if (!isWild(c)) s.color = colOf(c);
+  // down to one card: 3 seconds to call it
+  if (p.hand.length === 1) { s.last = { i, t: LAST_T }; p.called = false; }
+  if (p.hand.length === 0) { p.place = 1; return finishGame(s, i); }
+  const v = valOf(c);
+  if (isWild(c)) { s.ph = 'color'; s.chooser = i; s.t = 10; s.pendingWild = c; sendHands(s); sync(s); return true; }
+  if (v === 'S') { say(s, `${nm(s, nextI(s, i))} is skipped`); return advance(s, 2), true; }
+  if (v === 'R') { s.dir *= -1; return advance(s, s.p.length === 2 ? 2 : 1), true; }
+  if (v === 'D') { s.stack += 2; s.stackKind = 'D'; s.fx.push('plus'); return advance(s), true; }
+  advance(s); return true;
+}
+// after a wild: the colour (and for SWAP, who to swap with)
+function chooseColor(s, i, col) {
+  if (s.ph !== 'color' || s.chooser !== i || !COLS[col]) return;
+  s.color = col; const c = s.pendingWild; say(s, `colour is now ${CN[col]}`);
+  if (c === 'F') { s.stack += 4; s.stackKind = 'F'; s.fx.push('plus'); return advance(s); }
+  if (c === 'X') { if (s.p.filter((q, k) => k !== i).length) { s.ph = 'swap'; s.t = 10; sendHands(s); sync(s); return; } }
+  if (c === 'O') { const hands = s.p.map((q) => q.hand); s.p.forEach((q, k) => (q.hand = hands[(((k - s.dir) % s.p.length) + s.p.length) % s.p.length])); s.p.forEach((q) => (q.called = false)); say(s, 'everyone passes their hand along!'); s.fx.push('rotate'); }
+  advance(s);
+}
+function chooseSwap(s, i, who) {
+  if (s.ph !== 'swap' || s.chooser !== i || who === i || !s.p[who]) return;
+  const a = s.p[i].hand; s.p[i].hand = s.p[who].hand; s.p[who].hand = a; s.p[i].called = s.p[who].called = false;
+  say(s, `${nm(s, i)} swaps hands with ${nm(s, who)}!`); s.fx.push('rotate');
+  if (s.p[i].hand.length === 0) return finishGame(s, i);
+  advance(s);
+}
+// draw: take the stack if there is one (turn over), else draw 1 (you may still play it)
+function draw(s, i) {
+  if (s.ph !== 'turn' || s.turn !== i) return;
+  if (s.stack > 0) { drawN(s, i, s.stack); say(s, `${nm(s, i)} draws ${s.stack}!`); s.stack = 0; s.stackKind = null; s.fx.push('ouch'); return advance(s); }
+  if (s.drewThisTurn) return advance(s);   // second press = pass
+  drawN(s, i, 1); s.drewThisTurn = true; s.fx.push('draw');
+  const c = s.p[i].hand[s.p[i].hand.length - 1];
+  if (!fits(s, c)) { say(s, `${nm(s, i)} draws and passes`); return advance(s); }
+  s.t = Math.min(s.t, 8); sendHands(s); sync(s);
+}
+function callLast(s, i) { if (s.ph !== 'over' && s.last && s.last.i === i) { s.p[i].called = true; say(s, `${nm(s, i)}: LAST CARD!`); s.last = null; s.fx.push('call'); sync(s); } }
+function finishGame(s, w) {
+  if (s.ph === 'over') return;
+  s.ph = 'over'; s.t = 99;
+  const order = s.p.map((p, k) => ({ k, pts: p.hand.reduce((a, c) => a + points(c), 0) })).sort((a, b) => a.pts - b.pts);
+  order.forEach((o, n) => (s.p[o.k].place = n + 1));
+  s.p[w].place = 1; say(s, `${nm(s, w)} is out of cards - WINNER!`); s.fx.push('win'); sync(s);
+  setTimeout(() => endGame(s), 2400);
+}
+function endGame(s) {
+  if (s.ended) return; s.ended = true;
+  const me = s.p.find((p) => p.me), won = me && me.place === 1, n = s.p.length;
+  K.end(s, { score: me ? (n - me.place + 1) * 100 + (won ? 400 : 0) : 0, won, stats: { won: won ? 1 : 0 }, title: won ? 'YOU WIN!' : `#${me?.place} OF ${n}`, text: s.p.slice().sort((a, b) => a.place - b.place).map((p) => `#${p.place} ${p.me ? 'YOU' : p.name}`).join(' · ') });
+}
+// ---------- bots ----------
+function botTurn(s, i) {
+  const h = s.p[i].hand, ok = h.map((c, k) => [c, k]).filter(([c]) => fits(s, c));
+  if (!ok.length) return draw(s, i);
+  const nextCount = s.p[nextI(s, i)].hand.length;
+  // prefer: attack someone close to winning, keep wilds for later, dump high cards
+  ok.sort((a, b) => score(b[0]) - score(a[0]));
+  function score(c) { let v = points(c); if ('SD'.includes(valOf(c)) || c === 'F') v += nextCount <= 2 ? 40 : 5; if (isWild(c)) v -= h.length > 3 ? 45 : 0; if (c === 'X') v = h.length > 4 ? 80 : -50; if (c === 'O') v = h.length > 5 ? 60 : -40; return v + Math.random() * 6; }
+  playCard(s, i, ok[0][1]);
+}
+function botColor(s, i) { const cnt = { r: 0, g: 0, b: 0, y: 0 }; s.p[i].hand.forEach((c) => colOf(c) && cnt[colOf(c)]++); chooseColor(s, i, Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0]); }
+function botSwap(s, i) { const best = s.p.map((q, k) => [k, q.hand.length]).filter(([k]) => k !== i).sort((a, b) => a[1] - b[1])[0]; chooseSwap(s, i, best[0]); }
+
+// ---------- the game ----------
+const meI = (s) => Math.max(0, s.p.findIndex((p) => p.me));
+K.game({
+  bg: '#0e1a24', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.p = K.seats(4, 'BOT').slice(0, 8).map((p, i) => ({ ...p, name: p.bot ? ['ACE', 'JOKER', 'DEALER', 'LUCKY', 'SHUFFLE', 'BLITZ', 'CHIP'][i % 7] : p.name, col: PCOL[i], hand: [], place: 0 }));
+    s.fx = []; s.botT = 0; s.scroll = 0;
+    if (K.isHost()) deal(s); else { s.ph = 'wait'; s.deck = []; s.disc = []; s.log = ['waiting for the host...']; }
+  },
+  onNet(s, d, from) {
+    const host = K.net.isHost, i = s.p.findIndex((p) => p.id === from);
+    if (!host) {
+      if (d.t === 'hand') s.p[meI(s)].hand = d.h;
+      if (d.t === 'st') { Object.assign(s, { ph: d.ph, turn: d.turn, dir: d.dir, color: d.color, stack: d.stack, t: d.tt, dn: d.dn, topC: d.top, log: d.log, last: d.last, chooser: d.chooser }); d.p.forEach((o, k) => { if (s.p[k]) { s.p[k].n = o[0]; s.p[k].place = o[1]; s.p[k].called = !!o[2]; } }); (d.fx || []).forEach((f) => sound(f)); if (d.ph === 'over') setTimeout(() => endGame(s), 2400); }
+      return;
+    }
+    if (d.t !== 'act' || i < 0) return;
+    if (d.a === 'play') playCard(s, i, d.k);
+    if (d.a === 'draw') draw(s, i);
+    if (d.a === 'color') chooseColor(s, i, d.c);
+    if (d.a === 'swap') chooseSwap(s, i, d.who);
+    if (d.a === 'last') callLast(s, i);
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    const host = K.isHost(), me = meI(s), my = s.p[me], m = K.mouse, L = layout(s);
+    s.t -= dt;
+    const act = (a, x = {}) => { if (host) { if (a === 'play') playCard(s, me, x.k); if (a === 'draw') draw(s, me); if (a === 'color') chooseColor(s, me, x.c); if (a === 'swap') chooseSwap(s, me, x.who); if (a === 'last') callLast(s, me); } else K.net.send({ t: 'act', a, ...x }); };
+    if (m.clicked) {
+      if (s.last && s.last.i === me && K.inRect(m.x, m.y, L.lastBtn)) { act('last'); K.sfx('select'); }
+      else if (s.ph === 'turn' && s.turn === me) {
+        const k = L.hand.findIndex((r) => K.inRect(m.x, m.y, r));
+        if (k >= 0) { if (canFit(s, my.hand[k])) act('play', { k }); else K.sfx('error'); }
+        if (K.inRect(m.x, m.y, L.deck)) act('draw');
+      } else if (s.ph === 'color' && s.chooser === me) { for (const [c, r] of Object.entries(L.colors)) if (K.inRect(m.x, m.y, r)) act('color', { c }); }
+      else if (s.ph === 'swap' && s.chooser === me) L.seats.forEach((r, k) => { if (k !== me && K.inRect(m.x, m.y, r)) act('swap', { who: k }); });
+    }
+    if (!host) return;
+    for (const f of s.fx) sound(f);
+    s.fx = [];
+    // last card: called in time, or draw 2 (bots forget now and then)
+    if (s.ph === 'over') s.last = null;
+    if (s.last) { s.last.t -= dt; const p = s.p[s.last.i]; if (p.bot && s.last.t < LAST_T - 0.6 && Math.random() < 0.012) callLast(s, s.last.i); if (s.last && s.last.t <= 0) { if (!p.called && p.hand.length === 1) { drawN(s, s.last.i, 2); say(s, `${nm(s, s.last.i)} forgot LAST CARD - draws 2!`); s.fx.push('ouch'); sendHands(s); } s.last = null; sync(s); } }
+    if (s.ph === 'turn' && s.t <= 0) draw(s, s.turn);
+    if (s.ph === 'color' && s.t <= 0) botColor(s, s.chooser);
+    if (s.ph === 'swap' && s.t <= 0) botSwap(s, s.chooser);
+    s.botT -= dt;
+    if (s.botT <= 0) {
+      s.botT = 0.8 + Math.random() * 0.7;
+      const cur = s.p[s.turn];
+      if (s.ph === 'turn' && cur.bot) botTurn(s, s.turn);
+      else if (s.ph === 'color' && s.p[s.chooser].bot) botColor(s, s.chooser);
+      else if (s.ph === 'swap' && s.p[s.chooser].bot) botSwap(s, s.chooser);
+    }
+    s.syncT = (s.syncT || 0) - dt; if (s.syncT <= 0) { s.syncT = 0.5; sync(s); sendHands(s); }
+  },
+  draw(s) {
+    const c = K.ctx(), me = meI(s), my = s.p[me], L = layout(s), host = K.isHost();
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#123040', '#0a1420']); c.fillRect(0, 0, 960, 540);
+    c.fillStyle = 'rgba(30,90,80,.35)'; c.beginPath(); c.ellipse(480, 240, 360, 130, 0, 0, 7); c.fill(); K.stroke(120, 110, 720, 260, '#ffffff10', 2, 130);
+    if (s.ph === 'wait') { K.text('waiting for the host...', 480, 270, 20, '#fff'); return; }
+    // players
+    s.p.forEach((p, k) => {
+      const r = L.seats[k], cur = s.turn === k && s.ph !== 'over', n = host || p.me ? p.hand.length : p.n || 0;
+      const pick = s.ph === 'swap' && s.chooser === me && k !== me;
+      K.rect(r.x, r.y, r.w, r.h, cur ? '#1f3a4a' : '#13202c', 12); K.stroke(r.x, r.y, r.w, r.h, pick ? '#ffd93a' : cur ? p.col : '#27404c', pick || cur ? 3 : 1, 12);
+      K.text(p.me ? 'YOU' : p.name, r.x + 12, r.y + 18, 13, p.col, 'left', 'd');
+      K.text(`${n} card${n === 1 ? '' : 's'}${(host ? p.called : p.called) && n === 1 ? ' · LAST!' : ''}`, r.x + 12, r.y + 38, 12, n === 1 ? '#ffd93a' : '#c8d8e8', 'left', 'u');
+      for (let j = 0; j < Math.min(n, 8); j++) K.rect(r.x + r.w - 16 - j * 7, r.y + 12, 12, 18, '#2a1846', 3);
+    });
+    // deck + pile
+    const dn = host ? s.deck.length : s.dn || 0, D = L.deck;
+    for (let k = 3; k >= 0; k--) back(D.x - k * 2, D.y - k * 2, D.w, D.h);
+    K.text(`${dn}`, D.x + D.w / 2, D.y + D.h + 16, 13, '#c8d8e8', 'center', 'd');
+    if (s.ph === 'turn' && s.turn === me) { K.alpha(0.6 + 0.4 * Math.sin(K.time() * 6)); K.stroke(D.x - 4, D.y - 4, D.w + 8, D.h + 8, '#ffd93a', 3, 12); K.alpha(1); K.text(s.stack ? `TAKE ${s.stack}` : s.drewThisTurn ? 'PASS' : 'DRAW', D.x + D.w / 2, D.y - 12, 12, '#ffd93a', 'center', 'd'); }
+    const top = host ? s.disc[s.disc.length - 1] : s.topC;
+    if (top) card(L.pile.x, L.pile.y, L.pile.w, L.pile.h, top, false, s.color);
+    // current colour + direction + stack
+    if (s.color) { K.circle(L.pile.x + L.pile.w + 34, L.pile.y + 30, 18, COLS[s.color]); K.text(CN[s.color], L.pile.x + L.pile.w + 34, L.pile.y + 62, 11, COLS[s.color], 'center', 'd'); }
+    K.text(s.dir > 0 ? '↻' : '↺', L.pile.x + L.pile.w + 34, L.pile.y + 100, 26, '#7fa0b0');
+    if (s.stack) K.text(`+${s.stack} STACK`, 480, 118 + 20, 18, '#ff3355', 'center', 'd', 10);
+    const lg = s.log || [];
+    K.text(lg[0] || '', 480, 352, 15, '#fff', 'center', 'u'); K.alpha(0.55); K.text(lg[1] || '', 480, 371, 12, '#c8d8e8', 'center', 'u'); K.alpha(1);
+    if (s.ph === 'turn') K.text(s.turn === me ? `YOUR TURN · ${Math.max(0, Math.ceil(s.t))}s` : `${s.p[s.turn]?.name}'s turn`, 480, 330, 13, s.turn === me ? '#ffd93a' : '#7fa0b0', 'center', 'd');
+    // my hand: playable cards lift up
+    my.hand.forEach((code, k) => { const r = L.hand[k], ok = s.ph === 'turn' && s.turn === me && canFit(s, code); card(r.x, r.y - (ok ? 14 : 0), r.w, r.h, code, ok); });
+    // LAST CARD button
+    if (s.last && s.last.i === me) { const b = L.lastBtn, k = Math.sin(K.time() * 12) > 0; K.rect(b.x, b.y, b.w, b.h, k ? '#ff3355' : '#ffd93a', 14); K.text('LAST CARD!', b.x + b.w / 2, b.y + b.h / 2 + 1, 20, '#0a1420', 'center', 'd'); }
+    // choose a colour / a hand to swap with
+    if (s.ph === 'color' && s.chooser === me) { K.rect(300, 140, 360, 150, '#0a1420f0', 16); K.text('PICK A COLOUR', 480, 164, 15, '#fff', 'center', 'd'); for (const [c, r] of Object.entries(L.colors)) { K.rect(r.x, r.y, r.w, r.h, COLS[c], 12); K.text(CN[c], r.x + r.w / 2, r.y + r.h / 2 + 1, 12, '#0a1420', 'center', 'd'); } }
+    if (s.ph === 'swap' && s.chooser === me) K.text('SWAP HANDS WITH... (tap a player ↑)', 480, 312, 16, '#ffd93a', 'center', 'd');
+    if (s.ph === 'over') { K.rect(260, 200, 440, 80, '#000c', 14); K.text(lg[0] || '', 480, 240, 18, '#ffd93a', 'center', 'd'); }
+  },
+  ai(s) { const me = meI(s); if (s.ph === 'turn' && s.turn === me && s.t < TURN_T - 1 && K.isHost()) botTurn(s, me); if (s.ph === 'color' && s.chooser === me) botColor(s, me); if (s.ph === 'swap' && s.chooser === me) botSwap(s, me); if (s.last && s.last.i === me) callLast(s, me); },
+});
+// the client checks fits with its own copy of the pile state
+function canFit(s, c) { if (!c) return false; if (K.isHost()) return fits(s, c); const st = { stack: s.stack, stackKind: s.stack ? (s.topC === 'F' ? 'F' : 'D') : null, color: s.color, disc: [s.topC] }; return fits(st, c); }
+function layout(s) {
+  const me = meI(s), my = s.p[me], h = my ? my.hand.length : 0, cw = 70, gap = Math.min(78, 880 / Math.max(1, h)), x0 = 480 - (gap * (h - 1) + cw) / 2;
+  const hand = Array.from({ length: h }, (_, k) => ({ x: x0 + k * gap, y: 410, w: cw, h: 108 }));
+  const others = s.p.map((_, k) => k).filter((k) => k !== me), seats = [];
+  others.forEach((k, j) => { const w = Math.min(170, 920 / others.length - 8); seats[k] = { x: 480 - (others.length * (w + 8) - 8) / 2 + j * (w + 8), y: 16, w, h: 52 }; });
+  seats[me] = { x: 16, y: 334, w: 160, h: 52 };
+  return { hand, seats, deck: { x: 330, y: 160, w: 90, h: 132 }, pile: { x: 470, y: 160, w: 90, h: 132 }, lastBtn: { x: 760, y: 324, w: 180, h: 60 }, colors: { r: { x: 320, y: 186, w: 75, h: 80 }, g: { x: 403, y: 186, w: 75, h: 80 }, b: { x: 486, y: 186, w: 75, h: 80 }, y: { x: 569, y: 186, w: 75, h: 80 } } };
+}
+function back(x, y, w, h) { K.rect(x, y, w, h, '#2a1846', 10); K.stroke(x + 5, y + 5, w - 10, h - 10, '#ff2bd6', 2, 8); K.text('WILD', x + w / 2, y + h / 2, 14, '#ffd93a', 'center', 'd'); }
+function card(x, y, w, h, c, lit = false, wildCol = null) {
+  const col = isWild(c) ? null : COLS[colOf(c)];
+  if (col) K.rect(x, y, w, h, col, 10);
+  else { const g = K.ctx().createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#ff3355'); g.addColorStop(0.33, '#ffd93a'); g.addColorStop(0.66, '#3dffa0'); g.addColorStop(1, '#22b8ff'); K.ctx().fillStyle = g; K.ctx().beginPath(); K.ctx().roundRect(x, y, w, h, 10); K.ctx().fill(); if (wildCol) K.rect(x + 8, y + 8, w - 16, h - 16, COLS[wildCol] + 'cc', 8); }
+  K.ctx().fillStyle = '#ffffffee'; K.ctx().beginPath(); K.ctx().ellipse(x + w / 2, y + h / 2, w * 0.36, h * 0.3, -0.5, 0, 7); K.ctx().fill();
+  const t = label(c), big = t.length <= 2;
+  K.text(t, x + w / 2, y + h / 2 + 2, big ? w * 0.42 : w * 0.2, col || '#2a1846', 'center', 'd');
+  K.text(t, x + 9, y + 13, 11, '#fff', 'left', 'd');
+  if (c === 'X') K.text('🔁', x + w / 2, y + h - 16, 16, '#fff'); if (c === 'O') K.text('🌪', x + w / 2, y + h - 16, 16, '#fff');
+  K.stroke(x, y, w, h, lit ? '#ffffff' : '#00000055', lit ? 3 : 1, 10);
+}
+function sound(f) {
+  if (f === 'play') K.tone(620, 0.05, 'triangle', 0.04);
+  if (f === 'draw') K.tone(400, 0.05, 'triangle', 0.03);
+  if (f === 'plus') K.tone(220, 0.15, 'square', 0.05, 220);
+  if (f === 'ouch') K.tone(300, 0.3, 'sawtooth', 0.05, -200);
+  if (f === 'call') K.tone(880, 0.12, 'square', 0.05);
+  if (f === 'rotate') K.noise(0.4, 0.08, 1800);
+  if (f === 'win') K.sfx('win');
+}
+</script></body></html>

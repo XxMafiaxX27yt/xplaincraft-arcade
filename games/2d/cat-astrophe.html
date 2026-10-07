@@ -47,7 +47,8 @@ function deal(s) {
 }
 const alive = (s) => s.p.filter((p) => p.alive);
 const nextAlive = (s, i, dir = s.dir) => { const n = s.p.length; for (let k = 1; k <= n; k++) { const j = (((i + dir * k) % n) + n) % n; if (s.p[j].alive) return j; } return i; };
-const say = (s, t) => { s.log.unshift(t); s.log = s.log.slice(0, 4); };
+const youVerb = (t) => { if (!t.startsWith('YOU ')) return t; const V = { plays: 'play', draws: 'draw', swaps: 'swap', is: 'are', passes: 'pass', hisses: 'hiss', HISSES: 'HISS', steals: 'steal', hides: 'hide', naps: 'nap', reverses: 'reverse', has: 'have', drew: 'drew', forgot: 'forgot' }; const w = t.slice(4).split(' '); if (V[w[0]]) w[0] = V[w[0]]; return ('YOU ' + w.join(' ')).replace(' and passes', ' and pass'); };
+const say = (s, t) => { s.log.unshift(youVerb(t)); s.log = s.log.slice(0, 4); };
 const nm = (s, i) => (s.p[i].me && !K.net ? 'YOU' : s.p[i].name);
 function sendHands(s) { if (!K.net) return; s.p.forEach((p) => { if (!p.bot && !p.me) K.net.send({ t: 'hand', h: p.hand }, p.id); }); }
 // one snapshot for everyone (no hands, no deck order)
