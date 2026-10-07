@@ -186,6 +186,44 @@ with sync_playwright() as pw:
     check('no JS errors (phone run)', not errs, errs[:5])
     b.close()
 
+    # ---------- FLOORFALL ----------
+    b = pw.chromium.launch(channel='msedge', args=['--ignore-gpu-blocklist'])
+    p = b.new_page(viewport={'width': 1280, 'height': 720}); errs = []
+    p.on('pageerror', lambda e: errs.append('PAGE ' + str(e)[:300]))
+    p.on('response', lambda r: r.status >= 400 and 'favicon' not in r.url and errs.append(f'HTTP {r.status} {r.url}'))
+    p.goto('http://localhost:8787/games/3d/floorfall.html?test&auto', wait_until='load'); p.wait_for_function('window.__F && window.__F.me', timeout=30000); p.wait_for_timeout(4000)
+    res = p.evaluate(r"""(() => { const G = window.__F, K3 = window.__K3; K3.paused = true; const me = G.me, out = {};
+      out.tiles = G.tiles.length; out.anims = Object.keys(me.av.groups).length;
+      // stand on a fresh tile: I must not sink into it, and it must crack + drop me to the floor below
+      const t = G.tiles.find((t) => t.l === 0 && t.ring === 4 && t.state === 'solid'); me.ch.teleport(t.x, 0.05, t.z); me.vel = { x: 0, y: 0, z: 0 };
+      let minY = 9; for (let i = 0; i < 30; i++) { G.simulate(1); minY = Math.min(minY, me.ch.pos().y); }
+      out.standY = +minY.toFixed(3); out.cracked = t.state;
+      G.simulate(150); out.afterY = +me.ch.pos().y.toFixed(2);
+      // a whole game (you are a bot too)
+      me.bot = true; me.skill = 0.8; let n = 0; while (G.phase !== 'over' && n < 60 * 300) { G.simulate(60); n += 60; }
+      out.phase = G.phase; out.secs = Math.round(G.t); out.places = G.players.map((P) => P.place).sort().join(',');
+      return out; })()""")
+    check('floorfall: 1300+ tiles, animated characters', res['tiles'] > 1200 and res['anims'] >= 10, res)
+    check('floorfall: standing on a tile holds you up, then it cracks and drops you a floor', res['standY'] > -0.05 and res['afterY'] < -5, res)
+    check('floorfall: a whole 8-player game ends with places 1-8', res['phase'] == 'over' and res['places'] == '1,2,3,4,5,6,7,8', res)
+    check('floorfall: no JS errors', not errs, errs[:5])
+    b.close()
+    b = pw.chromium.launch(channel='msedge'); ctx = b.new_context(viewport={'width': 900, 'height': 420}, has_touch=True, is_mobile=True); p = ctx.new_page(); errs = []
+    p.on('pageerror', lambda e: errs.append('PAGE ' + str(e)[:300]))
+    p.goto('http://localhost:8787/games/3d/floorfall.html?test&touch&auto', wait_until='load'); p.wait_for_function('window.__F && window.__F.me', timeout=30000); p.wait_for_timeout(3600)
+    before = p.evaluate("(() => { const q = window.__F.me.ch.pos(); return [q.x, q.z]; })()")
+    cdp = p.context.new_cdp_session(p)
+    tp = lambda typ, x, y: cdp.send('Input.dispatchTouchEvent', {'type': typ, 'touchPoints': ([{'x': x, 'y': y, 'id': 1}] if typ != 'touchEnd' else [])})
+    tp('touchStart', 150, 300)
+    for i in range(1, 10): tp('touchMove', 150, 300 - i * 6); p.wait_for_timeout(50)
+    p.wait_for_timeout(700); tp('touchEnd', 0, 0)
+    after = p.evaluate("(() => { const q = window.__F.me.ch.pos(); return [q.x, q.z]; })()")
+    moved = ((after[0] - before[0]) ** 2 + (after[1] - before[1]) ** 2) ** 0.5
+    check('floorfall phone: stick runs you, JUMP button shown', moved > 1.5 and p.evaluate("window.__K3.touchButtons.length") == 1, round(moved, 2))
+    p.screenshot(path=os.path.join(OUT, '3d_floorfall_phone.png'))
+    check('floorfall phone: no JS errors', not errs, errs[:5])
+    b.close()
+
 fails = [r for r in results if not r[1]]
 print(f'\n{len(results) - len(fails)}/{len(results)} passed')
 sys.exit(1 if fails else 0)

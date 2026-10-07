@@ -2069,6 +2069,30 @@ export const GAME_LIST = [
 "cover": "games/covers/novex-strike.png"
 },
 {
+"id": "floorfall",
+"n": 207,
+"title": "FLOORFALL",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "Five floors of glowing hex tiles hang over the void. Every tile anyone stands on cracks and drops a moment later. Keep moving, jump the holes, land on the floor below - fall out of the bottom and you are out. Gold tiles bounce you back up a floor, and every 14 seconds a SURGE rips a line of tiles out of the upper floors. Last one standing out of up to 8 wins.",
+"controls": "WASD / arrows run · mouse turns the camera · SPACE jump. Phones: left side runs, right side turns the camera, JUMP button.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Be the last one standing in Floorfall"
+}
+],
+"file": "games/3d/floorfall.html",
+"cover": "games/covers/floorfall.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
