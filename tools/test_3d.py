@@ -1,0 +1,191 @@
+"""NOVEX 3D test harness - no 3D game ships without passing this.
+
+  python tools/test_3d.py              (needs tools/serve.py on :8787)
+
+Checks (NOVEX STRIKE): assets load, no JS errors, frame rate, NO WALL PHASING (sprint / slide / dash / jump into
+every kind of wall for thousands of ticks, a capsule overlap test every tick), ramps + catwalk walkable end to end,
+jump height, slide speed, hitscan damage + headshots + walls stopping bullets, a whole bot-vs-bot match plays out,
+and phone controls (touch stick moves you, touch buttons exist). Screenshots go to tools/out/3d_*.png
+"""
+import sys, os, json, time
+from playwright.sync_api import sync_playwright
+
+BASE = 'http://localhost:8787/games/3d/novex-strike.html'
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
+os.makedirs(OUT, exist_ok=True)
+results = []
+
+def check(name, ok, info=''):
+    results.append((name, bool(ok), info))
+    print(('PASS ' if ok else 'FAIL ') + name + (('  ' + str(info)) if info else ''), flush=True)
+
+# shared JS helpers injected into the page
+HELPERS = r"""
+window.T = (() => {
+  const G = window.__S, K3 = window.__K3, R = K3.R;
+  const pen = (f) => {   // is this fighter's capsule overlapping the world? (a smaller capsule than the real one)
+    const p = f.feet(), h = f.ch.height;
+    return K3.world.intersectionWithShape({ x: p.x, y: p.y + h / 2, z: p.z }, { x: 0, y: 0, z: 0, w: 1 }, new R.Capsule(Math.max(0.05, h / 2 - 0.4), 0.3), undefined, K3.phys.groups(0xffff, K3.phys.G_WORLD), f.ch.collider);
+  };
+  const solo = () => {   // a test fighter: the enemy bot, with its brain removed; everyone else switched off
+    K3.paused = true; G.brains = []; G.phase = 'test';
+    const X = G.fighters.find((f) => f.team === 1);
+    for (const f of G.fighters) if (f !== X) { f.alive = false; f.ch.collider.setEnabled(false); }
+    X.alive = true; X.ch.collider.setEnabled(true); X.dashT = 0; X.slideT = 0; X.ch.setHeight(1.8); X.vel = { x: 0, y: 0, z: 0 };
+    X.input = { move: { x: 0, y: 0 }, jump: false, crouch: false, sprint: false, fire: false, fireTap: false, aim: false, reload: false, swap: -1, ability: false };
+    return X;
+  };
+  return { G, K3, pen, solo };
+})();
+0;
+"""
+
+def page_with(pw, query, touch=False):
+    b = pw.chromium.launch(channel='msedge', args=['--ignore-gpu-blocklist'])
+    ctx = b.new_context(viewport={'width': 1280, 'height': 720}, has_touch=touch, is_mobile=touch)
+    p = ctx.new_page()
+    errs = []
+    p.on('pageerror', lambda e: errs.append('PAGE ' + str(e)[:300]))
+    p.on('console', lambda m: m.type == 'error' and 'favicon' not in m.text and '404' not in m.text and errs.append(m.text[:300]))
+    p.on('response', lambda r: r.status >= 400 and 'favicon' not in r.url and errs.append(f'HTTP {r.status} {r.url}'))
+    p.goto(BASE + query, wait_until='load')
+    p.wait_for_function('window.__S && window.__S.me', timeout=30000)
+    p.wait_for_timeout(1500)
+    p.evaluate(HELPERS)
+    return b, p, errs
+
+with sync_playwright() as pw:
+    # ---------- assets, errors, frame rate ----------
+    b, p, errs = page_with(pw, '?test&auto=2v2')
+    p.wait_for_timeout(3000)
+    st = p.evaluate("[T.G.gunsLoaded(), T.K3.fps(), T.G.nav.nodes.length, T.G.fighters.length]")
+    check('assets: 4 gun models loaded', st[0] == 4, st[0])
+    check('frame rate > 40 fps (2v2, desktop quality)', st[1] > 40, round(st[1]))
+    check('bots built a navigation map', st[2] > 500, st[2])
+    p.screenshot(path=os.path.join(OUT, '3d_match.png'))
+
+    # ---------- NO WALL PHASING ----------
+    res = p.evaluate(r"""(() => {
+      const { G, pen, solo } = T, X = solo();
+      const cases = [];
+      // run at walls, crates, the tunnel, the indoor block, pillars, ramp sides, outer walls - from many angles
+      const spots = [[-20, 0], [-14.8, 0.5], [-3.2, 0.2], [0, 7.5], [-8, 6.5], [-11, 9], [-17, -4], [-14.5, -6], [-12, -8.1], [-6, -4], [0, -11.5], [-21, 13], [20, -13], [-10.5, 4.3], [-6.8, -0.4], [5, 2.6]];
+      let worst = 0, bad = [];
+      spots.forEach(([x, z], si) => {
+        for (let k = 0; k < 8; k++) {
+          X.dashT = 0; X.slideT = 0; X.ch.setHeight(1.8); X.ch.teleport(x, 0.05, z); X.vel = { x: 0, y: 0, z: 0 }; X.yaw = (k / 8) * Math.PI * 2 + si * 0.37;
+          let pens = 0, first = null;
+          G.simulate(150, (i) => {
+            const I = X.input;
+            I.move = { x: Math.sin(i * 0.05) * 0.4, y: 1 }; I.sprint = true;
+            I.crouch = i % 50 > 30;                       // slides
+            I.jump = i % 37 === 0;
+            if (i % 45 === 10) { X.abilityCd = 0; X.abilityKind = 'dash'; I.ability = true; X.useAbility(); }
+            X.yaw += Math.sin(i * 0.11) * 0.03;
+            if (pen(X)) { pens++; if (!first) { const q = X.feet(); first = [i, +q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2), X.ch.height, X.dashT > 0, X.slideT > 0, X.grounded]; } }
+            const p = X.feet();
+            if (Math.abs(p.x) > 22.1 || Math.abs(p.z) > 15.1 || p.y < -0.3) pens += 100;
+          });
+          if (pens) bad.push([x, z, k, pens, first]);
+          worst = Math.max(worst, pens);
+          cases.push(pens);
+        }
+      });
+      return { cases: cases.length, bad: bad.slice(0, 6) };
+    })()""")
+    check('no wall phasing: 128 runs x 150 ticks of sprint / slide / dash / jump into walls', not res['bad'], res)
+
+    # ---------- ramps + catwalk, jump, slide ----------
+    res = p.evaluate(r"""(() => {
+      const { G, solo } = T, X = solo(), out = {};
+      X.ch.teleport(-16.5, 0.05, -10); X.input.move = { x: 0, y: 0 }; G.simulate(5); X.vel = { x: 0, y: 0, z: 0 }; X.yaw = Math.PI / 2;
+      let topY = 0, maxX = -99;
+      G.simulate(330, () => { X.input.move = { x: 0, y: 1 }; X.input.sprint = false; X.input.crouch = false; X.input.jump = false; const p = X.feet(); if (p.x > -6 && p.x < 6) topY = Math.max(topY, p.y); maxX = Math.max(maxX, p.x); });
+      out.catwalkY = +topY.toFixed(2); out.endX = +maxX.toFixed(2); out.endY = +X.feet().y.toFixed(2);
+      // jump height
+      X.ch.teleport(0, 0.05, 3); X.vel = { x: 0, y: 0, z: 0 }; X.input.move = { x: 0, y: 0 }; G.simulate(10);
+      let apex = 0; X.input.jump = true; G.simulate(1); X.input.jump = false; G.simulate(60, () => (apex = Math.max(apex, X.feet().y)));
+      out.jump = +apex.toFixed(2);
+      // slide: sprint, then crouch
+      X.ch.teleport(-17, 0.05, 0); X.vel = { x: 0, y: 0, z: 0 }; X.yaw = Math.PI; X.ch.teleport(0, 0.05, 12.2 - 13); X.yaw = 0;
+      X.ch.teleport(-2, 0.05, -6); X.yaw = Math.PI / 2;
+      X.input.move = { x: 0, y: 1 }; X.input.sprint = true; G.simulate(40);
+      const runSp = Math.hypot(X.vel.x, X.vel.z); X.input.crouch = true; G.simulate(3);
+      out.sprint = +runSp.toFixed(2); out.slide = +Math.hypot(X.vel.x, X.vel.z).toFixed(2); out.sliding = X.slideT > 0;
+      X.input.crouch = false; X.input.sprint = false;
+      return out;
+    })()""")
+    check('ramp up to the catwalk (3 m)', abs(res['catwalkY'] - 3) < 0.15, res)
+    check('across the catwalk and down the far ramp', res['endX'] > 13 and res['endY'] < 0.2, res)
+    check('jump height about 1.2 m', 0.9 < res['jump'] < 1.5, res['jump'])
+    check('sprint 8.5 m/s, slide ~10 m/s', 8.2 < res['sprint'] < 8.8 and res['sliding'] and res['slide'] > 9.3, res)
+
+    # ---------- shooting ----------
+    res = p.evaluate(r"""(() => {
+      const { G, K3 } = T, me = G.me, X = T.solo(); const out = {};
+      me.alive = true; me.ch.collider.setEnabled(true); G.mods = {};
+      const aimAt = (pt) => { const e = me.eye(), dx = pt.x - e.x, dy = pt.y - e.y, dz = pt.z - e.z; me.yaw = Math.atan2(dx, dz); me.pitch = -Math.atan2(dy, Math.hypot(dx, dz)); };
+      const setup = (prim, mx, mz, tx, tz) => { X.hp = 100; X.alive = true; X.ch.collider.setEnabled(true); X.ch.teleport(tx, 0.05, tz); X.vel = { x: 0, y: 0, z: 0 }; X.input.move = { x: 0, y: 0 };
+        me.primary = prim; me.reset({ x: mx, z: mz, yaw: 0 }); me.arms.swapT = 0; G.simulate(2); };
+      // SMG body shots at 8 m in the open
+      setup('smg', -3, -1, 5, -1); const hb = () => X.hitboxes();
+      let n = 0; G.simulate(40, () => { const b = hb().body; aimAt({ x: b.a.x, y: (b.a.y + b.b.y) / 2, z: b.a.z }); me.arms.bloom = 0; K3.input.sim.hold('Mouse0'); });
+      K3.input.sim.release('Mouse0'); out.smgHp = Math.round(X.hp); out.smgAlive = X.alive;
+      // pistol headshot = 48 at short range
+      setup('smg', -3, -1, 3, -1); me.arms.cur = 1; me.arms.swapT = 0; G.simulate(1);
+      aimAt(hb().head); me.arms.bloom = 0; K3.input.sim.press('Mouse0'); G.simulate(1); K3.input.sim.release('Mouse0');
+      out.headHp = Math.round(X.hp);
+      // a wall between: no damage (target hides behind the tall crate at x -3.2, z 1.8)
+      setup('smg', -3.2, -2, -3.2, 4); G.simulate(1);
+      G.simulate(30, () => { aimAt(hb().head); K3.input.sim.hold('Mouse0'); }); K3.input.sim.release('Mouse0');
+      out.wallHp = Math.round(X.hp);
+      return out;
+    })()""")
+    check('SMG kills at 8 m (17 a hit, 600 rpm)', not res['smgAlive'], res)
+    check('pistol headshot does 48', res['headHp'] == 52, res)
+    check('walls stop bullets', res['wallHp'] == 100, res)
+    p.screenshot(path=os.path.join(OUT, '3d_shoot.png'))
+
+    # ---------- a whole match, bots on both sides (you are a bot too) ----------
+    p.evaluate("location.reload()"); p.wait_for_function('window.__S && window.__S.me', timeout=30000); p.wait_for_timeout(1500); p.evaluate(HELPERS)
+    res = p.evaluate(r"""(async () => {
+      const { G, K3 } = T; const { Brain } = await import('./strike/bot.js');
+      K3.paused = true; G.brains.push(new Brain(G, G.me, 'normal'));
+      const seen = []; let last = '';
+      for (let chunk = 0; chunk < 160 && G.phase !== 'over'; chunk++) {
+        G.simulate(300);
+        if (G.phase === 'patch') { G.phaseT = 0; }
+        const s = G.score.join('-'); if (s !== last) { seen.push(s + ' @' + Math.round(G.time)); last = s; }
+      }
+      return { phase: G.phase, score: G.score, rounds: G.round, seen, time: Math.round(G.time), kills: [...G.stats.values()].map((v) => v.k) };
+    })()""")
+    check('a full 2v2 match plays out to 5 (bots only)', res['phase'] == 'over' and max(res['score']) == 5, res)
+    check('no JS errors (desktop run)', not errs, errs[:5])
+    b.close()
+
+    # ---------- phone controls ----------
+    b, p, errs = page_with(pw, '?test&touch&auto=1v1', touch=True)
+    p.wait_for_timeout(3500)   # past the 3 s freeze
+    n = p.evaluate("T.K3.touchButtons.length")
+    check('phone: touch buttons shown in a match', n >= 6, n)
+    before = p.evaluate("(() => { const f = T.G.me.feet(); return [f.x, f.z]; })()")
+    cdp = p.context.new_cdp_session(p)
+    tp = lambda typ, x, y: cdp.send('Input.dispatchTouchEvent', {'type': typ, 'touchPoints': ([{'x': x, 'y': y, 'id': 1}] if typ != 'touchEnd' else [])})
+    tp('touchStart', 200, 500)
+    for i in range(1, 12): tp('touchMove', 200, 500 - i * 6); p.wait_for_timeout(60)
+    p.wait_for_timeout(900); tp('touchEnd', 0, 0)
+    after = p.evaluate("(() => { const f = T.G.me.feet(); return [f.x, f.z]; })()")
+    moved = ((after[0] - before[0]) ** 2 + (after[1] - before[1]) ** 2) ** 0.5
+    check('phone: left-side stick walks you forward', moved > 2, round(moved, 2))
+    yaw0 = p.evaluate("T.G.me.yaw")
+    tp('touchStart', 1000, 300)
+    for i in range(1, 10): tp('touchMove', 1000 + i * 15, 300); p.wait_for_timeout(30)
+    tp('touchEnd', 0, 0); p.wait_for_timeout(100)
+    check('phone: right-side drag turns the view', abs(p.evaluate("T.G.me.yaw") - yaw0) > 0.2, round(p.evaluate("T.G.me.yaw") - yaw0, 3))
+    p.screenshot(path=os.path.join(OUT, '3d_phone.png'))
+    check('no JS errors (phone run)', not errs, errs[:5])
+    b.close()
+
+fails = [r for r in results if not r[1]]
+print(f'\n{len(results) - len(fails)}/{len(results)} passed')
+sys.exit(1 if fails else 0)

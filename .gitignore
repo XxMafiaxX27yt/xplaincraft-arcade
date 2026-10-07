@@ -3,3 +3,6 @@ tools/qa_accounts.json
 __pycache__/
 *.pyc
 .DS_Store
+
+# 3D kit build tools (games/kit3d/vendor.js is the committed output)
+tools/kit3d/node_modules/

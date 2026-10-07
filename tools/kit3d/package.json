@@ -1,0 +1,12 @@
+{
+  "name": "novex-kit3d-build",
+  "private": true,
+  "description": "Builds games/kit3d/vendor.js: the parts of Babylon.js + Rapier the 3D games use, tree-shaken into one ES module. Run: npm install && npm run build",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": {
+    "@babylonjs/core": "^8.0.0",
+    "@babylonjs/loaders": "^8.0.0",
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "esbuild": "^0.25.0"
+  }
+}

@@ -2045,6 +2045,30 @@ export const GAME_LIST = [
 "cover": "games/covers/neon-brawl.png"
 },
 {
+"id": "novex-strike",
+"n": 206,
+"title": "NOVEX STRIKE",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp"
+],
+"minPlayers": 1,
+"maxPlayers": 4,
+"desc": "A fast 3D arena shooter. 1v1 or 2v2 against bots in THE FOUNDRY: tight indoor rooms, an exposed metal catwalk, a bent tunnel, cover in the middle. Pick a primary (SMG, Shotgun or Marksman) - you always carry a pistol and a knife - and an ability: a 5.5 m DASH or a 100 HP BARRIER. First to 5 rounds. Lose a round and you pick a PATCH for the next one (Low Gravity, Overclock, Headshot Surge...). After 45 seconds the Overcharge ring closes in. Slide, jump, crouch-peek, headshots. Plus a training range to learn every gun.",
+"controls": "WASD move · mouse look · click shoot · right click aim / scope · SPACE jump · CTRL crouch (slide while running) · SHIFT sprint · R reload · 1 2 3 / Q weapons · E ability · TAB scores. Phones: left side moves, right side looks, FIRE / AIM / JUMP / CROUCH buttons.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a NOVEX STRIKE match"
+}
+],
+"file": "games/3d/novex-strike.html",
+"cover": "games/covers/novex-strike.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
