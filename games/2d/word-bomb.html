@@ -1,0 +1,176 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Word Bomb</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"word-bomb","n":211,"title":"WORD BOMB","genre":"mind","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"A bomb with a secret fuse goes round the table. It shows a few letters - ING, STR, AT - and whoever holds it must type a real word containing them before it blows. Get one in and the bomb jumps to the next player. Nobody knows when it will go off. Three lives each, no word twice. Use every letter from A to Z across your words to earn a life back. Last one standing wins. Solo against three bots or online for up to 8.","controls":"Type a word that contains the letters on the bomb + Enter (phones: the on-screen keys). Every letter A-Z you use counts toward a bonus life.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Survive the Word Bomb"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/words.js"></script><script src="../kit/dict.js"></script>
+<script>
+const LIVES = 3, MINFUSE = 9, MAXFUSE = 22, MINTURN = 4.5;
+const PCOL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#ff3355', '#f4f4f4'];
+const ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const AZ = 'abcdefghijklmnopqrstuvwxyz';
+let dictOk = false, PROMPTS = null;
+DICT.ready.then(() => { dictOk = true; buildPrompts(); });
+// letter chunks that plenty of everyday words contain (so every bomb is fair)
+function buildPrompts() {
+  const common = [...(window.WORDS?.all || [])].filter((w) => /^[a-z]+$/.test(w)), cnt = {};
+  for (const w of common) { const seen = new Set(); for (let L = 2; L <= 3; L++) for (let i = 0; i + L <= w.length; i++) { const sub = w.slice(i, i + L); if (!seen.has(sub)) { seen.add(sub); cnt[sub] = (cnt[sub] || 0) + 1; } } }
+  PROMPTS = { easy: Object.keys(cnt).filter((k) => k.length === 2 && cnt[k] >= 30), mid: Object.keys(cnt).filter((k) => (k.length === 2 && cnt[k] >= 12) || (k.length === 3 && cnt[k] >= 14)), hard: Object.keys(cnt).filter((k) => k.length === 3 && cnt[k] >= 7) };
+}
+const pickPrompt = (s) => { const lvl = s.round < 6 ? 'easy' : s.round < 16 ? 'mid' : 'hard', L = PROMPTS[lvl]; return L[Math.floor(Math.random() * L.length)]; };
+const nm = (s, i) => (s.p[i].me && !K.net ? 'YOU' : s.p[i].name);
+const aliveP = (s) => s.p.filter((p) => p.lives > 0);
+const nextAlive = (s, i) => { for (let k = 1; k <= s.p.length; k++) { const j = (i + k) % s.p.length; if (s.p[j].lives > 0) return j; } return i; };
+
+// ---------- host ----------
+function start(s) {
+  s.p.forEach((p) => { p.lives = LIVES; p.used = new Set(); p.typed = ''; p.place = 0; });
+  s.used = new Set(); s.round = 0; s.turn = K.irand(0, s.p.length - 1); s.ph = 'play';
+  newBomb(s); s.msg = 'the bomb is lit!'; sync(s);
+}
+function newBomb(s) { s.fuse = MINFUSE + Math.random() * (MAXFUSE - MINFUSE); s.prompt = pickPrompt(s); s.turnT = 0; s.p.forEach((p) => (p.typed = '')); s.round++; s.botWord = null; }
+function submit(s, i, word) {
+  if (s.ph !== 'play' || s.turn !== i) return;
+  word = String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+  const p = s.p[i];
+  let bad = null;
+  if (word.length < 3) bad = 'too short';
+  else if (!word.includes(s.prompt)) bad = `no "${s.prompt.toUpperCase()}" in it`;
+  else if (s.used.has(word)) bad = 'already used';
+  else if (!DICT.isWord(word)) bad = 'not a word';
+  if (bad) { s.fx.push('bad:' + i); s.msg = `${nm(s, i)}: ${word.toUpperCase()} - ${bad}`; p.typed = ''; sync(s); return; }
+  s.used.add(word);
+  for (const ch of word) p.used.add(ch);
+  // every letter A-Z: +1 life (up to the start amount... and one more)
+  if (AZ.split('').every((ch) => p.used.has(ch))) { p.used = new Set(); if (p.lives < LIVES + 1) { p.lives++; s.msg = `${nm(s, i)} used the whole alphabet - +1 LIFE!`; s.fx.push('life'); } }
+  else s.msg = `${nm(s, i)}: ${word.toUpperCase()}`;
+  s.fx.push('ok'); p.typed = '';
+  s.turn = nextAlive(s, i); s.turnT = 0; s.prompt = pickPrompt(s); s.round++; s.botWord = null;
+  sync(s);
+}
+function boom(s) {
+  const i = s.turn, p = s.p[i];
+  p.lives--; s.fx.push('boom'); s.msg = `💥 BOOM! ${nm(s, i)} ${p.lives > 0 ? `has ${p.lives} ${p.lives === 1 ? 'life' : 'lives'} left` : 'is out'}`;
+  if (p.lives <= 0) p.place = aliveP(s).length + 1;
+  if (aliveP(s).length <= 1) { const w = aliveP(s)[0]; if (w) w.place = 1; s.ph = 'over'; s.msg = `${w ? nm(s, s.p.indexOf(w)) : 'nobody'} survives the bomb!`; sync(s); setTimeout(() => endGame(s), 2500); return; }
+  s.turn = nextAlive(s, i);
+  newBomb(s); s.boomT = 1.4; sync(s);
+}
+function sync(s) {
+  if (!K.net) return;
+  K.net.send({ t: 'st', ph: s.ph, turn: s.turn, prompt: s.prompt, msg: s.msg, p: s.p.map((p) => [p.lives, p.typed, AZ.split('').filter((c) => p.used.has(c)).join(''), p.place]), fx: s.fx.slice(), boomT: s.boomT || 0 });
+}
+function endGame(s) {
+  if (s.ended) return; s.ended = true;
+  const me = s.p.find((p) => p.me), won = me && me.place === 1, n = s.p.length;
+  K.end(s, { score: me ? (n - me.place + 1) * 100 + (won ? 400 : 0) + s.used.size * 5 : 0, won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST ONE STANDING!' : `#${me?.place} OF ${n}`, text: s.p.slice().sort((a, b) => a.place - b.place).map((p) => `#${p.place} ${p.me ? 'YOU' : p.name}`).join(' · ') });
+}
+// bots: find a word with the letters (common words first), type it at human speed, sometimes blank
+function botStep(s, i, dt) {
+  const p = s.p[i];
+  if (!s.botWord) {
+    const pr = s.prompt, sk = p.skill;
+    const common = [...(window.WORDS?.all || [])].filter((w) => w.includes(pr) && !s.used.has(w) && w.length >= 3);
+    let w = common.length && Math.random() < 0.85 ? K.pick(common) : null;
+    if (!w) { const all = DICT.all(), start = Math.floor(Math.random() * all.length); for (let k = 0; k < all.length; k += 1) { const x = all[(start + k) % all.length]; if (x.length <= 9 && x.includes(pr) && !s.used.has(x)) { w = x; break; } } }
+    s.botWord = { w: Math.random() < 0.05 + (1 - sk) * 0.25 ? null : w, think: 0.6 + Math.random() * (2.5 - sk * 1.4), k: 0, rate: 4 + sk * 6 };
+  }
+  const B = s.botWord;
+  if (B.think > 0) { B.think -= dt; return; }
+  if (!B.w) return;   // blanked: the bot just sweats
+  B.k += dt * B.rate; p.typed = B.w.slice(0, Math.floor(B.k));
+  if (B.k >= B.w.length + 1) submit(s, i, B.w);
+}
+
+const meI = (s) => Math.max(0, s.p.findIndex((p) => p.me));
+K.game({
+  bg: '#160c22', typing: true, touch: { stick: false, buttons: [] },
+  init(s) {
+    s.p = K.seats(4, 'BOT').slice(0, 8).map((p, i) => ({ ...p, name: p.bot ? ['SPELLA', 'WORDY', 'LEXI', 'NOUN', 'VERBO', 'QUILL', 'INK'][i % 7] : p.name, col: PCOL[i], lives: LIVES, used: new Set(), typed: '', place: 0, skill: 0.55 + Math.random() * 0.35 }));
+    s.fx = []; s.ph = K.isHost() ? 'load' : 'wait'; s.msg = 'loading the dictionary…'; s.mine = ''; s.shake = 0; s.tick = 0;
+  },
+  onNet(s, d, from) {
+    const host = K.net.isHost, i = s.p.findIndex((p) => p.id === from);
+    if (!host) {
+      if (d.t === 'st') { Object.assign(s, { ph: d.ph, turn: d.turn, prompt: d.prompt, msg: d.msg, boomT: d.boomT }); d.p.forEach((o, k) => { const p = s.p[k]; if (!p) return; p.lives = o[0]; if (!p.me) p.typed = o[1]; p.used = new Set(o[2].split('')); p.place = o[3]; }); (d.fx || []).forEach((f) => sound(s, f)); if (d.ph === 'over') setTimeout(() => endGame(s), 2500); }
+      return;
+    }
+    if (i < 0) return;
+    if (d.t === 'type' && s.turn === i) s.p[i].typed = String(d.w || '').slice(0, 24);
+    if (d.t === 'word') submit(s, i, d.w);
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    const host = K.isHost(), me = meI(s), my = s.p[me];
+    if (s.shake > 0) s.shake -= dt;
+    if (s.boomT > 0) s.boomT -= dt;
+    // my typing (keyboard, or the on-screen keys on a phone)
+    if ((s.ph === 'play') && s.turn === me && my.lives > 0) {
+      let w = s.mine;
+      for (const ch of K.typed()) if (w.length < 24) w += ch.toLowerCase();
+      if (K.tap('Backspace')) w = w.slice(0, -1);
+      if (K.mouse.clicked) { for (const k of keys()) if (K.inRect(K.mouse.x, K.mouse.y, k)) { if (k.c === '⌫') w = w.slice(0, -1); else if (k.c === 'ENTER') { s.enter = true; } else if (w.length < 24) w += k.c.toLowerCase(); K.sfx('click'); } }
+      if (w !== s.mine) { s.mine = w; my.typed = w; if (!host) { s.sendT = 0; } }
+      if (K.tap('Enter', 'NumpadEnter') || s.enter) { s.enter = false; if (s.mine) { if (host) submit(s, me, s.mine); else K.net.send({ t: 'word', w: s.mine }); s.mine = ''; my.typed = ''; } }
+      if (!host) { s.sendT = (s.sendT ?? 0) - dt; if (s.sendT <= 0) { s.sendT = 0.15; K.net.send({ t: 'type', w: s.mine }); } }
+    } else { K.typed(); if (s.turn !== me) s.mine = ''; }
+    if (!host) return;
+    for (const f of s.fx) sound(s, f);
+    s.fx = [];
+    if (s.ph === 'load') { if (dictOk && PROMPTS) start(s); return; }
+    if (s.ph !== 'play') return;
+    if (s.boomT > 0) return;   // a short pause after a boom
+    s.fuse -= dt; s.turnT += dt;
+    // the fuse never blows in the first few seconds of a turn (so nobody dies the instant it arrives)
+    if (s.fuse <= 0 && s.turnT > MINTURN) boom(s);
+    const cur = s.p[s.turn];
+    if (cur.bot && cur.lives > 0) botStep(s, s.turn, dt);
+    s.syncT = (s.syncT || 0) - dt; if (s.syncT <= 0) { s.syncT = 0.1; sync(s); }
+  },
+  draw(s) {
+    const c = K.ctx(), me = meI(s), my = s.p[me];
+    if (s.shake > 0) c.translate((Math.random() - 0.5) * 14 * s.shake, (Math.random() - 0.5) * 14 * s.shake);
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#241238', '#100818']); c.fillRect(0, 0, 960, 540);
+    if (s.ph === 'load' || s.ph === 'wait') { K.text('WORD BOMB', 480, 230, 50, '#fff', 'center', 'd', 18); K.text(s.msg || 'waiting…', 480, 290, 16, '#8e88b8', 'center', 'u'); return; }
+    // players in a ring
+    const phone = K.isTouch, n = s.p.length, cx = 480, cy = phone ? 128 : 205, R = 175, RY = phone ? 0.5 : 0.78;
+    s.p.forEach((p, k) => {
+      const a = -Math.PI / 2 + (k / n) * Math.PI * 2, x = cx + Math.cos(a) * R * 1.55, y = cy + Math.sin(a) * R * RY, cur = s.turn === k && s.ph === 'play';
+      K.alpha(p.lives > 0 ? 1 : 0.3);
+      K.circle(x, y, cur ? 30 : 24, cur ? p.col : '#2a1c40'); K.circle(x, y, cur ? 26 : 21, '#160c22');
+      K.text((p.me ? 'YOU' : p.name).slice(0, 8), x, y - 2, 11, p.col, 'center', 'd');
+      K.text(p.lives > 0 ? '♥'.repeat(p.lives) : 'OUT', x, y + 13, 11, p.lives > 0 ? '#ff3355' : '#8e88b8', 'center', 'd');
+      if (p.typed && p.lives > 0) K.text(p.typed.toUpperCase(), x, y + (y > cy ? 44 : -40), 15, '#fff', 'center', 'd');
+      K.alpha(1);
+    });
+    // the bomb: shakes harder the longer it has been held
+    const cur = s.p[s.turn], held = Math.min(1, ((s.turnT ?? 2) - 2) / 8), jig = s.ph === 'play' ? (Math.random() - 0.5) * 4 * Math.max(0, held) : 0;
+    const a = -Math.PI / 2 + (s.turn / n) * Math.PI * 2;
+    K.line(cx, cy, cx + Math.cos(a) * 90, cy + Math.sin(a) * (phone ? 30 : 50), cur ? cur.col : '#fff', 3);
+    if (s.boomT > 0) { K.text('💥', cx, cy, 120 * (1.2 - s.boomT * 0.3), '#fff'); }
+    else { K.circle(cx + jig, cy + 6 + jig, 54, '#1a1424'); K.circle(cx + jig, cy + 6 + jig, 50, '#2c2438'); K.text('💣', cx + jig, cy - 14, 42, '#fff'); K.text((s.prompt || '').toUpperCase(), cx + jig, cy + 28, 34, '#ffd93a', 'center', 'd', 12); }
+    K.text(s.msg || '', 480, phone ? 248 : 410, 15, '#fff', 'center', 'u');
+    // my word + letters used toward the bonus life
+    if (my.lives > 0) {
+      const mine = s.turn === me && s.ph === 'play';
+      K.rect(280, phone ? 290 : 430, 400, 44, '#0e0818', 10); K.stroke(280, phone ? 290 : 430, 400, 44, mine ? '#22e6ff' : '#3a3060', 2, 10);
+      K.text(mine ? (s.mine.toUpperCase() || 'type a word…') + (Math.sin(K.time() * 8) > 0 ? '|' : '') : 'wait for the bomb…', 480, (phone ? 290 : 430) + 22, 20, mine && s.mine ? '#fff' : '#5d5a80', 'center', 'u');
+      if (!phone) AZ.split('').forEach((ch, k) => K.text(ch.toUpperCase(), 228 + k * 20, 500, 14, my.used.has(ch) ? '#3dffa0' : '#3a3060', 'center', 'd'));
+      if (phone && mine) keys().forEach((k) => { K.rect(k.x, k.y, k.w, k.h, k.c.length > 1 ? '#3a1f6a' : '#1b1738', 7); K.text(k.c, k.x + k.w / 2, k.y + k.h / 2 + 1, k.c.length > 1 ? 12 : 18, '#fff', 'center', 'd'); });
+    } else K.text('you are out - watching', 480, 460, 16, '#ff6a7a', 'center', 'd');
+  },
+  ai(s) { /* title screen */ },
+});
+function keys() {
+  if (!K.isTouch) return [];
+  const out = [];
+  ROWS.forEach((r, ri) => { const kw = 58, gap = 5, w0 = r.length * kw - gap, x0 = 480 - w0 / 2 - (ri === 2 ? 60 : 0); for (let i = 0; i < r.length; i++) out.push({ c: r[i], x: x0 + i * kw, y: 360 + ri * 58, w: kw - gap, h: 52 }); });
+  out.push({ c: '⌫', x: 480 + (7 * 58) / 2 - 55, y: 476, w: 60, h: 52 }, { c: 'ENTER', x: 480 + (7 * 58) / 2 + 10, y: 476, w: 110, h: 52 });
+  return out;
+}
+function sound(s, f) {
+  if (f === 'ok') K.tone(700, 0.07, 'triangle', 0.05);
+  if (f.startsWith('bad')) K.tone(160, 0.15, 'square', 0.04);
+  if (f === 'life') K.sfx('power');
+  if (f === 'boom') { K.sfx('boom'); s.shake = 0.6; K.flash('#ff8a3a', 0.25); }
+}
+</script></body></html>

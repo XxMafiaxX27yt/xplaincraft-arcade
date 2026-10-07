@@ -3087,6 +3087,31 @@ export const GAME_LIST = [
 "cover": "games/covers/letter-chain.png"
 },
 {
+"id": "word-bomb",
+"n": 211,
+"title": "WORD BOMB",
+"genre": "mind",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "A bomb with a secret fuse goes round the table. It shows a few letters - ING, STR, AT - and whoever holds it must type a real word containing them before it blows. Get one in and the bomb jumps to the next player. Nobody knows when it will go off. Three lives each, no word twice. Use every letter from A to Z across your words to earn a life back. Last one standing wins. Solo against three bots or online for up to 8.",
+"controls": "Type a word that contains the letters on the bomb + Enter (phones: the on-screen keys). Every letter A-Z you use counts toward a bonus life.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Survive the Word Bomb"
+}
+],
+"file": "games/2d/word-bomb.html",
+"dim": "2d",
+"cover": "games/covers/word-bomb.png"
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",

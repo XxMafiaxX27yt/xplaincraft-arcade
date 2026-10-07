@@ -17,6 +17,8 @@
       out.length = n; list = out; return n;
     }),
     get size() { return list.length; },
+    // the whole list (sorted, lower case) - for bots that need to search it
+    all: () => list,
     isWord: (w) => { w = String(w).toLowerCase(); const i = lb(w); return list[i] === w; },
     isPrefix: (p) => { p = String(p).toLowerCase(); if (!p) return true; const i = lb(p); return i < list.length && list[i].startsWith(p); },
     next: (p) => { p = String(p).toLowerCase(); return 'abcdefghijklmnopqrstuvwxyz'.split('').filter((c) => D.isPrefix(p + c)); },
