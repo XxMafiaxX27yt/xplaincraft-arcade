@@ -1,0 +1,199 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Murder Mystery</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"murder-mystery","n":202,"title":"MURDER MYSTERY","genre":"mystery","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"Everyone at the party gets a secret role. One is the MURDERER with a hidden knife - stab or throw it, but draw it and anyone who sees will know. One is the SHERIFF with a gun - shoot the murderer, but shoot an innocent and you go down too, dropping the gun for someone braver. Everyone else: collect coins. Every 8 coins buys you a clue about the murderer's hat or colour. Survive 150 seconds or catch the killer.","controls":"WASD / stick to move · mouse to aim · click (or Space / ACTION) to stab, throw or shoot · Shift / E (KNIFE) to draw or hide the knife","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a round of Murder Mystery"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const T = 40, MAP = [
+  '########################################',
+  '#..........#...........#...............#',
+  '#..xx......#...........#..xxxx.........#',
+  '#..xx......#....xx.....#..xxxx.........#',
+  '#...............xx.....................#',
+  '#..........#...........#...............#',
+  '#..........#....xx.....#.......xx......#',
+  '#####..#########..##########..######..##',
+  '#......................................#',
+  '#...xx........xxxxxxxxx.........xx.....#',
+  '#...xx........xxxxxxxxx.........xx.....#',
+  '#......................................#',
+  '#####..#########..##########..######..##',
+  '#..........#...........#...............#',
+  '#..x.......#....xx.....#...xx..........#',
+  '#..x...........xxxx.........xx.........#',
+  '#..........#....xx.....#...............#',
+  '#..........#...........#.......xxx.....#',
+  '########################################',
+];
+const MW = 40, MH = MAP.length, WW = MW * T, WH = MH * T;
+const COLS = [['#e8403a', 'red'], ['#3a8ae8', 'blue'], ['#3ac85a', 'green'], ['#f4c83a', 'yellow'], ['#a85ae8', 'purple'], ['#ff8a3a', 'orange'], ['#f2f2f2', 'white'], ['#ff7ab8', 'pink']];
+const HATS = ['cap', 'top hat', 'crown', 'beanie', 'bow', 'no hat'];
+const solid = (x, y) => '#x'.includes((MAP[y] || '#')[x] || '#');
+const blocked = (x, y, r = 12) => [[-r, -r], [r, -r], [-r, r], [r, r]].some(([a, b]) => solid(Math.floor((x + a) / T), Math.floor((y + b) / T)));
+const sees = (a, b, max = 420) => { const d = Math.hypot(b.x - a.x, b.y - a.y); if (d > max) return false; for (let k = 10; k < d; k += 12) { const x = a.x + ((b.x - a.x) * k) / d, y = a.y + ((b.y - a.y) * k) / d; if (solid(Math.floor(x / T), Math.floor(y / T)) && (MAP[Math.floor(y / T)][Math.floor(x / T)] === '#')) return false; } return true; };
+const floorTiles = []; MAP.forEach((r, y) => [...r].forEach((c, x) => c === '.' && floorTiles.push([x, y])));
+const randFloor = () => { const [x, y] = K.pick(floorTiles); return { x: x * T + 20, y: y * T + 20 }; };
+function nextStep(sx, sy, tx, ty) {   // BFS, returns the next tile centre
+  const k = (x, y) => y * MW + x, prev = new Map([[k(sx, sy), -1]]), q = [[sx, sy]];
+  while (q.length) { const [x, y] = q.shift(); if (x === tx && y === ty) break; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + a, Y = y + b; if (solid(X, Y) || prev.has(k(X, Y))) continue; prev.set(k(X, Y), k(x, y)); q.push([X, Y]); } }
+  if (!prev.has(k(tx, ty))) return null; let c = k(tx, ty); while (prev.get(c) !== k(sx, sy) && prev.get(c) !== -1) c = prev.get(c); return { x: (c % MW) * T + 20, y: Math.floor(c / MW) * T + 20 };
+}
+const meP = (s) => s.p.find((p) => p.me) || s.p[0];
+function startRound(s) {
+  const roles = K.shuffle(s.p.map((_, i) => i)); s.p.forEach((p) => (p.role = 'inno')); s.p[roles[0]].role = 'murderer'; s.p[roles[1]].role = 'sheriff';
+  s.p.forEach((p, i) => { const f = randFloor(); Object.assign(p, f, { alive: true, knife: false, gun: p.role === 'sheriff', cd: 0, coins: 0, clues: 0, fa: 0, know: null, wp: null }); });
+  s.coins = Array.from({ length: 20 }, randFloor); s.shots = []; s.drop = null; s.time = 150; s.intro = 3.5; s.ev = [];
+  if (K.net) s.p.forEach((p) => !p.bot && !p.me && K.net.send({ t: 'role', r: p.role }, p.id));
+}
+function clue(s, p) {
+  const M = s.p.find((q) => q.role === 'murderer'); p.clues++;
+  const text = p.clues % 2 ? `the murderer wears a ${M.hat === 'no hat' ? 'bare head (no hat)' : M.hat.toUpperCase()}` : `the murderer is ${M.cname.toUpperCase()}`;
+  if (p.me) { s.clue.push(text); s.clueT = 4; K.sfx('power'); } else if (!p.bot) K.net.send({ t: 'clue', text }, p.id); else p.suspect = M.id;
+}
+function kill(s, v, by, how) {
+  if (!v.alive) return; v.alive = false; s.ev.push({ k: 'die', x: v.x, y: v.y, who: v.name, how });
+  if (v.gun) { v.gun = false; s.drop = { x: v.x, y: v.y }; s.ev.push({ k: 'drop' }); }
+  // witnesses: anyone who can see the killer now knows
+  if (by) s.p.forEach((w) => { if (w.alive && w !== by && sees(w, by, 380)) w.know = by.id; });
+}
+function fire(s, p, ang) {
+  if (!p.alive || p.cd > 0) return;
+  if (p.role === 'murderer') {
+    if (!p.knife) { p.knife = true; p.cd = 0.3; return; }
+    const near = s.p.find((q) => q !== p && q.alive && Math.hypot(q.x - p.x, q.y - p.y) < 40);
+    if (near) { kill(s, near, p, 'stab'); p.cd = 0.9; s.ev.push({ k: 'stab', x: near.x, y: near.y }); }
+    else { s.shots.push({ x: p.x, y: p.y, vx: Math.cos(ang) * 520, vy: Math.sin(ang) * 520, by: p.id, knife: true, life: 0.9 }); p.cd = 2.6; s.ev.push({ k: 'throw', x: p.x, y: p.y }); s.p.forEach((w) => { if (w.alive && w !== p && sees(w, p, 380)) w.know = p.id; }); }
+  } else if (p.gun) { s.shots.push({ x: p.x, y: p.y, vx: Math.cos(ang) * 950, vy: Math.sin(ang) * 950, by: p.id, life: 0.6 }); p.cd = 2.4; s.ev.push({ k: 'bang', x: p.x, y: p.y }); }
+}
+function bot(s, p, dt) {
+  const M = s.p.find((q) => q.role === 'murderer'), alive = s.p.filter((q) => q.alive && q !== p);
+  let goal = null, want = null;
+  if (p.role === 'murderer') {
+    const lone = alive.filter((q) => !alive.some((w) => w !== q && Math.hypot(w.x - q.x, w.y - q.y) < 260)).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0] || (s.time < 70 ? alive.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0] : null);
+    if (lone) { goal = lone; const d = Math.hypot(lone.x - p.x, lone.y - p.y); p.knife = d < 140; if (d < 36) want = Math.atan2(lone.y - p.y, lone.x - p.x); else if (d < 260 && d > 120 && sees(p, lone) && Math.random() < dt * 0.4) { p.knife = true; want = Math.atan2(lone.y - p.y, lone.x - p.x); } }
+    else p.knife = false;
+  } else {
+    const k = s.p.find((q) => q.id === (p.know || (p.gun && p.suspect)) && q.alive);
+    if (p.gun && k) { goal = k; if (sees(p, k, 400)) want = Math.atan2(k.y - p.y, k.x - p.x) + K.rand(-0.06, 0.06); }
+    else if (!p.gun && s.drop && Math.hypot(s.drop.x - p.x, s.drop.y - p.y) < 500) goal = s.drop;
+    else if (k && Math.hypot(k.x - p.x, k.y - p.y) < 300) { goal = { x: p.x * 2 - k.x, y: p.y * 2 - k.y }; }
+    else goal = s.coins.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  }
+  if (!goal) { if (!p.wp || Math.hypot(p.wp.x - p.x, p.wp.y - p.y) < 20) p.wp = randFloor(); goal = p.wp; }
+  const gx = K.clamp(Math.floor(goal.x / T), 1, MW - 2), gy = K.clamp(Math.floor(goal.y / T), 1, MH - 2);
+  p.repath = (p.repath || 0) - dt; if (p.repath <= 0 || !p.step) { p.step = solid(gx, gy) ? null : nextStep(Math.floor(p.x / T), Math.floor(p.y / T), gx, gy); p.repath = 0.3; }
+  if (p.step) { const dx = p.step.x - p.x, dy = p.step.y - p.y, d = Math.hypot(dx, dy) || 1; move(p, (dx / d) * 140 * dt, (dy / d) * 140 * dt); p.fa = Math.atan2(dy, dx); if (d < 4) p.step = null; }
+  if (want != null) fire(s, p, want);
+}
+function move(p, vx, vy) { if (!blocked(p.x + vx, p.y)) p.x += vx; if (!blocked(p.x, p.y + vy)) p.y += vy; }
+function endCheck(s) {
+  const M = s.p.find((q) => q.role === 'murderer'), others = s.p.filter((q) => q.role !== 'murderer' && q.alive);
+  if (!M.alive) return 'inno'; if (!others.length) return 'murderer'; if (s.time <= 0) return 'inno'; return null;
+}
+function finish(s, win) {
+  if (s.over) return; s.over = true; const me = meP(s), mine = me.role === 'murderer' ? 'murderer' : 'inno', won = win === mine, M = s.p.find((q) => q.role === 'murderer');
+  K.end(s, { score: (won ? 30 : 0) + (me.coins || 0) * 2, won, stats: { won: won ? 1 : 0 }, title: win === 'murderer' ? 'THE MURDERER WINS' : 'THE INNOCENTS WIN', text: `The murderer was ${M.me ? 'YOU' : M.name} (${M.cname}, ${M.hat}). You collected ${me.coins || 0} coins.` });
+}
+K.game({
+  bg: '#14101a', touch: { buttons: [['Space', 'ACTION'], ['ShiftLeft', 'KNIFE']] },
+  init(s) {
+    const hats = K.shuffle(HATS.concat(HATS)), cols = K.shuffle(COLS.slice());
+    s.p = K.seats(K.net ? Math.max(5, K.net.players.length) : 6, 'GUEST').map((p, i) => ({ ...p, col: cols[i % 8][0], cname: cols[i % 8][1], hat: hats[i], x: 0, y: 0, fa: 0, alive: true, coins: 0 }));
+    s.clue = []; s.clueT = 0; s.sendT = 0; s.inputs = {}; s.msg = ''; s.msgT = 0; s.role = null;
+    if (K.isHost()) { startRound(s); s.role = meP(s).role; } else { s.time = 150; s.coins = []; s.shots = []; s.intro = 3.5; }
+  },
+  onNet(s, d, from) {
+    const host = K.net.isHost, p = s.p.find((q) => q.id === from);
+    if (d.t === 'role' && !host) { s.role = d.r; meP(s).role = d.r; }
+    if (d.t === 'clue' && !host) { s.clue.push(d.text); s.clueT = 4; K.sfx('power'); }
+    if (d.t === 'me' && host && p && p.alive) { p.x = d.x; p.y = d.y; p.fa = d.fa; if (p.role === 'murderer') p.knife = !!d.k; }
+    if (d.t === 'act' && host && p) fire(s, p, d.ang);
+    if (d.t === 'st' && !host) {
+      s.time = d.tm; s.coins = d.c.map(([x, y]) => ({ x, y })); s.shots = d.sh; s.drop = d.dr; s.intro = d.in;
+      d.p.forEach((o, i) => { const q = s.p[i]; if (!q) return; if (!q.me || !s.placed) { q.x = o[0]; q.y = o[1]; q.fa = o[2]; } q.alive = !!o[3]; q.knife = !!o[4]; q.gun = !!o[5]; q.coins = o[6]; if (q.me && !q.alive) q.dead = true; });
+      s.placed = true; (d.ev || []).forEach((e) => evFx(s, e)); if (d.end) { const M = s.p[d.mi]; if (M) M.role = 'murderer'; finish(s, d.end); }
+    }
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    const me = meP(s), m = K.mouse, host = K.isHost();
+    s.intro -= dt; s.clueT -= dt; s.msgT -= dt;
+    // me
+    if (me.alive && s.intro <= 0) {
+      const d = K.dir(), L = Math.hypot(d.x, d.y) || 1; move(me, (d.x / L) * 150 * dt, (d.y / L) * 150 * dt);
+      const cx = K.clamp(me.x - 480, 0, WW - 960), cy = K.clamp(me.y - 270, 0, WH - 540);
+      if (!K.isTouch) me.fa = Math.atan2(m.y + cy - me.y, m.x + cx - me.x);
+      else { const tgt = s.p.filter((q) => q !== me && q.alive && Math.hypot(q.x - me.x, q.y - me.y) < 420).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0]; if (d.x || d.y) me.fa = Math.atan2(d.y, d.x); if (tgt && K.down('Space')) me.fa = Math.atan2(tgt.y - me.y, tgt.x - me.x); }
+      if ((me.role || s.role) === 'murderer' && K.tap('ShiftLeft', 'KeyE')) me.knife = !me.knife;
+      if (K.tap('Space') || (m.clicked && !K.isTouch)) { if (host) fire(s, me, me.fa); else K.net.send({ t: 'act', ang: me.fa }); }
+    }
+    if (!host) { s.sendT -= dt; if (s.sendT <= 0 && s.placed) { K.net.send({ t: 'me', x: Math.round(me.x), y: Math.round(me.y), fa: +me.fa.toFixed(2), k: me.knife }); s.sendT = 0.066; } s.time -= dt; return; }
+    // host: the world (secret roles get re-sent for a few seconds in case one went missing)
+    if (K.net && s.time > 140) { s.roleT = (s.roleT || 0) - dt; if (s.roleT <= 0) { s.roleT = 1.5; s.p.forEach((p) => !p.bot && !p.me && K.net.send({ t: 'role', r: p.role }, p.id)); } }
+    if (s.intro <= 0) {
+      s.time -= dt;
+      s.p.forEach((p) => { p.cd = Math.max(0, p.cd - dt); if (p.bot && p.alive) bot(s, p, dt); });
+      // coins + clues + the dropped gun
+      s.p.forEach((p) => { if (!p.alive) return; s.coins = s.coins.filter((c) => { if (Math.hypot(c.x - p.x, c.y - p.y) < 22) { p.coins++; if (p.me) K.sfx('coin'); if (p.role !== 'murderer' && p.coins % 8 === 0) clue(s, p); return false; } return true; }); if (s.drop && p.role !== 'murderer' && !p.gun && Math.hypot(s.drop.x - p.x, s.drop.y - p.y) < 24) { p.gun = true; s.drop = null; s.ev.push({ k: 'hero', who: p.name }); } });
+      if (s.coins.length < 20 && Math.random() < dt * 1.2) s.coins.push(randFloor());
+      // projectiles
+      for (const sh of s.shots) { const steps = 4; for (let k = 0; k < steps && sh.life > 0; k++) { sh.x += (sh.vx * dt) / steps; sh.y += (sh.vy * dt) / steps; if (solid(Math.floor(sh.x / T), Math.floor(sh.y / T)) && MAP[Math.floor(sh.y / T)][Math.floor(sh.x / T)] === '#') { sh.life = 0; break; } const hit = s.p.find((q) => q.alive && q.id !== sh.by && Math.hypot(q.x - sh.x, q.y - sh.y) < 16); if (hit) { sh.life = 0; const by = s.p.find((q) => q.id === sh.by); kill(s, hit, sh.knife ? by : null, sh.knife ? 'knife' : 'shot'); if (!sh.knife && hit.role !== 'murderer' && by && by.alive) { kill(s, by, null, 'guilt'); } } } sh.life -= dt; }
+      s.shots = s.shots.filter((sh) => sh.life > 0);
+    }
+    const end = endCheck(s), ev = s.ev.splice(0); ev.forEach((e) => evFx(s, e));
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || ev.length || end) { K.net.send({ t: 'st', tm: +s.time.toFixed(1), in: +s.intro.toFixed(1), c: s.coins.map((c) => [Math.round(c.x), Math.round(c.y)]), sh: s.shots.map((q) => ({ x: Math.round(q.x), y: Math.round(q.y), vx: q.vx, vy: q.vy, knife: !!q.knife })), dr: s.drop, p: s.p.map((p) => [Math.round(p.x), Math.round(p.y), +p.fa.toFixed(2), p.alive ? 1 : 0, p.role === 'murderer' && p.knife ? 1 : 0, p.gun ? 1 : 0, p.coins]), ev, end, mi: s.p.findIndex((q) => q.role === 'murderer') }); s.sendT = 0.08; } }
+    if (end) finish(s, end);
+  },
+  draw(s) {
+    const c = K.ctx(), me = meP(s), cx = K.clamp(me.x - 480, 0, WW - 960), cy = K.clamp(me.y - 270, 0, WH - 540);
+    c.save(); c.translate(-cx, -cy);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { const t = MAP[y][x], X = x * T, Y = y * T; if (t === '#') { K.rect(X, Y, T, T, '#3a2e3e'); K.rect(X, Y, T, 6, '#4a3e52'); } else { K.rect(X, Y, T, T, y > 7 && y < 12 ? ((x + y) % 2 ? '#5a3a2a' : '#5e3e2e') : (x + y) % 2 ? '#2a2a3a' : '#2e2e40'); if (t === 'x') { K.rect(X + 2, Y + 2, T - 4, T - 4, '#6a4a3a', 6); K.rect(X + 6, Y + 6, T - 12, T - 12, '#7a5a48', 4); } } }
+    s.coins.forEach((cn) => { K.glow('#ffd93a', 8); K.circle(cn.x, cn.y + Math.sin(K.time() * 4 + cn.x) * 2, 6, '#ffd93a'); K.noGlow(); K.circle(cn.x - 1.5, cn.y - 1.5, 2, '#fff8c8'); });
+    if (s.drop) { K.glow('#9ad8ff', 12); K.rect(s.drop.x - 10, s.drop.y - 4, 20, 8, '#c8c8d8', 2); K.noGlow(); K.text('GUN', s.drop.x, s.drop.y - 14, 10, '#9ad8ff', 'center', 'd'); }
+    s.shots.forEach((sh) => { if (sh.knife) { c.save(); c.translate(sh.x, sh.y); c.rotate(Math.atan2(sh.vy, sh.vx) + K.time() * 20); K.rect(-9, -2, 18, 4, '#e8e8f0'); c.restore(); } else { K.glow('#ffe08a', 10); K.line(sh.x, sh.y, sh.x - sh.vx * 0.02, sh.y - sh.vy * 0.02, '#ffe08a', 3); K.noGlow(); } });
+    s.p.forEach((p) => {
+      if (!p.alive) { K.alpha(0.6); K.circle(p.x, p.y, 13, '#3a3a44'); K.text('✝', p.x, p.y, 14, '#c8c8d0'); K.alpha(1); return; }
+      K.alpha(0.3); K.circle(p.x + 2, p.y + 4, 14, '#000'); K.alpha(1);
+      K.circle(p.x, p.y, 14, p.col); K.circle(p.x + Math.cos(p.fa) * 6 - 3, p.y + Math.sin(p.fa) * 6 - 3, 2.5, '#111'); K.circle(p.x + Math.cos(p.fa) * 6 + 3, p.y + Math.sin(p.fa) * 6 - 3, 2.5, '#111');
+      hat(p);
+      const hx = p.x + Math.cos(p.fa) * 18, hy = p.y + Math.sin(p.fa) * 18;
+      if (p.knife) { K.line(hx, hy, hx + Math.cos(p.fa) * 14, hy + Math.sin(p.fa) * 14, '#e8e8f0', 3); K.glow('#ff3355', 8); K.circle(hx, hy, 3, '#ff3355'); K.noGlow(); }
+      if (p.gun) { K.line(hx, hy, hx + Math.cos(p.fa) * 12, hy + Math.sin(p.fa) * 12, '#8a8aa0', 5); }
+      K.text(p.me ? 'YOU' : p.name, p.x, p.y + 26, 10, '#ffffffcc', 'center', 'd');
+    });
+    c.restore();
+    // HUD
+    const role = me.role || s.role, RC = { murderer: '#ff3355', sheriff: '#4a9aff', inno: '#3dffa0' }, RN = { murderer: 'MURDERER', sheriff: 'SHERIFF', inno: 'INNOCENT' };
+    K.rect(0, 0, 960, 34, '#000a'); K.text(role ? (me.gun && role === 'inno' ? 'HERO (you have the gun)' : RN[role]) : '...', 14, 17, 15, RC[role] || '#fff', 'left', 'd');
+    K.text(`${Math.max(0, Math.ceil(s.time))}s`, 480, 17, 16, s.time < 20 ? '#ff3355' : '#fff', 'center', 'd'); K.text(`● ${me.coins || 0}`, 946, 17, 15, '#ffd93a', 'right', 'd');
+    K.text(`${s.p.filter((p) => p.alive).length} alive`, 300, 17, 12, '#c8c0e8', 'center', 'u');
+    if (s.clue.length) s.clue.forEach((t, i) => K.text('clue: ' + t, 14, 50 + i * 18, 12, s.clueT > 0 && i === s.clue.length - 1 ? '#ffd93a' : '#c8c0e8', 'left', 'u'));
+    if (role === 'inno' && !me.gun && me.alive) K.text(`next clue in ${8 - ((me.coins || 0) % 8)} coins`, 946, 44, 11, '#a89878', 'right', 'u');
+    if (s.msgT > 0) K.text(s.msg, 480, 90, 18, '#fff', 'center', 'd', 10);
+    if (!me.alive) K.text('you are dead · watching', 480, 520, 16, '#ff8a8a', 'center', 'd');
+    if (s.intro > 0 && role) { K.alpha(Math.min(1, s.intro)); K.rect(0, 180, 960, 160, '#000d'); K.text(`YOU ARE THE ${RN[role]}`, 480, 236, 34, RC[role], 'center', 'd', 16); K.text({ murderer: 'kill everyone before time runs out - draw your knife (Shift) only when nobody is watching', sheriff: 'find the murderer and shoot them - shoot an innocent and you die too', inno: 'collect coins for clues, stay with others, and stay alive' }[role], 480, 284, 16, '#e8e0f0', 'center', 'u'); K.alpha(1); }
+  },
+  ai(s) {
+    const me = meP(s); if (!me.alive || !K.isHost()) return; ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].forEach((k) => K.vhold(k, false));
+    const ox = me.x, oy = me.y; bot(s, me, 1 / 60); const dx = me.x - ox, dy = me.y - oy; me.x = ox; me.y = oy;
+    if (Math.abs(dx) > 0.2) K.vhold(dx > 0 ? 'ArrowRight' : 'ArrowLeft'); if (Math.abs(dy) > 0.2) K.vhold(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+  },
+});
+function hat(p) {
+  const x = p.x, y = p.y - 12;
+  if (p.hat === 'cap') { K.rect(x - 10, y - 4, 20, 7, '#2a2a3a', 3); K.rect(x, y + 1, 14, 3, '#2a2a3a'); }
+  else if (p.hat === 'top hat') { K.rect(x - 9, y - 14, 18, 14, '#111'); K.rect(x - 13, y - 1, 26, 4, '#111'); }
+  else if (p.hat === 'crown') K.poly([[x - 10, y + 2], [x - 10, y - 8], [x - 5, y - 3], [x, y - 10], [x + 5, y - 3], [x + 10, y - 8], [x + 10, y + 2]], '#ffd93a');
+  else if (p.hat === 'beanie') { K.circle(x, y, 10, '#3a8a5a'); K.circle(x, y - 10, 3, '#e8e8e8'); }
+  else if (p.hat === 'bow') { K.poly([[x, y], [x - 10, y - 6], [x - 10, y + 6]], '#ff4a8a'); K.poly([[x, y], [x + 10, y - 6], [x + 10, y + 6]], '#ff4a8a'); }
+}
+function evFx(s, e) {
+  const me = meP(s), near = e.x == null || Math.hypot(e.x - me.x, e.y - me.y) < 700;
+  if (e.k === 'die') { if (near) { K.sfx('hit'); K.shake(6); } s.msg = `${e.who} was ${e.how === 'guilt' ? 'punished for shooting an innocent' : 'killed'}`; s.msgT = 2.5; }
+  if (e.k === 'bang' && near) K.sfx('boom');
+  if (e.k === 'throw' && near) K.sfx('whoosh');
+  if (e.k === 'stab' && near) K.sfx('scare');
+  if (e.k === 'drop') { s.msg = 'the sheriff is down - the GUN is on the floor!'; s.msgT = 3; }
+  if (e.k === 'hero') { s.msg = `${e.who} picked up the gun`; s.msgT = 2.5; }
+}
+</script></body></html>

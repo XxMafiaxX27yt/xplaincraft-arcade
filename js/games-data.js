@@ -1997,6 +1997,54 @@ export const GAME_LIST = [
 "cover": "games/covers/mini-golf.png"
 },
 {
+"id": "pinball",
+"n": 198,
+"title": "PINBALL",
+"genre": "fun",
+"desc": "A neon pinball table. Pull the plunger, then keep the ball alive with the flippers. Pop bumpers, slingshots, three drop targets and three rollover lanes at the top - light all three lanes to raise the score multiplier, knock down the targets twice for MULTIBALL. Three balls.",
+"controls": "← / A (or ◀) left flipper · → / D (or ▶) right flipper · hold Space / ↓ (LAUNCH) to pull the plunger, let go to launch",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "score",
+"target": 25000,
+"text": "Score 25,000 in Pinball"
+}
+],
+"file": "games/2d/pinball.html",
+"dim": "2d",
+"modes": [
+"sp"
+],
+"cover": "games/covers/pinball.png"
+},
+{
+"id": "neon-brawl",
+"n": 204,
+"title": "NEON BRAWL",
+"genre": "fun",
+"modes": [
+"sp",
+"local",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 2,
+"desc": "A 2D street fighter on a neon rooftop. Six fighters, each with their own special and a SUPER: Blaze throws fireballs, Volt rushes in like lightning, Titan grabs, Kite flies up with a rising uppercut, Viper spins, Onyx counters. Chain punches into kicks into specials, block high and low, throw, dash, juggle. Fight up the ladder of five CPU rivals, against a friend on one keyboard, or online. Best of three rounds.",
+"controls": "A D / ← → walk (double tap to dash) · W / ↑ jump · S / ↓ crouch · hold BACK to block (crouch to block low) · J punch · K kick · L special · ↓ + L SUPER when the bar is full · forward + J up close = throw. Same keyboard: P1 WASD + F G H, P2 arrows + J K L",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Beat the Neon Brawl ladder"
+}
+],
+"file": "games/2d/neon-brawl.html",
+"dim": "2d",
+"cover": "games/covers/neon-brawl.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
@@ -4532,5 +4580,80 @@ export const GAME_LIST = [
 "file": "games/2d/paint-hide.html",
 "dim": "2d",
 "cover": "games/covers/paint-hide.png"
+},
+{
+"id": "liars-table",
+"n": 201,
+"title": "LIAR'S TABLE",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 4,
+"desc": "A bluffing card game at a very strange tea party. Each round names a TABLE CARD - kings, queens or aces. On your turn put down 1 to 3 cards face down and say they are all the table card... true or not. The next player can believe you, or call LIAR. Whoever is wrong must sip from their cursed teacup: six sips, and one of them is poison. Last one at the table wins. Jokers count as anything.",
+"controls": "Click / tap 1-3 of your cards, then PLAY · LIAR! to call out the last play · keys: 1-5 pick cards, Enter = play, L = liar",
+"scoreLabel": "PLACE",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Be the last one at the Liar's Table"
+}
+],
+"file": "games/2d/liars-table.html",
+"dim": "2d",
+"cover": "games/covers/liars-table.png"
+},
+{
+"id": "murder-mystery",
+"n": 202,
+"title": "MURDER MYSTERY",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Everyone at the party gets a secret role. One is the MURDERER with a hidden knife - stab or throw it, but draw it and anyone who sees will know. One is the SHERIFF with a gun - shoot the murderer, but shoot an innocent and you go down too, dropping the gun for someone braver. Everyone else: collect coins. Every 8 coins buys you a clue about the murderer's hat or colour. Survive 150 seconds or catch the killer.",
+"controls": "WASD / stick to move · mouse to aim · click (or Space / ACTION) to stab, throw or shoot · Shift / E (KNIFE) to draw or hide the knife",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a round of Murder Mystery"
+}
+],
+"file": "games/2d/murder-mystery.html",
+"dim": "2d",
+"cover": "games/covers/murder-mystery.png"
+},
+{
+"id": "odd-word",
+"n": 203,
+"title": "ODD WORD",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 3,
+"maxPlayers": 8,
+"desc": "Everyone gets the same secret word - except the IMPOSTOR, who gets a close but different one (COFFEE vs TEA, BEACH vs DESERT) and knows it. Every round everybody describes their word in a few words, then everyone votes. Vote out a friend and they are gone; vote out the impostor and they get one last chance: type the real word and steal the win. The impostor also wins by lasting three rounds. Solo against four bots, or online for up to 8.",
+"controls": "Type a short description + Enter (you cannot say your word) · click / tap a player to vote · a caught impostor types a guess + Enter",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Odd Word"
+}
+],
+"file": "games/2d/odd-word.html",
+"dim": "2d",
+"cover": "games/covers/odd-word.png"
 }
 ];

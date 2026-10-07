@@ -1,0 +1,102 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pinball</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"pinball","n":198,"title":"PINBALL","genre":"fun","desc":"A neon pinball table. Pull the plunger, then keep the ball alive with the flippers. Pop bumpers, slingshots, three drop targets and three rollover lanes at the top - light all three lanes to raise the score multiplier, knock down the targets twice for MULTIBALL. Three balls.","controls":"← / A (or ◀) left flipper · → / D (or ▶) right flipper · hold Space / ↓ (LAUNCH) to pull the plunger, let go to launch","scoreLabel":"POINTS","tasks":[{"stat":"score","target":25000,"text":"Score 25,000 in Pinball"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const BR = 9, G = 950, FL = 80;
+const WALLS = [];
+const seg = (x1, y1, x2, y2, kick = 0) => WALLS.push({ x1, y1, x2, y2, kick });
+(() => { let px = null, py = null; for (let i = 0; i <= 20; i++) { const a = Math.PI + (i / 20) * Math.PI, x = 482 + 203 * Math.cos(a), y = 205 + 203 * Math.sin(a); if (px != null) seg(px, py, x, y); px = x; py = y; } })();
+seg(279, 205, 279, 390); seg(279, 390, 377, 460); seg(281, 138, 336, 176); seg(685, 205, 685, 540); seg(650, 160, 650, 390); seg(650, 390, 583, 460);   // guides end just above the flipper tops so the ball rolls on
+seg(326, 340, 326, 390); seg(326, 390, 366, 418); seg(366, 418, 326, 340, 380);   // left slingshot (kicks off its long face) - sits high enough that the ball fits through the inlane under it
+seg(604, 340, 604, 390); seg(604, 390, 564, 418); seg(604, 340, 564, 418, 380);
+const GATE = { x1: 650, y1: 160, x2: 673, y2: 137 };
+const BUMP = [[420, 175, 22], [544, 175, 22], [482, 245, 24]];
+const POSTS = [[405, 82, 5], [455, 82, 5], [505, 82, 5], [555, 82, 5]];
+const LANES = [430, 480, 530], DROPS = [440, 471, 502];
+const FLIP = [{ px: 380, py: 470, rest: 0.52, up: -0.48, dir: 1 }, { px: 580, py: 470, rest: Math.PI - 0.52, up: Math.PI + 0.48, dir: -1 }];
+function newBall(s, inLane = true) { s.balls.push(inLane ? { x: 667, y: 500, vx: 0, vy: 0, lane: true } : { x: 667, y: 380, vx: 0, vy: -1500, lane: true }); }
+function hitSeg(b, x1, y1, x2, y2, r, vx = 0, vy = 0, e = 0.5) {
+  const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy || 1, t = K.clamp(((b.x - x1) * dx + (b.y - y1) * dy) / L2, 0, 1), px = x1 + dx * t, py = y1 + dy * t, ex = b.x - px, ey = b.y - py, d = Math.hypot(ex, ey);
+  if (d >= BR + r || d === 0) return null;
+  const nx = ex / d, ny = ey / d; b.x = px + nx * (BR + r); b.y = py + ny * (BR + r);
+  const rvx = b.vx - vx, rvy = b.vy - vy, vn = rvx * nx + rvy * ny; if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+  return { nx, ny, vn };
+}
+K.game({
+  bg: '#07051a', touch: { stick: false, buttons: [['ArrowLeft', '◀'], ['Space', 'LAUNCH'], ['ArrowRight', '▶']] },
+  init(s) { s.score = 0; s.left = 3; s.balls = []; newBall(s); s.fa = FLIP.map((f) => f.rest); s.fw = [0, 0]; s.pull = 0; s.lit = [0, 0, 0]; s.mult = 1; s.drop = [1, 1, 1]; s.dropsDone = 0; s.save = 0; s.flash = {}; s.msg = ''; s.msgT = 0; },
+  update(s, dt) {
+    const add = (p, x, y) => { const v = p * s.mult; s.score += v; if (x) K.floatText(`${v}`, x, y - 16, '#ffd93a', 12); };
+    s.msgT -= dt; s.save -= dt; Object.keys(s.flash).forEach((k) => (s.flash[k] -= dt));
+    // flippers
+    const want = [K.down('ArrowLeft', 'KeyA', 'KeyZ'), K.down('ArrowRight', 'KeyD', 'KeyM', 'Slash')];
+    FLIP.forEach((f, i) => { const tgt = want[i] ? f.up : f.rest, prev = s.fa[i], sp = want[i] ? 24 : 14; s.fa[i] += K.clamp(tgt - s.fa[i], -sp * dt, sp * dt); s.fw[i] = (s.fa[i] - prev) / Math.max(dt, 1e-4); if (want[i] && !s.was?.[i]) K.tone(160, 0.05, 'square', 0.04); });
+    s.was = want;
+    // plunger
+    const lb = s.balls.find((b) => b.lane && b.y > 470);
+    if (K.down('Space', 'ArrowDown', 'KeyS') && lb) s.pull = Math.min(1, s.pull + dt * 1.2);
+    else if (s.pull > 0) { if (lb) { lb.vy = -(1250 + s.pull * 800); s.save = 7; K.noise(0.15, 0.08, 900); } s.pull = 0; }
+    for (let t = dt; t > 0; t -= 1 / 480) {
+      const h = Math.min(t, 1 / 480);
+      for (const b of s.balls) {
+        if (b.lane && b.y >= 470 && b.vy >= 0) { b.x = 667; b.vx = 0; b.vy = 0; b.y = Math.min(500 + s.pull * 26, b.y + 600 * h); continue; }   // resting on the plunger
+        b.vy += G * h; b.x += b.vx * h; b.y += b.vy * h;
+        const sp = Math.hypot(b.vx, b.vy); if (sp > 2600) { b.vx *= 2600 / sp; b.vy *= 2600 / sp; }
+        if (b.x < 650) b.lane = false;
+        for (const w of WALLS) { const r = hitSeg(b, w.x1, w.y1, w.x2, w.y2, 0, 0, 0, w.kick ? 0.2 : 0.45); if (r && w.kick && r.vn < -60) { b.vx += r.nx * w.kick; b.vy += r.ny * w.kick; add(10, b.x, b.y); s.flash['sl' + w.x1] = 0.12; K.tone(520, 0.05, 'square', 0.04); } }
+        if (b.vy > 0 && !b.lane) hitSeg(b, GATE.x1, GATE.y1, GATE.x2, GATE.y2, 0, 0, 0, 0.3);
+        BUMP.forEach(([x, y, r], i) => { const d = Math.hypot(b.x - x, b.y - y); if (d < r + BR) { const nx = (b.x - x) / d, ny = (b.y - y) / d; b.x = x + nx * (r + BR); b.y = y + ny * (r + BR); const vn = b.vx * nx + b.vy * ny; b.vx -= vn * nx; b.vy -= vn * ny; b.vx += nx * 720; b.vy += ny * 720; add(100, x, y); s.flash['b' + i] = 0.15; K.tone(700 + i * 120, 0.06, 'square', 0.05); } });
+        POSTS.forEach(([x, y, r]) => { const d = Math.hypot(b.x - x, b.y - y); if (d < r + BR) { const nx = (b.x - x) / d, ny = (b.y - y) / d; b.x = x + nx * (r + BR); b.y = y + ny * (r + BR); const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.5 * vn * nx; b.vy -= 1.5 * vn * ny; } } });
+        // rollover lanes at the top
+        LANES.forEach((x, i) => { if (Math.abs(b.x - x) < 16 && Math.abs(b.y - 82) < 6 && !s.lit[i]) { s.lit[i] = 1; add(250, x, 82); K.sfx('blip'); if (s.lit.every(Boolean)) { s.lit = [0, 0, 0]; s.mult = Math.min(5, s.mult + 1); s.msg = `MULTIPLIER ×${s.mult}`; s.msgT = 1.6; K.sfx('power'); } } });
+        // drop targets
+        DROPS.forEach((x, i) => { if (!s.drop[i]) return; const r = hitSeg(b, x, 312, x + 24, 312, 4, 0, 0, 0.5); if (r) { s.drop[i] = 0; add(500, x + 12, 312); K.tone(300, 0.08, 'square', 0.05); if (!s.drop.some(Boolean)) { add(5000); s.drop = [1, 1, 1]; s.dropsDone++; s.msg = 'TARGETS +5000'; s.msgT = 1.5; K.sfx('win'); if (s.dropsDone % 2 === 0) { newBall(s, false); s.msg = 'MULTIBALL!'; s.save = 6; } } } });
+        // flippers
+        FLIP.forEach((f, i) => { const a = s.fa[i], tx = f.px + Math.cos(a) * FL, ty = f.py + Math.sin(a) * FL; const cx = b.x - f.px, cy = b.y - f.py, w = s.fw[i]; hitSeg(b, f.px, f.py, tx, ty, 7, -cy * w, cx * w, 0.25); });
+      }
+    }
+    // a ball that has sat still for 3 s gets a nudge
+    for (const b of s.balls) { if (b.lane) continue; if (Math.hypot(b.x - (b.sx ?? 0), b.y - (b.sy ?? 0)) > 4) { b.sx = b.x; b.sy = b.y; b.st = 0; } else if ((b.st = (b.st || 0) + dt) > 3) { b.vx += K.rand(-200, 200); b.vy -= 300; b.st = 0; s.msg = 'NUDGE'; s.msgT = 0.8; } }
+    // drains
+    const before = s.balls.length; s.balls = s.balls.filter((b) => b.y < 560);
+    if (s.balls.length < before) {
+      if (s.save > 0) { newBall(s, false); s.msg = 'BALL SAVED'; s.msgT = 1.3; }
+      else if (!s.balls.length) { s.left--; K.sfx('lose'); if (s.left <= 0) return K.end(s, { score: s.score, won: s.score >= 25000 ? true : null, stats: { won: s.score >= 25000 ? 1 : 0 }, title: 'GAME OVER', text: `${s.score.toLocaleString()} points · best multiplier ×${s.mult}` }); s.mult = 1; s.lit = [0, 0, 0]; newBall(s); s.msg = `BALL ${4 - s.left}`; s.msgT = 1.5; }
+    }
+  },
+  draw(s) {
+    const c = K.ctx();
+    // table
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#1a1040', '#0c0820']); c.beginPath(); c.moveTo(279, 540); c.lineTo(279, 205); c.arc(482, 205, 203, Math.PI, 0); c.lineTo(685, 540); c.fill();
+    K.alpha(0.08); for (let i = 0; i < 9; i++) K.ring(482, 300, 40 + i * 40, '#c45cff', 1); K.alpha(1);
+    K.glow('#22e6ff', 10); WALLS.forEach((w) => K.line(w.x1, w.y1, w.x2, w.y2, w.kick ? (s.flash['sl' + w.x1] > 0 ? '#fff' : '#ff2bd6') : '#22e6ff', w.kick ? 4 : 3)); K.noGlow();
+    K.line(GATE.x1, GATE.y1, GATE.x2, GATE.y2, '#22e6ff55', 2);
+    BUMP.forEach(([x, y, r], i) => { const f = s.flash['b' + i] > 0; K.glow(f ? '#fff' : '#ff2bd6', 18); K.circle(x, y, r, f ? '#fff' : '#ff2bd6'); K.noGlow(); K.circle(x, y, r * 0.62, '#2a0a3a'); K.text('100', x, y + 1, 9, '#ffb8f0', 'center', 'd'); });
+    POSTS.forEach(([x, y, r]) => K.circle(x, y, r, '#c8c8e8'));
+    LANES.forEach((x, i) => { K.glow(s.lit[i] ? '#ffd93a' : '#000', s.lit[i] ? 12 : 0); K.circle(x, 104, 6, s.lit[i] ? '#ffd93a' : '#3a3050'); K.noGlow(); });
+    DROPS.forEach((x, i) => K.rect(x, 306, 24, s.drop[i] ? 12 : 3, s.drop[i] ? '#3dffa0' : '#1a4a3a', 2));
+    K.text(`×${s.mult}`, 482, 360, 26, '#ffd93a55', 'center', 'd');
+    // flippers
+    FLIP.forEach((f, i) => { const a = s.fa[i], tx = f.px + Math.cos(a) * FL, ty = f.py + Math.sin(a) * FL; K.glow('#ffd93a', 12); K.line(f.px, f.py, tx, ty, '#ffd93a', 14); K.noGlow(); K.circle(f.px, f.py, 7, '#fff'); });
+    // plunger
+    K.rect(658, 512 + s.pull * 26, 18, 30, '#c8c8d8', 3);
+    // balls
+    s.balls.forEach((b) => { K.glow('#ffffff', 10); K.circle(b.x, b.y, BR, '#e8e8f8'); K.noGlow(); K.circle(b.x - 3, b.y - 3, 3, '#fff'); });
+    if (s.save > 0 && s.balls.some((b) => !b.lane)) K.text('BALL SAVE', 480, 520, 12, '#3dffa0', 'center', 'd');
+    // side panels
+    K.text('SCORE', 140, 120, 14, '#8a80b8', 'center', 'd'); K.text(s.score.toLocaleString(), 140, 160, 28, '#ffd93a', 'center', 'd', 10);
+    K.text('BALLS', 140, 230, 14, '#8a80b8', 'center', 'd'); for (let i = 0; i < 3; i++) K.circle(110 + i * 30, 262, 9, i < s.left ? '#e8e8f8' : '#2a2440');
+    K.text(`MULTIPLIER ×${s.mult}`, 140, 320, 14, '#ffd93a', 'center', 'd');
+    K.wrapText('light all 3 top lanes: multiplier up · drop all 3 targets twice: MULTIBALL', 830, 120, 200, 13, '#8a80b8', 1.4, 'center', 'u');
+    if (s.balls.some((b) => b.lane && b.y > 470) && !K.attract) K.text('hold SPACE, let go!', 830, 470, 15, '#22e6ff', 'center', 'd');
+    if (s.msgT > 0) K.text(s.msg, 482, 420, 24, '#fff', 'center', 'd', 14);
+  },
+  ai(s) {
+    ['ArrowLeft', 'ArrowRight', 'Space'].forEach((k) => K.vhold(k, false));
+    if (s.balls.some((b) => b.lane && b.y > 470)) { s.ap = (s.ap || 0) + 1; if (s.ap < 40) K.vhold('Space'); else s.ap = 0; return; }
+    for (const b of s.balls) { if (b.vy > 0 && b.y > 400 && b.y < 490) { if (b.x < 482) K.vhold('ArrowLeft'); else K.vhold('ArrowRight'); } }
+  },
+});
+</script></body></html>

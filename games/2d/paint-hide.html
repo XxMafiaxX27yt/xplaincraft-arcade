@@ -150,6 +150,7 @@ K.game({
     if (s.done) finish(s);
   },
   draw(s) {
+    const drawEyes = (x0, y0) => { K.rect(x0 + 9, y0 + 11, 7, 6, '#ffffff'); K.rect(x0 + 24, y0 + 11, 7, 6, '#ffffff'); K.rect(x0 + 11, y0 + 12, 3, 4, '#111'); K.rect(x0 + 26, y0 + 12, 3, 4, '#111'); };
     const c = K.ctx(), me = meP(s), H = hunterOf(s), iHunt = me && me.hunter;
     if (s.ph === 'wait' || !sdata) { K.text('waiting for the host...', 480, 270, 20, '#fff', 'center', 'u'); return; }
     if (iHunt && s.ph === 'paint') { K.rect(0, 0, 960, 540, '#05050a'); K.text("YOU'RE THE HUNTER", 480, 210, 34, '#ff3355', 'center', 'd', 14); K.text(`eyes closed... counting ${Math.max(0, Math.ceil(s.t))}`, 480, 260, 20, '#e8e0f0', 'center', 'u'); K.text('when the lights go down, sweep your spotlight and shoot the hiders. watch for blinking eyes!', 480, 300, 15, '#8e88b8', 'center', 'u'); return; }
@@ -162,12 +163,16 @@ K.game({
       const x0 = Math.round(p.x - BW / 2), y0 = Math.round(p.y - BH / 2);
       if (!p.alive) { K.alpha(0.85); for (let i = 0; i < GW * GH; i++) { c.fillStyle = p.g[i]; c.fillRect(x0 + (i % GW) * CS, y0 + Math.floor(i / GW) * CS, CS, CS); } K.alpha(1); K.stroke(x0, y0, BW, BH, '#ff3355', 2); K.text('✕', p.x, p.y, 26, '#ff3355'); K.text(p.me ? 'YOU' : p.name, p.x, y0 - 10, 11, '#ff6a7a', 'center', 'd'); return; }
       for (let i = 0; i < GW * GH; i++) { c.fillStyle = p.g[i]; c.fillRect(x0 + (i % GW) * CS, y0 + Math.floor(i / GW) * CS, CS, CS); }
-      if (!p.closed && !p.blinking) { K.rect(x0 + 9, y0 + 11, 7, 6, '#ffffff'); K.rect(x0 + 24, y0 + 11, 7, 6, '#ffffff'); K.rect(x0 + 11, y0 + 12, 3, 4, '#111'); K.rect(x0 + 26, y0 + 12, 3, 4, '#111'); }
+      if (!p.closed && !p.blinking && !(iHunt && s.ph === 'hunt')) drawEyes(x0, y0);
       if (!iHunt) { K.stroke(x0 - 1, y0 - 1, BW + 2, BH + 2, p.me ? '#ffffffaa' : p.col + '55', 1); K.text(p.me ? 'YOU' : p.name, p.x, y0 - 9, 10, p.me ? '#fff' : p.col, 'center', 'd'); }
     });
     // the hunt: lights down, spotlight
     if (s.ph === 'hunt' || s.ph === 'res') {
-      if (iHunt && s.ph === 'hunt') K.darkness([{ x: s.aim.x, y: s.aim.y, r: 150 }], 0.86);
+      if (iHunt && s.ph === 'hunt') {
+        K.darkness([{ x: s.aim.x, y: s.aim.y, r: 150 }], 0.86);
+        // eyes only shine where the spotlight actually lands - drawn after the dark so they never leak through it
+        s.p.forEach((p) => { if (p.hunter || !p.alive || p.closed || p.blinking) return; const d = Math.hypot(p.x - s.aim.x, p.y - s.aim.y); if (d > 150) return; K.alpha(K.clamp((150 - d) / 40, 0, 1)); drawEyes(Math.round(p.x - BW / 2), Math.round(p.y - BH / 2)); K.alpha(1); });
+      }
       else { K.alpha(0.35); K.rect(0, 0, 960, 540, '#000'); K.alpha(1); K.ring(s.aim.x, s.aim.y, 150, '#ffffff55', 2); }
       K.ring(s.aim.x, s.aim.y, 14, '#ff3355', 2); K.line(s.aim.x - 22, s.aim.y, s.aim.x - 8, s.aim.y, '#ff3355', 2); K.line(s.aim.x + 8, s.aim.y, s.aim.x + 22, s.aim.y, '#ff3355', 2); K.line(s.aim.x, s.aim.y - 22, s.aim.x, s.aim.y - 8, '#ff3355', 2); K.line(s.aim.x, s.aim.y + 8, s.aim.x, s.aim.y + 22, '#ff3355', 2);
       if (me && !me.hunter && me.closed && me.alive) { K.alpha(0.92); K.rect(0, 0, 960, 540, '#000'); K.alpha(1); K.text('eyes closed', 480, 270, 18, '#666', 'center', 'u'); }

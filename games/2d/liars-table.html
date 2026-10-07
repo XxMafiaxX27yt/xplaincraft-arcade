@@ -1,0 +1,140 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Liar's Table</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"liars-table","n":201,"title":"LIAR'S TABLE","genre":"mystery","modes":["sp","online"],"minPlayers":2,"maxPlayers":4,"desc":"A bluffing card game at a very strange tea party. Each round names a TABLE CARD - kings, queens or aces. On your turn put down 1 to 3 cards face down and say they are all the table card... true or not. The next player can believe you, or call LIAR. Whoever is wrong must sip from their cursed teacup: six sips, and one of them is poison. Last one at the table wins. Jokers count as anything.","controls":"Click / tap 1-3 of your cards, then PLAY · LIAR! to call out the last play · keys: 1-5 pick cards, Enter = play, L = liar","scoreLabel":"PLACE","tasks":[{"stat":"won","target":1,"text":"Be the last one at the Liar's Table"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const COL = ['#22e6ff', '#ff2bd6', '#3dffa0', '#ffd93a'], NAME = { K: 'KINGS', Q: 'QUEENS', A: 'ACES' }, SEAT = [[150, 470], [130, 260], [480, 80], [830, 260]];
+const matches = (c, tbl) => c === tbl || c === 'J';
+function deal(s) {
+  const deck = K.shuffle([...'KKKKKKQQQQQQAAAAAAJJ']);
+  s.p.forEach((p) => { p.hand = p.alive ? deck.splice(0, 5) : []; });
+  s.table = K.pick(['K', 'Q', 'A']); s.last = null; s.claimed = 0; s.ph = 'turn'; s.t = 0; s.reveal = null; s.round++;
+  s.log = `Round ${s.round}: the table card is ${NAME[s.table]}`;
+  if (!s.p[s.turn].alive) s.turn = nextAlive(s, s.turn);
+  sendHands(s);
+}
+const nextAlive = (s, i) => { for (let k = 1; k <= s.p.length; k++) { const j = (i + k) % s.p.length; if (s.p[j].alive) return j; } return i; };
+function sendHands(s) { if (!K.net) return; s.p.forEach((p) => { if (!p.bot && !p.me) K.net.send({ t: 'hand', h: p.hand }, p.id); }); }
+function play(s, i, idx) {
+  const p = s.p[i]; idx = [...new Set(idx)].filter((k) => k >= 0 && k < p.hand.length).slice(0, 3); if (!idx.length) return;
+  const cards = idx.map((k) => p.hand[k]); p.hand = p.hand.filter((_, k) => !idx.includes(k));
+  s.last = { by: i, cards }; s.claimed += cards.length; s.log = `${p.name} plays ${cards.length} ${NAME[s.table].toLowerCase()}${cards.length === 1 ? ' (or so they say)' : ''}`;
+  s.fx.push('card'); s.turn = nextAlive(s, i); s.t = 0; sendHands(s);
+  // nobody else has cards: the play stands and the round is re-dealt
+  if (s.p.every((q, j) => !q.alive || !q.hand.length) ) { s.ph = 'deal'; s.t = 2.2; s.log += ' · everyone is out of cards'; }
+}
+function callLiar(s, i) {
+  if (!s.last) return; const lied = s.last.cards.some((c) => !matches(c, s.table)), loser = lied ? s.last.by : i;
+  s.reveal = { cards: s.last.cards, lied, caller: i, loser }; s.ph = 'reveal'; s.t = 0; s.fx.push('liar');
+  s.log = `${s.p[i].name} calls LIAR on ${s.p[s.last.by].name}!`;
+}
+function sip(s) {
+  const L = s.p[s.reveal.loser]; L.sips++; const dead = L.sips - 1 === L.poison;
+  if (dead) { L.alive = false; L.place = s.p.filter((q) => q.alive).length + 1; s.log = `${L.name} sips... POISON. ${L.name} is out.`; s.fx.push('poison'); }
+  else { s.log = `${L.name} sips... and is fine. (${6 - L.sips} sips left)`; s.fx.push('safe'); }
+  s.turn = L.alive ? s.reveal.loser : nextAlive(s, s.reveal.loser);
+}
+function bot(s, i) {
+  const p = s.p[i], mine = p.hand.filter((c) => matches(c, s.table)).length, room = 8 - mine;
+  if (s.last && (!p.hand.length || s.claimed > room || Math.random() < Math.min(0.85, (s.claimed / Math.max(1, room)) * 0.55 + (s.last.cards.length - 1) * 0.12 + (mine ? 0 : 0.25)))) return callLiar(s, i);
+  const good = p.hand.map((c, k) => (matches(c, s.table) ? k : -1)).filter((k) => k >= 0), bad = p.hand.map((c, k) => (matches(c, s.table) ? -1 : k)).filter((k) => k >= 0);
+  let idx = good.length ? good.slice(0, K.irand(1, Math.min(2, good.length))) : [bad[0]];
+  if (good.length && bad.length && Math.random() < 0.2 && idx.length < 3) idx.push(bad[0]);
+  play(s, i, idx);
+}
+const meI = (s) => Math.max(0, s.p.findIndex((p) => p.me));
+function finishGame(s) {
+  if (s.over) return; s.over = true; const w = s.p.find((p) => p.alive); if (w) w.place = 1;
+  const me = s.p[meI(s)], won = me.place === 1;
+  K.end(s, { score: s.p.length + 1 - (me.place || s.p.length), won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST ONE AT THE TABLE' : `${w ? w.name : '?'} WINS`, text: s.p.slice().sort((a, b) => (a.place || 9) - (b.place || 9)).map((p) => `${p.place}. ${p.me ? 'YOU' : p.name}`).join('  ') });
+}
+K.game({
+  bg: '#140c0a', touch: { stick: false, buttons: [] },
+  init(s) { s.p = K.seats(4, 'GUEST').slice(0, 4).map((p, i) => ({ ...p, col: COL[i], alive: true, sips: 0, poison: K.irand(0, 5), hand: [], place: 0 })); s.turn = K.irand(0, s.p.length - 1); s.round = 0; s.fx = []; s.sel = []; s.sendT = 0; if (K.isHost()) deal(s); else { s.ph = 'wait'; s.p.forEach((p) => (p.hand = [])); } },
+  onNet(s, d, from) {
+    const host = K.net.isHost;
+    if (d.t === 'hand' && !host) { const mh = s.p[meI(s)]; if (JSON.stringify(mh.hand) !== JSON.stringify(d.h)) { mh.hand = d.h; s.sel = []; } }   // the 1s resend must not wipe a selection
+    if (d.t === 'move' && host && s.ph === 'turn') { const i = s.p.findIndex((p) => p.id === from); if (i === s.turn) { if (d.liar) callLiar(s, i); else play(s, i, d.idx); } }
+    if (d.t === 'st' && !host) { Object.assign(s, { ph: d.ph, turn: d.turn, table: d.table, last: d.last, log: d.log, reveal: d.rv, round: d.r, t: d.tt }); d.p.forEach((o, i) => { const p = s.p[i]; p.n = o[0]; p.sips = o[1]; p.alive = !!o[2]; p.place = o[3]; }); (d.fx || []).forEach((f) => sound(f)); if (d.done) finishGame(s); }
+  },
+  onLeave(s, id) { const p = s.p.find((q) => q.id === id); if (p) p.bot = true; },
+  update(s, dt) {
+    const host = K.isHost(), me = meI(s), my = s.p[me], m = K.mouse;
+    s.t += dt;
+    // my move
+    if (s.ph === 'turn' && s.turn === me && my.alive) {
+      my.hand.forEach((_, k) => { const r = cardRect(k, my.hand.length); if ((m.clicked && K.inRect(m.x, m.y, r)) || K.tap('Digit' + (k + 1))) { s.sel = s.sel.includes(k) ? s.sel.filter((q) => q !== k) : s.sel.length < 3 ? [...s.sel, k] : s.sel; K.sfx('click'); } });
+      const send = (mv) => { if (host) { if (mv.liar) callLiar(s, me); else play(s, me, mv.idx); } else K.net.send({ t: 'move', ...mv }); s.sel = []; };
+      if (s.sel.length && (K.tap('Enter') || (m.clicked && K.inRect(m.x, m.y, BTN_PLAY)))) send({ idx: s.sel });
+      else if (s.last && (K.tap('KeyL') || (m.clicked && K.inRect(m.x, m.y, BTN_LIAR)))) send({ liar: true });
+      if (host && s.t > 30) { if (s.last && !my.hand.length) callLiar(s, me); else play(s, me, [0]); }
+    }
+    if (!host) return;
+    // the host runs the table
+    if (s.ph === 'turn') {
+      const cur = s.p[s.turn];
+      if (!cur.alive) s.turn = nextAlive(s, s.turn);
+      else if (!cur.hand.length && !s.last) { s.turn = nextAlive(s, s.turn); }
+      else if (!cur.hand.length && s.last && (cur.bot || s.t > 2.5)) callLiar(s, s.turn);
+      else if (cur.bot && s.t > K.rand(1.2, 1.4) + 0.6) bot(s, s.turn);
+      else if (!cur.bot && !cur.me && s.t > 30) { if (s.last && !cur.hand.length) callLiar(s, s.turn); else play(s, s.turn, [0]); }
+    } else if (s.ph === 'reveal' && s.t > 2.6) { s.ph = 'cup'; s.t = 0; s.fx.push('heart'); }
+    else if (s.ph === 'cup' && s.t > 2.2) { sip(s); s.ph = 'after'; s.t = 0; }
+    else if (s.ph === 'after' && s.t > 2) { if (s.p.filter((p) => p.alive).length <= 1) s.done = true; else deal(s); }
+    else if (s.ph === 'deal' && s.t > 2.2) deal(s);
+    const fx = s.fx.splice(0); fx.forEach((f) => sound(f));
+    s.handT = (s.handT || 0) - dt; if (s.handT <= 0) { sendHands(s); s.handT = 1; }   // in case someone missed theirs
+    if (K.net) { s.sendT -= dt; if (s.sendT <= 0 || fx.length || s.done) { K.net.send({ t: 'st', ph: s.ph, turn: s.turn, table: s.table, last: s.last && { by: s.last.by, n: s.last.cards.length }, log: s.log, rv: s.reveal, r: s.round, tt: +s.t.toFixed(1), p: s.p.map((p) => [p.hand.length, p.sips, p.alive ? 1 : 0, p.place]), fx, done: !!s.done }); s.sendT = 0.2; } }
+    if (s.done) finishGame(s);
+  },
+  draw(s) {
+    const c = K.ctx(), me = meI(s), my = s.p[me];
+    c.fillStyle = K.rgrad(480, 270, 520, ['#3a2418', '#140c0a']); c.fillRect(0, 0, 960, 540);
+    c.fillStyle = '#5a3a22'; c.beginPath(); c.ellipse(480, 270, 330, 170, 0, 0, 6.28); c.fill(); c.fillStyle = '#2a5a3a'; c.beginPath(); c.ellipse(480, 270, 310, 155, 0, 0, 6.28); c.fill();
+    for (const [x, y] of [[300, 200], [660, 200]]) { K.rect(x - 4, y - 16, 8, 22, '#e8dcc0', 2); K.glow('#ffb43a', 16); K.circle(x, y - 22 + Math.sin(K.time() * 9 + x) * 1.2, 4, '#ffd93a'); K.noGlow(); }
+    if (s.ph === 'wait') { K.text('sitting down...', 480, 270, 18, '#e8dcc0', 'center', 'u'); return; }
+    // table card
+    K.text('TABLE CARD', 480, 222, 11, '#c8e8c8', 'center', 'd'); drawCard(455, 232, s.table, false, 1.0); K.text(NAME[s.table] || '', 480, 318, 14, '#ffd93a', 'center', 'd');
+    // the face-down pile of the last play / the reveal
+    if (s.reveal && s.ph !== 'turn') s.reveal.cards.forEach((cc, k) => drawCard(560 + k * 40, 238, cc, false, 0.8, !matches(cc, s.table)));
+    else if (s.last) for (let k = 0; k < (s.last.n || s.last.cards?.length || 0); k++) drawCard(560 + k * 14, 238 + k * 3, '?', true, 0.8);
+    // seats: me at the bottom
+    s.p.forEach((p, i) => {
+      const [x, y] = SEAT[(i - me + 4) % 4], turn = s.turn === i && s.ph === 'turn';
+      K.alpha(p.alive ? 1 : 0.35);
+      if (turn) { K.glow(p.col, 18); K.ring(x, y, 34, p.col, 3); K.noGlow(); }
+      K.circle(x, y, 28, p.col); K.circle(x - 9, y - 5, 4, '#fff'); K.circle(x + 9, y - 5, 4, '#fff'); K.circle(x - 9, y - 4, 2, '#111'); K.circle(x + 9, y - 4, 2, '#111');
+      K.text(p.me ? 'YOU' : p.name, x, y + 44, 13, p.col, 'center', 'd');
+      // the teacup + its six sips
+      const seat = (i - me + 4) % 4, cx = x + (seat % 2 === 0 ? 62 : 0), cy = y + (seat % 2 === 0 ? -4 : -62);
+      K.rect(cx - 14, cy - 10, 28, 20, '#e8e0f0', 6); c.strokeStyle = '#e8e0f0'; c.lineWidth = 3; c.beginPath(); c.arc(cx + 16, cy, 6, -1.4, 1.4); c.stroke();
+      for (let k = 0; k < 6; k++) K.circle(cx - 15 + k * 6, cy + 16, 2.2, k < p.sips ? '#5a4a6a' : '#c8b8e8');
+      if (!p.alive) K.text('☠', x, y, 30, '#fff');
+      const n = K.isHost() ? p.hand.length : p.n || 0;
+      if (i !== me && p.alive) for (let k = 0; k < n && k < 6; k++) drawCard(x - 24 + k * 9 - (i % 2 ? 0 : 0), y + (i === 2 ? 58 : 58), '?', true, 0.35);
+      K.alpha(1);
+    });
+    if (s.ph === 'cup' && s.reveal) { const L = s.p[s.reveal.loser]; K.rect(300, 140, 360, 70, '#000c', 12); K.text(`${L.me ? 'YOU' : L.name} must sip...`, 480, 166, 20, '#ff8a8a', 'center', 'd'); K.text('♥'.repeat(1 + Math.floor(s.t * 3) % 3), 480, 192, 16, '#ff3355', 'center', 'u'); }
+    // my hand
+    if (my && my.alive) my.hand.forEach((cc, k) => { const r = cardRect(k, my.hand.length), sel = s.sel.includes(k); drawCard(r.x, r.y - (sel ? 18 : 0), cc, false, 1, false, sel); });
+    const myTurn = s.ph === 'turn' && s.turn === me && my?.alive;
+    if (myTurn) { button(BTN_PLAY, `PLAY ${s.sel.length || ''}`, s.sel.length ? '#3dffa0' : '#3a4a3a'); if (s.last) button(BTN_LIAR, 'LIAR!', '#ff3355'); K.text(`your turn · ${30 - Math.floor(s.t)}s`, 480, 330, 13, '#ffd93a', 'center', 'd'); }
+    K.rect(0, 0, 960, 32, '#000a'); K.text(s.log || '', 480, 16, 14, '#f4e8d0', 'center', 'u');
+    if (s.reveal && (s.ph === 'reveal')) K.text(s.reveal.lied ? 'A LIE!' : 'THE TRUTH!', 640, 340, 24, s.reveal.lied ? '#ff3355' : '#3dffa0', 'center', 'd', 12);
+  },
+  ai(s) { const me = meI(s); if (s.ph === 'turn' && s.turn === me && s.t > 1.5 && K.isHost()) bot(s, me); },
+});
+const BTN_PLAY = { x: 760, y: 440, w: 120, h: 44 }, BTN_LIAR = { x: 760, y: 492, w: 120, h: 40 };
+function cardRect(k, n) { return { x: 480 - (n * 62) / 2 + k * 62, y: 410, w: 56, h: 80 }; }
+function drawCard(x, y, c, back, sc = 1, bad = false, sel = false) {
+  const w = 56 * sc, h = 80 * sc;
+  K.rect(x + 2, y + 3, w, h, '#0006', 6 * sc);
+  if (back) { K.rect(x, y, w, h, '#6a1a2a', 6 * sc); K.stroke(x + 3 * sc, y + 3 * sc, w - 6 * sc, h - 6 * sc, '#c8a050', 1.5, 4 * sc); K.text('?', x + w / 2, y + h / 2, 22 * sc, '#c8a050', 'center', 'd'); return; }
+  K.rect(x, y, w, h, sel ? '#fff8d8' : '#f4ecd8', 6 * sc); if (sel) K.stroke(x, y, w, h, '#ffd93a', 3, 6 * sc); if (bad) K.stroke(x, y, w, h, '#ff3355', 3, 6 * sc);
+  const col = c === 'J' ? '#8a3ad8' : c === 'K' ? '#c42a2a' : c === 'Q' ? '#2a4ac4' : '#1a1a1a';
+  K.text(c === 'J' ? '★' : c, x + w / 2, y + h / 2 + 2, 34 * sc, col, 'center', 'd'); K.text(c === 'J' ? 'JOKER' : { K: 'KING', Q: 'QUEEN', A: 'ACE' }[c] || '', x + w / 2, y + h - 10 * sc, 8 * sc, col, 'center', 'd');
+}
+function button(b, label, col) { const h = K.inRect(K.mouse.x, K.mouse.y, b); K.rect(b.x, b.y, b.w, b.h, h ? col : col + '99', 10); K.text(label, b.x + b.w / 2, b.y + b.h / 2 + 1, 16, '#0a0a10', 'center', 'd'); }
+function sound(f) { if (f === 'card') K.noise(0.08, 0.05, 3000); if (f === 'liar') { K.sfx('wrong'); K.shake(6); } if (f === 'heart') K.sfx('heart'); if (f === 'poison') { K.sfx('scare'); K.flash('#3a0a2a', 0.4); K.shake(14); } if (f === 'safe') K.sfx('chime'); }
+</script></body></html>
