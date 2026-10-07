@@ -51,9 +51,10 @@ with sync_playwright() as pw:
     chat = A.evaluate("""async () => (await import('/js/party.js')).party.chat.filter(c => !c.sys).map(c => c.from + ': ' + (c.text || c.sticker))""")
     print('chat at A:', chat)
     FAST = sys.argv[sys.argv.index('--fast') + 1] if '--fast' in sys.argv else None
+    QS = sys.argv[sys.argv.index('--q') + 1] if '--q' in sys.argv else None   # --q "test&relay": extra query for the game page
     for pg in (A, B):
         # tests only: let 3+ player party games start with the two QA accounts, optionally run game time faster
-        pg.evaluate(f"""async () => {{ const G = await import('/js/games.js'); const g = G.GAME['{GAME}']; g.minPlayers = Math.min(g.minPlayers || 2, 2); {"g.file = g.file.split('?')[0] + '?fast=" + FAST + "';" if FAST else ''} }}""")
+        pg.evaluate(f"""async () => {{ const G = await import('/js/games.js'); const g = G.GAME['{GAME}']; g.minPlayers = Math.min(g.minPlayers || 2, 2); {"g.file = g.file.split('?')[0] + '?fast=" + FAST + "';" if FAST else ''}{"g.file = g.file.split('?')[0] + '?" + QS + "';" if QS else ''} }}""")
     A.evaluate(f"""async () => {{ const P = await import('/js/party.js'); P.pickGame('{GAME}'); P.startGame(); }}""")
     A.wait_for_timeout(9000)
     for name, p in (('A', A), ('B', B)):

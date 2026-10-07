@@ -173,6 +173,7 @@ export async function boot(opts = {}) {
   const onKey = (e, d) => {
     if (e.target && e.target.tagName === 'INPUT') return;
     const k = e.code;
+    if (d && K3.menuOpen) return;
     if (d) { if (!keys.has(k)) pressed.add(k); keys.add(k); } else keys.delete(k);
     if (K3.playing && ['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'ControlLeft'].includes(k)) e.preventDefault();
   };
@@ -289,40 +290,51 @@ export async function boot(opts = {}) {
   K3.loop = (update, render) => {
     let acc = 0, last = performance.now();
     const STEP = 1 / 60;
+    const advance = (dt, max) => {
+      if (K3.paused) return;
+      acc += dt;
+      let n = 0;
+      while (acc >= STEP && n < max) { update(STEP); world.step(); acc -= STEP; n++; K3.t += STEP; pressed.clear(); touchTapped.clear(); }
+      if (n === max) acc = 0;
+    };
     engine.runRenderLoop(() => {
       const now = performance.now(); let dt = Math.min(0.1, (now - last) / 1000); last = now;
       if (K3.test && K3.fixedDt) dt = K3.fixedDt;
       readMove();
-      if (!K3.paused) {
-        acc += dt;
-        let n = 0;
-        while (acc >= STEP && n < 6) { update(STEP); world.step(); acc -= STEP; n++; K3.t += STEP; pressed.clear(); touchTapped.clear(); }
-        if (n === 6) acc = 0;
-      }
+      advance(dt, 6);
       render?.(acc / STEP, dt);
       scene.render();
       K3.frame++;
     });
+    // online + tab hidden: no frames get drawn, but the match must not freeze for everyone else (the host runs the bots)
+    setInterval(() => {
+      if (!K3.online || !document.hidden) return;
+      const now = performance.now(), dt = Math.min(1.2, (now - last) / 1000); last = now;
+      keys.clear(); inp.move = { x: 0, y: 0 };
+      advance(dt, 75);
+    }, 100);
   };
   K3.fps = () => engine.getFps();
 
   // ---------- shell: title, pause, end ----------
-  const screen = (html) => { ui.innerHTML = html ? `<div class="k3-screen">${html}</div>` : ''; return ui.firstChild; };
+  const screen = (html) => { ui.innerHTML = html ? `<div class="k3-screen">${html}</div>` : ''; if (!html) K3.menuOpen = false; return ui.firstChild; };
   K3.shell = {
     screen,
     loading(f) { let el = root.querySelector('.k3-load'); if (!el) { el = document.createElement('div'); el.className = 'k3-load'; el.innerHTML = '<i></i>'; root.appendChild(el); } el.firstChild.style.width = Math.round(f * 100) + '%'; if (f >= 1) setTimeout(() => el.remove(), 250); },
     // again = back from SETTINGS: show the pause screen again (the game is already paused)
     pause(again = false) {
-      if (!K3.playing || (K3.paused && !again)) return;
-      K3.paused = true; keys.clear();
+      if (!K3.playing || ((K3.paused || K3.menuOpen) && !again)) return;
+      // online: the match keeps running for everyone (you just stop moving while the menu is open)
+      K3.menuOpen = true; K3.paused = !K3.online; keys.clear();
       const el = screen(`<div class="k3-title" style="font-size:40px">PAUSED</div>
         <div class="k3-row"><button class="k3-btn primary" data-r>RESUME</button><button class="k3-btn" data-s>SETTINGS</button><button class="k3-btn" data-q>QUIT</button></div>
         <div class="k3-sub">${K3.isTouch ? '' : 'click RESUME to lock the mouse again · Esc to pause'}</div>`);
+      if (K3.online) el.querySelector('.k3-sub').textContent = 'online: the match keeps going while this menu is open';
       el.querySelector('[data-r]').onclick = () => K3.shell.resume();
       el.querySelector('[data-s]').onclick = () => K3.shell.settings(() => K3.shell.pause(true));
       el.querySelector('[data-q]').onclick = () => (window.XC ? XC.exit() : history.back());
     },
-    resume() { screen(''); K3.paused = false; if (!K3.isTouch && !K3.test) canvas.requestPointerLock?.(); canvas.focus(); },
+    resume() { screen(''); K3.paused = false; K3.menuOpen = false; if (!K3.isTouch && !K3.test) canvas.requestPointerLock?.(); canvas.focus(); },
     settings(back) {
       const S = K3.settings;
       const el = screen(`<div class="k3-title" style="font-size:34px">SETTINGS</div>
@@ -336,8 +348,8 @@ export async function boot(opts = {}) {
       el.querySelector('[data-b]').onclick = () => back();
     },
   };
-  window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && K3.playing) (K3.paused ? K3.shell.resume() : K3.shell.pause()); });
-  if (K3.isTouch) { const pb = document.createElement('button'); pb.className = 'k3-pausebtn'; pb.textContent = 'II'; pb.onclick = () => (K3.paused ? K3.shell.resume() : K3.shell.pause()); ui.parentNode.appendChild(pb); K3.pauseBtn = pb; }
+  window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && K3.playing) (K3.paused || K3.menuOpen ? K3.shell.resume() : K3.shell.pause()); });
+  if (K3.isTouch) { const pb = document.createElement('button'); pb.className = 'k3-pausebtn'; pb.textContent = 'II'; pb.onclick = () => (K3.paused || K3.menuOpen ? K3.shell.resume() : K3.shell.pause()); ui.parentNode.appendChild(pb); K3.pauseBtn = pb; }
   K3.xc = window.XC ? await XC.ready() : null;
   return K3;
 }

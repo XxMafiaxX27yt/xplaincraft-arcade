@@ -5,6 +5,8 @@ import { WEAPONS, PRIMARIES, curW, spreadOf, tickArms, startReload, swapTo, tryF
 import { Fighter, TEAM_COL, rayHit, mulberry } from './fighter.js';
 import { buildNav, Brain } from './bot.js';
 import { Hud } from './hud.js';
+import { net3d, Interp, lerp, lerpAngle } from '../../kit3d/net3d.js';
+import { onlineLobby, netBadge } from '../../kit3d/online.js';
 
 const ROUNDS_TO_WIN = 5, FREEZE = 3, OVERCHARGE_AT = 45, ZONE_END = 60;
 const PATCHES = {
@@ -24,8 +26,14 @@ const K3 = await boot({
   actions: { fire: ['Mouse0'], aim: ['Mouse2'], jump: ['Space'], crouch: ['ControlLeft', 'KeyC'], sprint: ['ShiftLeft'], reload: ['KeyR'], w1: ['Digit1'], w2: ['Digit2'], w3: ['Digit3'], swapLast: ['KeyQ'], ability: ['KeyE'], board: ['Tab'], cyclePrimary: ['KeyF'], hostile: ['KeyG'] },
 });
 const S = K3.scene;
+// online (started from a party): every player moves their own fighter, the host runs the bots, the rounds and everyone's HP
+const N = await net3d(window.XC?.net);
+K3.online = !!N;
 const G = { K3, mods: {}, fighters: [], brains: [], phase: 'menu', time: 0, score: [0, 0], round: 0, zone: null, barriers: [], fx: [], stats: new Map(), cfg: Object.assign({ mode: '1v1', diff: 'normal', primary: 'smg', ability: 'dash' }, JSON.parse(localStorage.getItem('strike_cfg') || '{}')) };
 window.__S = G;
+G.N = N;
+const hostSide = () => !N || N.isHost;               // do I decide damage, rounds, bots?
+const byNid = (nid) => G.fighters.find((f) => f.nid === nid);
 // where a bot goes when it knows nothing: mostly toward the enemy half / centre, a new spot every few seconds
 G.roamGoal = (f) => {
   if (!G.nav) return null;
@@ -145,6 +153,7 @@ const touchLayout = () => K3.setTouchButtons([
 const btns = (key, opts) => opts.map(([v, label]) => `<button class="k3-btn ${G.cfg[key] === v ? 'sel' : ''}" data-k="${key}" data-v="${v}">${label}</button>`).join('');
 function menu() {
   G.phase = 'menu'; K3.playing = false; hud.show(false); K3.setTouchButtons([]); document.exitPointerLock?.();
+  if (N) { clearFighters(); return lobby.show(); }
   const el = K3.shell.screen(`
     <div class="k3-title">NOVEX STRIKE</div>
     <div class="k3-sub">Fast arena shooter. First to 5 rounds. The loser of each round picks a PATCH that changes the next one.</div>
@@ -161,7 +170,7 @@ function menu() {
 K3.onSettings = () => {};
 
 // ---------- match ----------
-function clearFighters() { G.fighters.forEach((f) => { f.ch.destroy(); f.body?.root.dispose(); }); G.fighters = []; G.brains = []; G.barriers.forEach((b) => removeBarrier(b)); G.barriers = []; }
+function clearFighters() { G.fighters.forEach((f) => { f.ch.destroy(); f.body?.root.dispose(); }); if (G.me?.ghost) G.me.ch.destroy(); G.me = null; G.fighters = []; G.brains = []; G.barriers.forEach((b) => removeBarrier(b)); G.barriers = []; }
 function startMatch() {
   clearFighters();
   const mode = G.cfg.mode, n = mode === '2v2' ? 2 : 1;
@@ -183,26 +192,36 @@ function startMatch() {
   window.XC?.start();
   startRound();
 }
-function startRound() {
-  G.round++;
+function startRound(net = null) {
+  if (net) { G.round = net.round; G.score = net.score; G.mods = net.mods; G.patchName = net.patch; } else G.round++;
+  if (N && !net) N.send({ k: 'rd', round: G.round, score: G.score, mods: G.mods, patch: G.patchName });
+  if (N) K3.shell.screen('');
   G.barriers.forEach((b) => removeBarrier(b)); G.barriers = [];
-  G.fighters.forEach((f) => { const sp = arena.spawns[f.team][G.fighters.filter((x) => x.team === f.team).indexOf(f)]; f.ch.collider.setEnabled(true); f.reset(sp); });
+  G.fighters.forEach((f) => { if (f.ghost) return; const sp = arena.spawns[f.team][G.fighters.filter((x) => x.team === f.team && !x.ghost).indexOf(f)]; f.ch.collider.setEnabled(true); f.reset(sp); f.zoneAcc = 0; if (f.interp) f.interp.clear(); });
   G.brains.forEach((b) => { b.mem.clear(); b.path = null; b.target = null; b.goal = null; });
   G.phase = 'freeze'; G.phaseT = FREEZE; G.roundT = 0; G.zone = null; G.overWarned = false;
   hud.msg(`ROUND ${G.round}`, G.patchName ? `PATCH: ${G.patchName}` : 'get ready', FREEZE - 0.3, '#fff');
   hud.patch(G.patchName ? 'PATCH · ' + G.patchName : '');
 }
-function endRound(winner) {
-  if (G.phase !== 'live') return;
+function endRound(winner, net = null) {
+  if (G.phase !== 'live' && !net) return;
   G.phase = 'end'; G.phaseT = 2.6;
-  if (winner >= 0) G.score[winner]++;
+  if (net) G.score = net.score; else if (winner >= 0) G.score[winner]++;
+  if (N && !net) N.send({ k: 're', w: winner, score: G.score });
   const mine = winner === G.me.team;
-  hud.msg(winner < 0 ? 'DRAW' : mine ? 'ROUND WON' : 'ROUND LOST', `${G.score[0]} - ${G.score[1]}`, 2.4, winner < 0 ? '#ffd93a' : mine ? '#3dffa0' : '#ff3355');
+  hud.msg(winner < 0 ? 'DRAW' : mine ? 'ROUND WON' : 'ROUND LOST', `${G.score[G.me.team]} - ${G.score[1 - G.me.team]}`, 2.4, winner < 0 ? '#ffd93a' : mine ? '#3dffa0' : '#ff3355');
   G.lastLoser = winner < 0 ? -1 : 1 - winner;
 }
 function afterRound() {
-  if (G.score[0] >= ROUNDS_TO_WIN || G.score[1] >= ROUNDS_TO_WIN) return matchOver();
+  if (G.score[0] >= ROUNDS_TO_WIN || G.score[1] >= ROUNDS_TO_WIN) { if (N) N.send({ k: 'mo', score: G.score }); return matchOver(); }
   const keys = Object.keys(PATCHES).sort(() => Math.random() - 0.5).slice(0, 3);
+  if (N) {
+    // online: the first player (not a bot) on the losing team picks; an all-bot team -> the host picks for it
+    const picker = G.lastLoser >= 0 ? G.fighters.find((f) => f.team === G.lastLoser && f.human && N.players.some((p) => p.id === f.nid)) : null;
+    if (!picker) { G.phase = 'patch'; return applyPatch(G.lastLoser >= 0 ? keys[0] : null, true); }
+    N.send({ k: 'pp', keys, who: picker.nid });
+    return patchPhase(keys, picker.nid);
+  }
   if (G.lastLoser === G.me.team) {
     // you lost the round: pick the patch
     G.phase = 'patch'; G.phaseT = 8; document.exitPointerLock?.();
@@ -214,7 +233,17 @@ function afterRound() {
     applyPatch(G.lastLoser >= 0 ? keys[0] : null, true);
   }
 }
+// online: someone is picking the next patch (me -> the picker screen; everyone else waits)
+function patchPhase(keys, who) {
+  G.phase = 'patch'; G.phaseT = 9; G.patchKeys = keys;
+  if (who !== N.me) { hud.msg('PATCH', `${N.name(who)} is picking the next patch`, 8.5); return; }
+  document.exitPointerLock?.();
+  const el = K3.shell.screen(`<div class="k3-title" style="font-size:34px">PICK A PATCH</div><div class="k3-sub">your team lost the round - choose how the next one plays</div>
+    <div class="k3-row">${keys.map((k) => `<button class="k3-btn" data-p="${k}" style="max-width:240px">${PATCHES[k][0]}<br><small style="font-family:Rajdhani;letter-spacing:0;font-weight:600;color:#c8c0e8">${PATCHES[k][1]}</small></button>`).join('')}</div>`);
+  el.querySelectorAll('[data-p]').forEach((b) => (b.onclick = () => { K3.shell.screen(''); if (!K3.isTouch && !K3.test) K3.canvas.requestPointerLock?.(); if (N.isHost) applyPatch(b.dataset.p); else N.send({ k: 'pk', key: b.dataset.p }, { to: N.hostId }); }));
+}
 function applyPatch(k, byBot) {
+  if (N && G.phase !== 'patch') return;
   G.mods = k ? { [k]: true } : {}; G.patchName = k ? PATCHES[k][0] : '';
   K3.shell.screen('');
   if (!K3.isTouch && !K3.test) K3.canvas.requestPointerLock?.();
@@ -222,16 +251,19 @@ function applyPatch(k, byBot) {
   if (k && byBot) hud.msg(`ROUND ${G.round}`, `they picked: ${PATCHES[k][0]}`, FREEZE - 0.3);
 }
 function matchOver() {
-  G.phase = 'over'; K3.playing = false; document.exitPointerLock?.(); hud.show(false); K3.setTouchButtons([]);
-  const won = G.score[0] > G.score[1], st = G.stats.get(G.me) || { k: 0, d: 0, dmg: 0 };
-  const score = G.score[0] * 100 + st.k * 25 + (won ? 500 : 0);
-  window.XC?.end({ score, won, stats: { won: won ? 1 : 0, kills: st.k } });
-  const el = K3.shell.screen(`<div class="k3-title" style="font-size:52px;${won ? '' : 'background:linear-gradient(90deg,#ff3355,#ff8a3a);-webkit-background-clip:text;background-clip:text'}">${won ? 'VICTORY' : 'DEFEAT'}</div>
-    <div class="k3-sub" style="font-size:22px">${G.score[0]} - ${G.score[1]}</div>
-    <div class="k3-sub">${st.k} eliminations · ${st.d} deaths · ${Math.round(st.dmg)} damage · ${score} points</div>
-    <div class="k3-row"><button class="k3-btn primary" data-again>PLAY AGAIN</button><button class="k3-btn" data-menu>MENU</button></div>`);
-  el.querySelector('[data-again]').onclick = () => startMatch();
-  el.querySelector('[data-menu]').onclick = () => { clearFighters(); menu(); };
+  G.phase = 'over'; K3.playing = false; K3.menuOpen = false; document.exitPointerLock?.(); hud.show(false); K3.setTouchButtons([]);
+  const myT = G.me.team, won = G.score[myT] > G.score[1 - myT], st = G.stats.get(G.me) || { k: 0, d: 0, dmg: 0 };
+  const score = G.score[myT] * 100 + st.k * 25 + (won ? 500 : 0);
+  if (!G.spectator) window.XC?.end({ score, won, stats: { won: won ? 1 : 0, kills: st.k } });
+  const rows = N ? `<div class="k3-sub">${G.fighters.filter((f) => !f.ghost).map((f) => `<span style="color:${TEAM_COL[f.team]}">${f === G.me ? 'YOU' : f.name}</span> ${(G.stats.get(f) || {}).k || 0}/${(G.stats.get(f) || {}).d || 0}`).join(' · ')}</div>` : '';
+  const el = K3.shell.screen(`<div class="k3-title" style="font-size:52px;${won ? '' : 'background:linear-gradient(90deg,#ff3355,#ff8a3a);-webkit-background-clip:text;background-clip:text'}">${G.spectator ? 'MATCH OVER' : won ? 'VICTORY' : 'DEFEAT'}</div>
+    <div class="k3-sub" style="font-size:22px">${G.score[myT]} - ${G.score[1 - myT]}</div>
+    <div class="k3-sub">${st.k} eliminations · ${st.d} deaths · ${Math.round(st.dmg)} damage · ${score} points</div>${rows}
+    <div class="k3-row">${!N ? '<button class="k3-btn primary" data-again>PLAY AGAIN</button><button class="k3-btn" data-menu>MENU</button>' : N.isHost ? '<button class="k3-btn primary" data-lobby>BACK TO LOBBY</button><button class="k3-btn" data-leave>LEAVE</button>' : `<div class="k3-sub">waiting for <b>${N.name(N.hostId)}</b>...</div><button class="k3-btn" data-leave>LEAVE</button>`}</div>`);
+  el.querySelector('[data-again]')?.addEventListener('click', () => startMatch());
+  el.querySelector('[data-menu]')?.addEventListener('click', () => { clearFighters(); menu(); });
+  el.querySelector('[data-lobby]')?.addEventListener('click', () => { clearFighters(); lobby.backToLobby(); });
+  el.querySelector('[data-leave]')?.addEventListener('click', () => (window.XC ? XC.exit() : history.back()));
 }
 
 // ---------- training range ----------
@@ -263,16 +295,19 @@ function rangeTick(dt) {
 }
 
 // ---------- barriers ----------
-G.placeBarrier = (f) => {
-  const fwd = { x: Math.sin(f.yaw), z: Math.cos(f.yaw) }, p = f.feet(), c = { x: p.x + fwd.x * 1.7, y: p.y + 1, z: p.z + fwd.z * 1.7 };
-  const q = V.Quaternion.FromEulerAngles(0, f.yaw, 0), rot = { x: q.x, y: q.y, z: q.z, w: q.w };
+let barN = 0;
+G.placeBarrier = (f, net = null) => {
+  const fwd = { x: Math.sin(f.yaw), z: Math.cos(f.yaw) }, p = f.feet(), c = net ? net.c : { x: p.x + fwd.x * 1.7, y: p.y + 1, z: p.z + fwd.z * 1.7 }, yaw = net ? net.yaw : f.yaw;
+  const q = V.Quaternion.FromEulerAngles(0, yaw, 0), rot = { x: q.x, y: q.y, z: q.z, w: q.w };
   // never inside walls or other barriers, so it cannot seal a doorway shut
-  const hit = K3.world.intersectionWithShape(c, rot, new K3.R.Cuboid(1.2, 1, 0.12), undefined, K3.phys.groups(0xffff, K3.phys.G_WORLD | K3.phys.G_CHAR), f.ch.collider);
+  const hit = !net && K3.world.intersectionWithShape(c, rot, new K3.R.Cuboid(1.2, 1, 0.12), undefined, K3.phys.groups(0xffff, K3.phys.G_WORLD | K3.phys.G_CHAR), f.ch.collider);
   if (hit) { if (f === G.me) hud.msg('', 'no room for a barrier there', 0.8); return false; }
+  const id = net ? net.id : `${f.nid || 'x'}:${++barN}`;
+  if (N && !net) N.send({ k: 'bar', id, n: f.nid, c, yaw });
   const col = K3.phys.box(c.x, c.y, c.z, 1.2, 1, 0.12, rot, { surface: 'barrier' });
-  const m = V.CreateBox('barrier', { width: 2.4, height: 2, depth: 0.24 }, S); m.position.set(c.x, c.y, c.z); m.rotation.y = f.yaw;
+  const m = V.CreateBox('barrier', { width: 2.4, height: 2, depth: 0.24 }, S); m.position.set(c.x, c.y, c.z); m.rotation.y = yaw;
   const mat = new V.StandardMaterial('bar', S); mat.emissiveColor = V.Color3.FromHexString(TEAM_COL[f.team]); mat.alpha = 0.35; mat.disableLighting = true; m.material = mat; m.isPickable = false;
-  const b = { col, m, hp: 100, t: 4.5, team: f.team }; G.barriers.push(b);
+  const b = { id, col, m, hp: 100, t: 4.5, team: f.team }; G.barriers.push(b);
   K3.audio.play('barrier', { vol: 0.6, at: c });
   return true;
 };
@@ -289,26 +324,38 @@ function fire(f, shot) {
   if (f === G.me) { G.kick = (G.kick || 0) + W.kick; G.flashT = 0.04; if (G.mode === 'range') G.rangeStats.shots++; }
   const range = W.range || 150;
   let anyHit = false, head = false, killed = false;
+  const claims = [], bars = [], ends = [];
   for (const dir of shot.pellets) {
     const wh = K3.phys.ray(eye, dir, range);
     const maxT = wh ? wh.dist : range;
     let best = null;
     for (const e of G.fighters) { if (e === f || !e.alive || e.team === f.team) continue; const h = rayHit(eye, dir, e.hitboxes(), maxT); if (h && (!best || h.t < best.t)) best = { ...h, e }; }
     const t = best ? best.t : maxT, end = { x: eye.x + dir.x * t, y: eye.y + dir.y * t, z: eye.z + dir.z * t };
-    if (shot.pellets.length === 1 || Math.random() < 0.4) tracer(muzzle, end, W.tracer);
+    if (shot.pellets.length === 1 || Math.random() < 0.4) { tracer(muzzle, end, W.tracer); if (ends.length < 4) ends.push([+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)]); }
     if (best) {
       const dmg = damageAt(shot.weapon, best.t, best.head, G.mods);
-      const r = hurt(best.e, dmg, f, best.head, shot.weapon);
+      const r = dealHit(best.e, dmg, f, best.head, shot.weapon, claims);
       anyHit = true; head = head || best.head; killed = killed || r;
       spark(end, 4);
     } else if (wh) {
       const bar = G.barriers.find((b) => b.col === wh.collider);
-      if (bar) { bar.hp -= damageAt(shot.weapon, t, false, G.mods); if (bar.hp <= 0) removeBarrier(bar); }
+      if (bar) { const bd = damageAt(shot.weapon, t, false, G.mods); if (hostSide()) hitBarrier(bar, bd); else bars.push([bar.id, +bd.toFixed(1)]); }
       spark(end, 3);
       if (Math.random() < 0.3) K3.audio.play('wall' + Math.floor(Math.random() * 3), { vol: 0.25, at: end });
     }
   }
   if (f === G.me && anyHit) { hud.hit(head, killed); K3.audio.play(head ? 'headshot' : 'flesh' + Math.floor(Math.random() * 3), { vol: head ? 0.35 : 0.5 }); if (G.mode === 'range') G.rangeStats.hits++; }
+  if (N) N.send({ k: 'sh', n: f.nid, w: shot.weapon, e: [+eye.x.toFixed(2), +eye.y.toFixed(2), +eye.z.toFixed(2)], m: [+muzzle.x.toFixed(2), +muzzle.y.toFixed(2), +muzzle.z.toFixed(2)], ends, hits: claims, bars });
+}
+// a hit: solo / host -> real damage now; online client -> a claim the host checks (returns "probably a kill" for the hit marker)
+function dealHit(e, dmg, by, head, weapon, claims) {
+  if (hostSide()) return hurt(e, dmg, by, head, weapon);
+  claims.push([e.nid, +dmg.toFixed(1), head ? 1 : 0]);
+  return e.hp - dmg <= 0;
+}
+function hitBarrier(bar, dmg) {
+  bar.hp -= dmg;
+  if (bar.hp <= 0) { removeBarrier(bar); if (N) N.send({ k: 'barx', id: bar.id }); }
 }
 function melee(f) {
   const eye = f.eye(), fwd = { x: Math.sin(f.yaw), z: Math.cos(f.yaw) };
@@ -322,26 +369,33 @@ function melee(f) {
   K3.audio.tone(320, 0.06, 'triangle', 0.04, -200);
   if (f === G.me) G.slashT = 0.22;
   if (!best) return;
-  if (bd > WEAPONS.knife.range) { f.dashDir = { x: (best.feet().x - eye.x) / bd, z: (best.feet().z - eye.z) / bd }; f.dashT = Math.min(0.12, (bd - 1.4) / 30); return setTimeout(() => best.alive && f.alive && Math.hypot(best.feet().x - f.feet().x, best.feet().z - f.feet().z) < WEAPONS.knife.range + 0.4 && hurt(best, 55, f, false, 'knife') !== undefined && f === G.me && hud.hit(false, !best.alive), 130); }
-  const k = hurt(best, 55 * (G.mods.glassCannon ? 1.25 : 1), f, false, 'knife');
-  if (f === G.me) hud.hit(false, k);
+  const stab = () => { const claims = [], k = dealHit(best, 55 * (G.mods.glassCannon ? 1.25 : 1), f, false, 'knife', claims); if (N && claims.length) N.send({ k: 'sh', n: f.nid, w: 'knife', melee: 1, hits: claims, ends: [], bars: [] }); if (f === G.me) hud.hit(false, k); };
+  if (bd > WEAPONS.knife.range) { f.dashDir = { x: (best.feet().x - eye.x) / bd, z: (best.feet().z - eye.z) / bd }; f.dashT = Math.min(0.12, (bd - 1.4) / 30); return setTimeout(() => best.alive && f.alive && Math.hypot(best.feet().x - f.feet().x, best.feet().z - f.feet().z) < WEAPONS.knife.range + 0.4 && stab(), 130); }
+  stab();
 }
 function hurt(e, dmg, by, head, weapon) {
   if (!e.alive) return false;
-  e.hp -= dmg; e.lastHitBy = by;
-  const sb = G.stats.get(by); if (sb) sb.dmg += Math.min(dmg, e.hp + dmg);
+  const was = e.hp;
+  applyHp(e, e.hp - dmg, by, Math.min(dmg, was), head);
+  if (N) N.send({ k: 'hp', n: e.nid, hp: +e.hp.toFixed(1), by: by.nid, d: +Math.min(dmg, was).toFixed(1), h: head ? 1 : 0 });
+  if (e.hp <= 0) { kill(e, by, head, weapon); if (N) N.send({ k: 'die', n: e.nid, by: by.nid, h: head ? 1 : 0, w: weapon }); return true; }
+  return false;
+}
+// HP changes (the host's own hits, or the host's word over the network)
+function applyHp(e, hp, by, dmg, head) {
+  e.hp = Math.max(0, hp); e.lastHitBy = by;
+  const sb = G.stats.get(by); if (sb && by !== e) sb.dmg += dmg;
   if (G.mode === 'range' && by === G.me) { const R = G.rangeStats; if (e.hp + dmg >= e.maxHp) R.first = G.time; R.last = `${Math.round(dmg)}${head ? ' HEAD' : ''} @ ${Math.round(Math.hypot(e.feet().x - by.feet().x, e.feet().z - by.feet().z))} m`; }
-  if (e === G.me) { const p = by.feet(), m = e.feet(); hud.damageFrom(Math.atan2(p.x - m.x, p.z - m.z) - G.me.yaw); G.hurtShake = 0.15; }
+  if (e === G.me && by !== e) { const p = by.feet(), m = e.feet(); hud.damageFrom(Math.atan2(p.x - m.x, p.z - m.z) - G.me.yaw); G.hurtShake = 0.15; }
   // bots react to being hit
   const br = G.brains.find((b) => b.f === e); if (br) br.hear(by.feet(), by);
-  if (e.hp <= 0) {
-    e.alive = false; e.hp = 0; e.ch.collider.setEnabled(false); dissolve(e);
-    const se = G.stats.get(e); if (se) se.d++; if (sb && by !== e) sb.k++;
-    if (G.mode === 'range' && by === G.me) G.rangeStats.ttk = G.rangeStats.first != null ? `${((G.time - G.rangeStats.first) * 1000).toFixed(0)} ms` : '-';
-    if (G.mode === '2v2') hud.feed(`<span style="color:${TEAM_COL[by.team]}">${by === G.me ? 'YOU' : by.name}</span> [${WEAPONS[weapon]?.name || ''}] <span style="color:${TEAM_COL[e.team]}">${e === G.me ? 'YOU' : e.name}</span>${head ? ' ◎' : ''}`);
-    return true;
-  }
-  return false;
+}
+function kill(e, by, head, weapon) {
+  if (!e.alive) return;
+  e.alive = false; e.hp = 0; e.ch.collider.setEnabled(false); dissolve(e);
+  const se = G.stats.get(e), sb = G.stats.get(by); if (se) se.d++; if (sb && by !== e) sb.k++;
+  if (G.mode === 'range' && by === G.me) G.rangeStats.ttk = G.rangeStats.first != null ? `${((G.time - G.rangeStats.first) * 1000).toFixed(0)} ms` : '-';
+  if (G.mode === '2v2' || (N && G.mode !== 'range')) hud.feed(`<span style="color:${TEAM_COL[by.team]}">${by === G.me ? 'YOU' : by.name}</span> [${WEAPONS[weapon]?.name || (weapon === 'zone' ? 'RING' : '')}] <span style="color:${TEAM_COL[e.team]}">${e === G.me ? 'YOU' : e.name}</span>${head ? ' ◎' : ''}`);
 }
 
 // ---------- player input ----------
@@ -400,9 +454,10 @@ function update(dt) {
   if (G.phase === 'menu' || G.phase === 'over' || !G.me) return;
   G.time += dt;
   playerInput(dt);
+  if (N) netTick(dt);
   for (const b of G.brains) b.tick(dt);
   if (G.mode === 'range') rangeTick(dt);
-  for (const f of G.fighters) { arms(f, dt); f.step(dt); }
+  for (const f of G.fighters) { if (f.remote) { followNet(f, dt); continue; } arms(f, dt); f.step(dt); }
   for (const b of G.barriers) { b.t -= dt; if (b.t <= 0 || b.hp <= 0) removeBarrier(b); }
   G.barriers = G.barriers.filter((b) => !b.dead);
   hud.tick(dt);
@@ -416,12 +471,12 @@ function update(dt) {
     if (G.roundT >= start) {
       const B = arena.bounds, R0 = Math.hypot(B.x, B.z), k = Math.min(1, (G.roundT - start) / (ZONE_END - start));
       G.zone = { x: 0, z: 0, r: R0 + (4 - R0) * k };
-      for (const f of G.fighters) if (f.alive && Math.hypot(f.feet().x, f.feet().z) > G.zone.r) hurt(f, (12 + Math.max(0, G.roundT - ZONE_END) * 3) * dt, f, false, 'zone');
+      if (hostSide()) for (const f of G.fighters) if (f.alive && !f.ghost && Math.hypot(f.feet().x, f.feet().z) > G.zone.r) { f.zoneAcc = (f.zoneAcc || 0) + (12 + Math.max(0, G.roundT - ZONE_END) * 3) * dt; if (f.zoneAcc >= 3) { const d = f.zoneAcc; f.zoneAcc = 0; hurt(f, d, f, false, 'zone'); } }
     }
-    const alive = [0, 1].map((t) => G.fighters.some((f) => f.team === t && f.alive));
-    if (!alive[0] || !alive[1]) endRound(alive[0] ? 0 : alive[1] ? 1 : -1);
-  } else if (G.phase === 'end') { G.phaseT -= dt; if (G.phaseT <= 0) afterRound(); }
-  else if (G.phase === 'patch') { G.phaseT -= dt; if (G.phaseT <= 0) applyPatch(G.patchKeys[0]); }
+    const alive = [0, 1].map((t) => G.fighters.some((f) => f.team === t && f.alive && !f.ghost));
+    if (hostSide() && (!alive[0] || !alive[1])) endRound(alive[0] ? 0 : alive[1] ? 1 : -1);
+  } else if (G.phase === 'end') { G.phaseT -= dt; if (G.phaseT <= 0 && hostSide()) afterRound(); }
+  else if (G.phase === 'patch') { G.phaseT -= dt; if (G.phaseT <= 0 && hostSide()) applyPatch(G.patchKeys[0]); }
 }
 
 // ---------- camera, viewmodel, HUD every frame ----------
@@ -486,6 +541,163 @@ function drawZone() {
   if (!G.zone) { if (ring) ring.setEnabled(false); return; }
   if (!ring) { ring = V.CreateCylinder('ring', { height: 7, diameter: 2, tessellation: 64, cap: 0, sideOrientation: 2 }, S); const m = new V.StandardMaterial('ringm', S); m.emissiveColor = V.Color3.FromHexString('#ff2bd6'); m.alpha = 0.18; m.disableLighting = true; m.backFaceCulling = false; ring.material = m; ring.isPickable = false; }
   ring.setEnabled(true); ring.position.set(G.zone.x, 3.5, G.zone.z); ring.scaling.set(G.zone.r, 1, G.zone.r);
+}
+
+// ================= ONLINE =================
+const lobby = N && onlineLobby(K3, N, {
+  title: 'NOVEX STRIKE',
+  sub: 'ONLINE · first to 5 rounds · bots fill the empty spots',
+  hostOpts: [
+    { key: 'mode', label: 'MODE', opts: [['1v1', '1v1'], ['2v2', '2v2 (teams)'], ['coop', 'CO-OP vs BOTS']], ok: (v, n) => (v === '1v1' ? n === 2 : v === 'coop' ? n <= 2 : n <= 4) },
+    { key: 'diff', label: 'BOTS', opts: [['easy', 'EASY'], ['normal', 'NORMAL'], ['hard', 'HARD']] },
+  ],
+  myOpts: [
+    { key: 'primary', label: 'YOUR PRIMARY · always with a pistol + knife', opts: [['smg', 'SMG'], ['shotgun', 'SHOTGUN'], ['marksman', 'MARKSMAN']] },
+    { key: 'ability', label: 'YOUR ABILITY', opts: [['dash', 'DASH · 5.5 m'], ['barrier', 'BARRIER']] },
+  ],
+  cfg: { mode: N.players.length === 2 ? '1v1' : '2v2', diff: G.cfg.diff },
+  mine: { primary: G.cfg.primary, ability: G.cfg.ability },
+  onMine: (m) => { Object.assign(G.cfg, m); localStorage.setItem('strike_cfg', JSON.stringify(G.cfg)); },
+  onStart: (go) => startOnline(go),
+  onShow: () => { clearFighters(); G.phase = 'menu'; hud.show(false); },
+});
+if (N) netBadge(K3, N, { left: 12, top: 64 });
+
+// who plays where: 1v1 (two players), 2v2 (players alternate teams), co-op (players together vs bots); bots fill the rest
+function startOnline(go) {
+  clearFighters();
+  const mode = go.cfg.mode === '1v1' ? '1v1' : '2v2', n = mode === '2v2' ? 2 : 1;
+  G.nav = navFor(mode); arena.setMode(mode);
+  G.mode = mode; G.score = [0, 0]; G.round = 0; G.mods = {}; G.patchName = ''; G.stats = new Map(); G.cfg.diff = go.cfg.diff; G.time = 0;
+  G.spectator = !go.ids.includes(N.me) || !!go.late;
+  const rng = mulberry(go.seed), names = ['VEX', 'NOVA', 'BYTE', 'GLITCH', 'RIFT', 'ZERO'];
+  const teams = [[], []];
+  go.ids.forEach((id, i) => teams[go.cfg.mode === 'coop' ? 0 : i % 2].push(id));
+  let bi = 0;
+  for (let t = 0; t < 2; t++) for (let i = 0; i < n; i++) {
+    const id = teams[t][i], sp = arena.spawns[t][i];
+    if (id) {
+      const pk = go.picks[id] || {}, me = id === N.me && !G.spectator;
+      const f = new Fighter(G, { team: t, name: N.name(id), primary: pk.primary || 'smg', ability: pk.ability || 'dash', me, spawn: sp, seed: 7 + t * 10 + i });
+      Object.assign(f, { nid: id, owner: id, human: true, remote: !me });
+      if (me) G.me = f;
+      G.fighters.push(f);
+    } else {
+      const f = new Fighter(G, { team: t, name: names[bi % names.length], primary: PRIMARIES[Math.floor(rng() * 3)], ability: rng() < 0.5 ? 'dash' : 'barrier', bot: true, spawn: sp, seed: 100 + t * 10 + i });
+      Object.assign(f, { nid: 'b' + bi++, owner: N.hostId, remote: !N.isHost });
+      G.fighters.push(f);
+      if (N.isHost) G.brains.push(new Brain(G, f, go.cfg.diff));
+    }
+  }
+  for (const f of G.fighters) if (f.remote) f.interp = new Interp(0.1);
+  // watching (arrived late): an invisible camera that spectates like a teammate who is out
+  if (G.spectator) { G.me = new Fighter(G, { team: 0, name: 'YOU', me: true, spawn: { x: 0, z: -60 }, seed: 1 }); G.me.alive = false; G.me.ch.collider.setEnabled(false); Object.assign(G.me, { nid: 'spec:' + N.me, owner: N.me, ghost: true }); }
+  G.fighters.forEach((f) => G.stats.set(f, { k: 0, d: 0, dmg: 0 }));
+  K3.shell.screen(''); hud.show(true); hud.range(null); touchLayout();
+  K3.playing = true; K3.paused = false; K3.menuOpen = false;
+  if (!K3.isTouch && !K3.test) K3.canvas.requestPointerLock?.();
+  K3.canvas.focus();
+  if (!G.spectator) window.XC?.start();
+  if (N.isHost) startRound(); else { G.phase = 'freeze'; G.phaseT = FREEZE; G.roundT = 0; hud.msg(G.spectator ? 'WATCHING' : 'GET READY', G.spectator ? 'you join the next match' : '', 2); }
+}
+
+// my fighters (me + the host's bots) -> everyone, 30 times a second; the host also sends the round clock + HP twice a second
+let sendAcc = 0, syncAcc = 0;
+const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
+function netTick(dt) {
+  sendAcc += dt; syncAcc += dt;
+  if (sendAcc >= 1 / 30) {
+    sendAcc = 0;
+    const list = G.fighters.filter((f) => !f.remote && !f.ghost);
+    if (list.length) N.send({ k: 's', t: N.now(), r: G.round, f: list.map((f) => { const p = f.feet(); return [f.nid, r2(p.x), r2(p.y), r2(p.z), r2(f.vel.x), r2(f.vel.y), r2(f.vel.z), r3(f.yaw), r3(f.pitch), (f.crouch ? 1 : 0) | (f.slideT > 0 ? 2 : 0) | (f.grounded ? 4 : 0) | (f.arms.reloadT > 0 ? 8 : 0), f.arms.cur, r2(f.arms.zoom), r2(f.eyeH)]; }) }, { fast: true });
+  }
+  if (N.isHost && syncAcc >= 0.5) {
+    syncAcc = 0;
+    N.send({ k: 'sy', r: G.round, ph: G.phase, pt: r2(G.phaseT || 0), rt: r2(G.roundT || 0), sc: G.score, hp: G.fighters.filter((f) => !f.ghost).map((f) => [f.nid, r2(f.hp), f.alive ? 1 : 0]) }, { fast: true });
+  }
+}
+// someone else's fighter: placed where its owner says it was ~0.1 s ago (smooth), footsteps from how far it moved
+function followNet(f, dt) {
+  const s = f.interp && f.interp.sample();
+  f.prev = f.feet();
+  if (!s || !f.alive) return;
+  const { a, b, k } = s, kk = Math.min(1.25, k);
+  const x = lerp(a[1], b[1], kk), y = lerp(a[2], b[2], kk), z = lerp(a[3], b[3], kk), fl = b[9];
+  const low = (fl & 1) || (fl & 2);
+  if (low && f.ch.height > 1.5) f.ch.setHeight(1.15); else if (!low && f.ch.height < 1.5) f.ch.setHeight(1.8);
+  const h = f.ch.height / 2;
+  f.ch.body.setTranslation({ x, y: y + h, z }, true); f.ch.body.setNextKinematicTranslation({ x, y: y + h, z });
+  f.vel = { x: b[4], y: b[5], z: b[6] };
+  f.yaw = lerpAngle(a[7], b[7], kk); f.pitch = lerp(a[8], b[8], kk);
+  f.crouch = !!low; f.slideT = fl & 2 ? 0.3 : 0; f.grounded = !!(fl & 4);
+  f.arms.reloadT = fl & 8 ? 0.5 : 0; f.arms.cur = Math.max(0, Math.min(f.arms.list.length - 1, b[10] | 0)); f.arms.zoom = b[11]; f.eyeH = b[12];
+  if (f.grounded) { f.stepAcc += Math.hypot(x - f.prev.x, z - f.prev.z); if (f.stepAcc > 2.1) { f.stepAcc = 0; G.sound('step', f); } }
+}
+// a fighter whose player left (or whose owner was the old host) now belongs to the host: a bot keeps it playing
+function reassign() {
+  for (const f of G.fighters) {
+    if (f.ghost || N.players.some((p) => p.id === f.owner)) continue;
+    f.owner = N.hostId;
+    if (f.human && !N.players.some((p) => p.id === f.nid)) { f.name += ' (BOT)'; f.human = false; }
+    if (f.owner === N.me && f.remote) {
+      f.remote = false; f.interp = null; f.bot = true;
+      if (f.alive) f.ch.collider.setEnabled(true);
+      if (!G.brains.some((b) => b.f === f)) G.brains.push(new Brain(G, f, G.cfg.diff));
+    }
+  }
+}
+// the host checks a hit claim: both alive, round live, believable damage + range, not faster than the gun can fire
+function claimOk(sh, by, e, dmg, w) {
+  const W = WEAPONS[w]; if (!W || !by || !e || !by.alive || !e.alive || G.phase !== 'live' || e.team === by.team) return false;
+  if (!(dmg > 0 && dmg <= 165)) return false;
+  const d = Math.hypot(e.feet().x - by.feet().x, e.feet().z - by.feet().z);
+  if (d > (W.melee ? W.lunge + 2.5 : (W.range || 150) + 6)) return false;
+  if (sh !== by.lastShot) {
+    // one trigger pull at most as often as the gun fires (+ slack for network bunching)
+    const t = G.time; by.budget = Math.min(6, (by.budget ?? 6) + (t - (by.budgetT ?? t)) * ((W.rpm || 600) / 60) * 1.6); by.budgetT = t;
+    by.lastShot = sh; if (by.budget < 1) { by.lastShotOk = false; return false; } by.budget -= 1; by.lastShotOk = true;
+  }
+  return by.lastShotOk;
+}
+if (N) {
+  N.on((d, from) => {
+    if (!d || !d.k || d.k[0] === 'L' || !G.fighters.length) return;
+    if (d.k === 's') { if (d.r !== G.round) return; for (const st of d.f) { const f = byNid(st[0]); if (f && f.remote && f.owner === from) f.interp.push(st, d.t); } return; }
+    if (d.k === 'sh') {
+      const f = byNid(d.n); if (!f) return;
+      // what it looks and sounds like
+      if (!d.melee && d.e) {
+        const W = WEAPONS[d.w], at = { x: d.e[0], y: d.e[1], z: d.e[2] }, mz = d.m ? { x: d.m[0], y: d.m[1], z: d.m[2] } : at;
+        if (W && W.snd) K3.audio.play(W.snd + Math.floor(Math.random() * (W.snd === 'marksman' || W.snd === 'shotgun' ? 2 : 3)), { vol: 0.9, rate: 0.95 + Math.random() * 0.1, at });
+        for (const e of d.ends || []) { tracer(mz, { x: e[0], y: e[1], z: e[2] }, W ? W.tracer : '#fff'); spark({ x: e[0], y: e[1], z: e[2] }, 3); }
+        G.brains.forEach((b) => b.f !== f && Math.hypot(b.f.feet().x - at.x, b.f.feet().z - at.z) < 28 && b.hear(f.feet(), f));
+      } else K3.audio.tone(320, 0.06, 'triangle', 0.02, -200);
+      // what it does (the host decides)
+      if (N.isHost && f.owner === from) {
+        const sh = {};
+        for (const [nid, dmg, head] of d.hits || []) { const e = byNid(nid); if (claimOk(sh, f, e, dmg, d.w)) hurt(e, dmg, f, !!head, d.w); }
+        for (const [id, dmg] of d.bars || []) { const b = G.barriers.find((x) => x.id === id); if (b && dmg > 0 && dmg < 120) hitBarrier(b, dmg); }
+      }
+      return;
+    }
+    if (d.k === 'bar') { const f = byNid(d.n); if (f && f.owner === from && !G.barriers.some((b) => b.id === d.id)) G.placeBarrier(f, d); return; }
+    if (d.k === 'pk') { if (N.isHost && G.phase === 'patch') applyPatch(d.key); return; }
+    if (from !== N.hostId || N.isHost) return;   // everything below is the host's word
+    if (d.k === 'hp') { const e = byNid(d.n), by = byNid(d.by); if (e && by && e.alive) applyHp(e, d.hp, by, d.d, !!d.h); }
+    else if (d.k === 'die') { const e = byNid(d.n), by = byNid(d.by); if (e && by) { kill(e, by, !!d.h, d.w); if (by === G.me) hud.hit(!!d.h, true); } }
+    else if (d.k === 'barx') { const b = G.barriers.find((x) => x.id === d.id); if (b) removeBarrier(b); }
+    else if (d.k === 'rd') startRound(d);
+    else if (d.k === 're') endRound(d.w, d);
+    else if (d.k === 'pp') patchPhase(d.keys, d.who);
+    else if (d.k === 'mo') { G.score = d.score; matchOver(); }
+    else if (d.k === 'sy' && d.r === G.round && G.phase !== 'over') {
+      if (G.phase === d.ph) { if (Math.abs((G.roundT || 0) - d.rt) > 0.3) G.roundT = d.rt; if (Math.abs((G.phaseT || 0) - d.pt) > 0.3) G.phaseT = d.pt; }
+      G.score = d.sc;
+      for (const [nid, hp, al] of d.hp) { const e = byNid(nid); if (!e) continue; if (!al && e.alive) kill(e, e.lastHitBy || e, false, 'zone'); else if (al && e.alive) e.hp = hp; }
+    }
+  });
+  N.onLeave((id) => { if (G.fighters.length) { reassign(); hud.msg('', 'a player left · a bot takes over', 2); } });
+  N.onHost((id) => { if (G.fighters.length) reassign(); if (id === N.me) hud.msg('', 'you are the host now', 2); });
 }
 
 K3.shell.loading(1);
