@@ -2990,6 +2990,31 @@ export const GAME_LIST = [
 "cover": "games/covers/cryptogram.png"
 },
 {
+"id": "letter-chain",
+"n": 205,
+"title": "LETTER CHAIN",
+"genre": "mind",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 2,
+"maxPlayers": 8,
+"desc": "Build a word together, one letter each. You say A, the next says P, the next P, then L... and the letters must always be the start of a REAL word. Add a letter that no word can start with (APPLX?) or run out of time and you are OUT. Finish a word that cannot go any further and you score the word. Last player standing wins. Checked against a 168,000-word dictionary. Solo against four bots or online for up to 8.",
+"controls": "Type a letter on your keyboard, or tap the big letter keys · 20 seconds per turn",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Be the last one standing in Letter Chain"
+}
+],
+"file": "games/2d/letter-chain.html",
+"dim": "2d",
+"cover": "games/covers/letter-chain.png"
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",
@@ -4229,7 +4254,7 @@ export const GAME_LIST = [
 ],
 "minPlayers": 2,
 "maxPlayers": 8,
-"desc": "Everyone gets the same ridiculous prompt - A DRAGON AT THE DENTIST, YOUR TEACHER AS A SUPERHERO - and 75 seconds to draw it with the full sketch pad: rainbow pen, shapes, paint bucket, any colour. Then the gallery opens and everybody votes for the best one (not their own). Votes are points, the round winner gets a bonus. Three rounds. Outside a party it is a practice sketchbook.",
+"desc": "Everyone gets the same ridiculous prompt - A DRAGON AT THE DENTIST, YOUR TEACHER AS A SUPERHERO - and 2 minutes to draw it with the full sketch pad: rainbow pen, shapes, paint bucket, any colour. Then the gallery opens and everybody votes for the best one (not their own). Votes are points, the round winner gets a bonus. Three rounds. Outside a party it is a practice sketchbook.",
 "controls": "Draw with the mouse / finger · tools under the canvas · DONE when finished · click / tap a drawing to vote",
 "scoreLabel": "VOTES",
 "tasks": [

@@ -60,7 +60,7 @@ with sync_playwright() as pw:
         fr = p.frame_locator('.gl-frame')
         st = p.evaluate("""() => { const f = document.querySelector('.gl-frame'); if (!f) return 'no frame'; try { const n = f.contentWindow.K && f.contentWindow.K.net; return n ? JSON.stringify({ i: n.index, me: n.me, ids: n.players.map(p => p.id + ':' + p.username), host: n.isHost }) : 'frame without net'; } catch (e) { return 'err ' + e; } }""")
         print(name, st)
-    script = os.path.join(HERE, 'mp_scripts', GAME + '.py')
+    script = os.environ.get('MP_SCRIPT') or os.path.join(HERE, 'mp_scripts', GAME + '.py')   # MP_SCRIPT=path runs another check
     if os.path.exists(script):
         # per-game play script: gets A, B, gp (game coords -> page coords), game_click, game_drag, OUT
         def gp(page, x, y):

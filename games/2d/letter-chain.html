@@ -1,0 +1,153 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Letter Chain</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"letter-chain","n":205,"title":"LETTER CHAIN","genre":"mind","modes":["sp","online"],"minPlayers":2,"maxPlayers":8,"desc":"Build a word together, one letter each. You say A, the next says P, the next P, then L... and the letters must always be the start of a REAL word. Add a letter that no word can start with (APPLX?) or run out of time and you are OUT. Finish a word that cannot go any further and you score the word. Last player standing wins. Checked against a 168,000-word dictionary. Solo against four bots or online for up to 8.","controls":"Type a letter on your keyboard, or tap the big letter keys · 20 seconds per turn","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Be the last one standing in Letter Chain"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script><script src="../kit/words.js"></script><script src="../kit/dict.js"></script>
+<script>
+const TURN_T = 20, OUT_T = 5, DONE_T = 4.5, MAX_ROUNDS = 12;
+const ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const BOTS = [{ id: 'me', name: 'YOU' }, { id: 'b1', name: 'ALPHA' }, { id: 'b2', name: 'BRAVO' }, { id: 'b3', name: 'ECHO' }, { id: 'b4', name: 'OSCAR' }];
+const COMMON = window.WORDS && WORDS.all ? WORDS.all : new Set();
+let dictOk = false;
+DICT.ready.then(() => (dictOk = true)).catch(() => {});
+
+K.game({
+  bg: '#0b0a1c', touch: { stick: false, buttons: [] },
+  init(s) {
+    if (!K.net) PK.setFake(BOTS);
+    s.ph = 'start'; s.t = 1; s.botT = 0; s.sent = false; s.pop = 0; s.over = false;
+    s.onPhase = (s) => { s.sent = false; s.pop = 0.35; s.botT = K.rand(1.2, 3.2); if (s.ph === 'out') K.sfx('lose'); if (s.ph === 'done') K.sfx('win'); if (s.ph === 'turn' && s.pd.who === PK.me()) K.sfx('blip'); if (s.ph === 'end') PK.finish(s, s.pd.pts, { win: 'LAST ONE STANDING!' }); };
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'letter' && PK.host() && s.ph === 'turn' && s.pd.who === from) play(s, d.c);
+  },
+  onLeave(s, id) {
+    if (!PK.host() || !s.pd || !s.pd.alive) return;
+    const alive = s.pd.alive.filter((x) => x !== id && PK.players().some((p) => p.id === x));
+    if (alive.length <= 1) return PK.go(s, 'end', 99, { pts: winBonus(s.pd.pts, alive) });
+    if (s.ph === 'turn' && s.pd.who === id) PK.go(s, 'turn', TURN_T, { ...s.pd, alive, who: nextOf(alive, id, s.pd.order) });
+    else s.pd.alive = alive;
+  },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt; s.pop = Math.max(0, s.pop - dt);
+    const me = PK.me(), d = s.pd || {};
+    // my turn: a key on the keyboard or a tap on the big letter keys
+    if (s.ph === 'turn' && d.who === me && !s.sent) {
+      let c = (!K.isTouch && K.typed()[0]) || null;   // phones use the big keys (no extra TYPE button over the players)
+      if (!c && K.mouse.clicked) { const k = keys().find((k) => K.inRect(K.mouse.x, K.mouse.y, k)); if (k) c = k.c; }
+      if (c) { s.sent = true; K.sfx('click'); if (PK.host()) play(s, c); else PK.send({ t: 'letter', c }); }
+    } else if (!K.isTouch) K.typed();
+    if (!PK.host()) return;
+    if (!K.net) bots(s, dt);
+    if (s.ph === 'start' && s.t <= 0 && dictOk) {
+      const order = PK.players().map((p) => p.id);
+      PK.go(s, 'turn', TURN_T, { order, alive: order.slice(), who: order[Math.floor(Math.random() * order.length)], chain: '', round: 1, pts: {}, by: [] });
+    } else if (s.ph === 'turn' && s.t <= 0) knockOut(s, d.who, null, 'time');
+    else if ((s.ph === 'out' || s.ph === 'done') && s.t <= 0) {
+      if (d.alive.length <= 1 || d.round >= MAX_ROUNDS) return PK.go(s, 'end', 99, { pts: winBonus(d.pts, d.alive) });
+      const start = d.alive.includes(d.next) ? d.next : nextOf(d.alive, d.who, d.order);
+      PK.go(s, 'turn', TURN_T, { order: d.order, alive: d.alive, who: start, chain: '', round: d.round + 1, pts: d.pts, by: [] });
+    }
+  },
+  draw(s) {
+    const me = PK.me(), d = s.pd, c = K.ctx();
+    c.fillStyle = K.grad(0, 0, 0, 540, ['#141030', '#0b0a1c']); c.fillRect(0, 0, 960, 540);
+    if (s.ph === 'start' || !d || !d.order) { K.text('LETTER CHAIN', 480, 230, 52, '#fff', 'center', 'd', 18); K.text(dictOk ? 'get ready…' : 'loading the dictionary…', 480, 290, 16, '#8e88b8', 'center', 'u'); return; }
+    if (s.ph === 'end') return;
+    // players
+    const pl = d.order, n = pl.length, cw = Math.min(150, 900 / n);
+    pl.forEach((id, i) => {
+      const x = 480 - (n * cw) / 2 + i * cw, alive = d.alive.includes(id), turn = s.ph === 'turn' && d.who === id;
+      K.alpha(alive ? 1 : 0.35);
+      K.rect(x + 4, 14, cw - 8, 54, turn ? '#22e6ff22' : '#17142e', 10); K.stroke(x + 4, 14, cw - 8, 54, turn ? '#22e6ff' : '#2c2850', turn ? 3 : 1, 10);
+      const nm = id === me ? 'YOU' : PK.name(id);
+      K.circle(x + 22, 33, 9, PK.col(id)); K.text(nm[0] || '?', x + 22, 34, 11, '#05040c', 'center', 'd');
+      K.text(nm.length > 9 ? nm.slice(0, 9) + '…' : nm, x + 36, 34, 13, alive ? PK.col(id) : '#8e88b8', 'left', 'd');
+      K.text(alive ? `${d.pts[id] || 0} pts` : 'OUT', x + 22, 56, 11, alive ? '#ffd93a' : '#ff3355', 'left', 'd');
+      K.alpha(1);
+    });
+    K.text(`ROUND ${d.round}`, 24, 88, 12, '#5d5a80', 'left', 'd');
+    if (s.ph === 'turn') PK.bar(620, 86, 270, s);
+    // the chain
+    const word = d.chain.toUpperCase(), L = Math.max(1, word.length), tw = Math.min(64, 860 / L), tx = 480 - (L * tw) / 2;
+    if (!word) K.text(s.ph === 'turn' ? (d.who === me ? 'START A NEW WORD - ANY LETTER' : 'a new word starts…') : '', 480, 180, 22, '#8e88b8', 'center', 'd');
+    for (let i = 0; i < word.length; i++) {
+      const last = i === word.length - 1, bad = s.ph === 'out' && last && d.why === 'bad', done = s.ph === 'done';
+      const sc = last && s.pop > 0 ? 1 + s.pop : 1, x = tx + i * tw + tw / 2, y = 180;
+      c.save(); c.translate(x, y); c.scale(sc, sc);
+      K.rect(-tw / 2 + 3, -36, tw - 6, 72, bad ? '#4a1020' : done ? '#103a2a' : '#1d1840', 10);
+      K.stroke(-tw / 2 + 3, -36, tw - 6, 72, bad ? '#ff3355' : done ? '#3dffa0' : last ? '#22e6ff' : '#3a3570', 3, 10);
+      K.text(word[i], 0, 2, Math.min(44, tw * 0.7), bad ? '#ff8aa0' : done ? '#3dffa0' : '#fff', 'center', 'd');
+      c.restore();
+      if (d.by && d.by[i]) K.circle(x, 226, 4, PK.col(d.by[i]));
+    }
+    // what is happening
+    if (s.ph === 'turn') {
+      const mine = d.who === me;
+      K.text(mine ? 'YOUR TURN - add a letter' : `${PK.name(d.who)} is thinking…`, 480, 262, mine ? 22 : 18, mine ? '#22e6ff' : '#c8c0e8', 'center', 'd', mine ? 10 : 0);
+      if (mine) { K.text('the letters must still be the start of a real word', 480, 288, 13, '#8e88b8', 'center', 'u'); drawKeys(s); }
+      else if (!d.alive.includes(me)) K.text('you are out - watching', 480, 300, 14, '#ff8a8a', 'center', 'u');
+    }
+    if (s.ph === 'out') {
+      K.text(`${d.who === me ? 'YOU ARE' : PK.name(d.who) + ' IS'} OUT!`, 480, 280, 34, '#ff3355', 'center', 'd', 14);
+      K.text(d.why === 'time' ? 'ran out of time' : `no word starts with ${word}`, 480, 318, 16, '#ffd6de', 'center', 'u');
+      if (d.ex) K.text(`it could have been ${d.ex.toUpperCase()}`, 480, 346, 16, '#8e88b8', 'center', 'u');
+    }
+    if (s.ph === 'done') {
+      K.text(`${d.who === me ? 'YOU' : PK.name(d.who)} FINISHED THE WORD!`, 480, 280, 30, '#3dffa0', 'center', 'd', 14);
+      K.text(`${word} can't go any further · +${word.length} points`, 480, 318, 16, '#d8fff0', 'center', 'u');
+    }
+    if (s.ph !== 'turn' || d.who !== me) K.text('add one letter each · keep it the start of a real word · a letter no word can start with = OUT', 480, 520, 12, '#5d5a80', 'center', 'u');
+  },
+});
+
+function keys() {
+  const out = [];
+  ROWS.forEach((r, ri) => { const kw = 70, gap = 6, w0 = r.length * kw - gap, x0 = 480 - w0 / 2; for (let i = 0; i < r.length; i++) out.push({ c: r[i], x: x0 + i * kw, y: 318 + ri * 66, w: kw - gap, h: 58 }); });
+  return out;
+}
+function drawKeys(s) {
+  const m = K.mouse;
+  keys().forEach((k) => { const hov = !K.isTouch && K.inRect(m.x, m.y, k); K.rect(k.x, k.y, k.w, k.h, hov ? '#2a2460' : '#1b1738', 9); K.stroke(k.x, k.y, k.w, k.h, hov ? '#22e6ff' : '#3a3570', 2, 9); K.text(k.c, k.x + k.w / 2, k.y + k.h / 2 + 2, 26, '#fff', 'center', 'd'); });
+}
+const nextOf = (alive, id, order) => { const i = order.indexOf(id); for (let k = 1; k <= order.length; k++) { const o = order[(i + k) % order.length]; if (alive.includes(o)) return o; } return alive[0]; };
+// the last one standing always wins: survivors get a bonus that puts them above everyone who was knocked out
+const winBonus = (pts, alive) => { const p = { ...pts }, outBest = Math.max(0, ...Object.keys(p).filter((id) => !alive.includes(id)).map((id) => p[id])); alive.forEach((id) => (p[id] = Math.max((p[id] || 0) + 10, outBest + 10 + (p[id] || 0) % 10))); return p; };
+
+// host: someone added a letter
+function play(s, ch) {
+  const d = s.pd; if (s.ph !== 'turn') return;
+  const chain = d.chain + String(ch).toLowerCase(), by = [...(d.by || []), d.who];
+  if (!DICT.isPrefix(chain)) return knockOut(s, d.who, chain, 'bad', by);
+  const pts = { ...d.pts, [d.who]: (d.pts[d.who] || 0) + 1 };
+  if (chain.length >= 3 && DICT.isWord(chain) && !DICT.next(chain).length) {
+    pts[d.who] += chain.length;
+    return PK.go(s, 'done', DONE_T, { ...d, chain, by, pts, next: nextOf(d.alive, d.who, d.order) });
+  }
+  PK.go(s, 'turn', TURN_T, { ...d, chain, by, pts, who: nextOf(d.alive, d.who, d.order) });
+}
+function knockOut(s, who, chain, why, by) {
+  const d = s.pd, alive = d.alive.filter((x) => x !== who);
+  PK.go(s, 'out', OUT_T, { ...d, chain: chain ?? d.chain, by: by || d.by, alive, why, ex: d.chain ? DICT.example(d.chain, COMMON) : null, next: nextOf(alive, who, d.order) });
+}
+
+// solo: bots know common words well and rare ones a little; now and then one slips
+function bots(s, dt) {
+  const d = s.pd; if (s.ph !== 'turn' || !d || d.who === 'me') return;
+  s.botT -= dt * (d.alive.includes('me') ? 1 : 3);
+  if (s.botT > 0) return;
+  const opts = DICT.next(d.chain);
+  const easy = opts.filter((c) => [...COMMON].some((w) => w.length > d.chain.length + 1 && w.startsWith(d.chain + c)));
+  let pick;
+  if (!opts.length || Math.random() < (easy.length ? 0.04 : 0.45)) pick = 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+  else {
+    // prefer letters with lots of words after them, but do not walk into a finished dead end on purpose too often
+    const pool = (easy.length ? easy : opts).map((c) => ({ c, n: DICT.count(d.chain + c) + Math.random() * 40 }));
+    pool.sort((a, b) => b.n - a.n);
+    pick = pool[Math.min(pool.length - 1, Math.floor(Math.random() * Math.min(3, pool.length)))].c;
+  }
+  play(s, pick);
+}
+</script></body></html>

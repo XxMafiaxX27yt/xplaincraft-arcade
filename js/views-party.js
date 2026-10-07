@@ -34,8 +34,110 @@ export function initParty() {
     renderDock();
   });
   if (api.MODE === 'online') startSocial();
-  window.addEventListener('xc-game', () => setTimeout(renderDock, 50));
+  window.addEventListener('xc-game', () => setTimeout(() => (renderDock(), renderGameChat()), 50));
+  onParty((e) => {
+    if (!isPlaying()) return;
+    if (e.type === 'chat' && !gcOpen && (e.m.sys || e.m.id !== party.me)) {
+      if (!e.m.sys) gcUnread++;
+      bubble(e.m);
+    }
+    if (e.type === 'left') gcOpen = false;
+    renderGameChat();
+  });
   renderDock();
+}
+
+// ---------- party chat inside a game: a 💬 button in the game bar, a chat panel over the game, pop-up bubbles ----------
+let gcOpen = false;
+let gcUnread = 0;
+function renderGameChat() {
+  const layer = $('#game-layer');
+  const bar = layer && $('.gl-bar', layer);
+  const old = layer && $('.gc-panel', layer);
+  if (!bar || !isPlaying() || !party.code) {
+    bar?.querySelector('[data-gchat]')?.remove();
+    old?.remove();
+    gcOpen = false;
+    return;
+  }
+  let btn = bar.querySelector('[data-gchat]');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'btn sm gc-btn';
+    btn.dataset.gchat = '1';
+    btn.onclick = () => {
+      gcOpen = !gcOpen;
+      gcUnread = 0;
+      renderGameChat();
+      if (gcOpen) layer.querySelector('.gc-panel [data-msg]')?.focus();
+      else $('.gl-frame', layer)?.focus();
+    };
+    bar.insertBefore(btn, bar.querySelector('.gl-best'));
+  }
+  btn.innerHTML = `💬 <span>CHAT</span>${gcUnread ? `<i class="pd-dot">${gcUnread}</i>` : ''}`;
+  btn.classList.toggle('on', gcOpen);
+  if (!gcOpen) {
+    old?.remove();
+    return;
+  }
+  const me = party.me;
+  const typed = old?.querySelector('[data-msg]')?.value || '';
+  const hadFocus = !!old && document.activeElement === old.querySelector('[data-msg]');
+  old?.remove();
+  const p = document.createElement('div');
+  p.className = 'gc-panel';
+  p.innerHTML = `
+    <div class="pd-head"><div><b>PARTY CHAT</b> <span class="pd-code">${esc(party.code)}</span></div><button class="btn sm ghost" data-close title="Back to the game">✕</button></div>
+    <div class="pd-chat" data-chat>${party.chat.map((c) => (c.sys ? `<div class="pd-sys">${esc(c.text)}</div>` : `<div class="pd-msg ${c.id === me ? 'me' : ''}"><b>${esc(c.from)}</b>${c.sticker ? `<span class="pd-stk">${esc(c.sticker)}</span>` : esc(c.text)}</div>`)).join('') || '<div class="pd-sys">Say something to your party.</div>'}</div>
+    <div class="pd-stickers">${STICKERS.map((s) => `<button data-stk="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+    <form class="pd-send" data-send><input maxlength="160" placeholder="Message the party" data-msg autocomplete="off" enterkeyhint="send"><button class="btn sm primary">SEND</button></form>`;
+  layer.appendChild(p);
+  const chat = p.querySelector('[data-chat]');
+  chat.scrollTop = chat.scrollHeight;
+  const input = p.querySelector('[data-msg]');
+  input.value = typed;
+  if (hadFocus) input.focus();
+  const close = () => {
+    gcOpen = false;
+    renderGameChat();
+    $('.gl-frame', layer)?.focus();
+  };
+  p.querySelector('[data-close]').onclick = close;
+  input.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') close();
+  };
+  p.querySelectorAll('[data-stk]').forEach((b) => (b.onclick = () => sendChat('', b.dataset.stk)));
+  p.querySelector('[data-send]').onsubmit = (e) => {
+    e.preventDefault();
+    const v = input.value;
+    input.value = ''; // before sending: sending re-renders the panel, which keeps whatever is typed
+    sendChat(v);
+    layer.querySelector('.gc-panel [data-msg]')?.focus();
+  };
+}
+function bubble(m) {
+  const layer = $('#game-layer');
+  if (!layer || !isPlaying()) return;
+  let box = $('.gc-bubbles', layer);
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'gc-bubbles';
+    layer.appendChild(box);
+  }
+  const b = document.createElement('div');
+  b.className = 'gc-bubble' + (m.sys ? ' sys' : '');
+  b.innerHTML = m.sys ? esc(m.text) : `<b>${esc(m.from)}</b>${m.sticker ? `<span class="pd-stk">${esc(m.sticker)}</span>` : esc(m.text)}`;
+  b.onclick = () => {
+    gcOpen = true;
+    gcUnread = 0;
+    renderGameChat();
+    layer.querySelector('.gc-panel [data-msg]')?.focus();
+  };
+  box.appendChild(b);
+  while (box.children.length > 3) box.firstChild.remove();
+  setTimeout(() => b.classList.add('out'), 4500);
+  setTimeout(() => b.remove(), 5000);
 }
 
 function showInvite(inv) {

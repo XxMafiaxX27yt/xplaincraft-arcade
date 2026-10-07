@@ -304,3 +304,20 @@ body.playing #party-dock { display: none; }
 .love-pv .pv-banner { width: 90px; height: 50px; }
 .love-piece small { font-size: 10px; color: var(--dim); line-height: 1.2; }
 .love-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ---------- party chat inside a game ---------- */
+.gc-btn { position: relative; }
+.gc-btn.on { border-color: var(--cyan); color: var(--cyan); }
+.gc-panel { position: absolute; right: 12px; top: 58px; bottom: 12px; width: min(340px, calc(100vw - 24px)); z-index: 5; display: flex; flex-direction: column; background: rgba(12,10,27,.96); border: 1px solid var(--line-hi); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.6), 0 0 30px rgba(34,230,255,.12); overflow: hidden; font-family: var(--f-ui); }
+.gc-panel .pd-chat { max-height: none; flex: 1; }
+.gc-bubbles { position: absolute; right: 14px; top: 62px; z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+.gc-bubble { pointer-events: auto; cursor: pointer; max-width: min(320px, 70vw); padding: 7px 12px; border-radius: 12px; background: rgba(17,13,36,.92); border: 1px solid var(--line-hi); color: var(--text); font-family: var(--f-ui); font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.5); animation: gcIn .2s ease-out; transition: opacity .5s, transform .5s; }
+.gc-bubble b { color: var(--mag); margin-right: 6px; }
+.gc-bubble.sys { color: var(--dim); font-style: italic; font-size: 12px; }
+.gc-bubble.out { opacity: 0; transform: translateX(20px); }
+@keyframes gcIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) {
+  .gc-btn span { display: none; }
+  .gc-panel { left: 8px; right: 8px; width: auto; top: auto; height: min(62vh, 420px); bottom: 8px; }
+  .gc-bubbles { right: 8px; top: 54px; }
+}
