@@ -2093,6 +2093,30 @@ export const GAME_LIST = [
 "cover": "games/covers/floorfall.png"
 },
 {
+"id": "redline",
+"n": 208,
+"title": "REDLINE",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp"
+],
+"minPlayers": 1,
+"maxPlayers": 6,
+"desc": "3D circuit racing with a real engine under the hood. Four cars - rear-drive racer, big-turbo hypercar, all-wheel-drive sedan, light hatch - each with its own torque, gears and turbo. Launch on the green with the revs in the green zone, shift at the redline for a PERFECT SHIFT, feel the turbo spool above 4000 rpm and hear it blow off when you lift. Drift, catch air and slipstream to fill your nitro. Race five rivals over three laps or chase your best lap in time trial.",
+"controls": "W / ↑ gas · S / ↓ brake (and reverse) · A D / ← → steer · SPACE handbrake drift · SHIFT nitro · E / Q gear up / down (manual) · C camera · R back on track. Phones: stick steers, GAS / BRAKE / NITRO / DRIFT buttons.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a REDLINE race"
+}
+],
+"file": "games/3d/redline.html",
+"cover": "games/covers/redline.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",

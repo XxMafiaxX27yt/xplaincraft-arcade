@@ -224,6 +224,64 @@ with sync_playwright() as pw:
     check('floorfall phone: no JS errors', not errs, errs[:5])
     b.close()
 
+    # ---------- REDLINE ----------
+    b = pw.chromium.launch(channel='msedge', args=['--ignore-gpu-blocklist'])
+    p = b.new_page(viewport={'width': 1280, 'height': 720}); errs = []
+    p.on('pageerror', lambda e: errs.append('PAGE ' + str(e)[:300]))
+    p.on('response', lambda r: r.status >= 400 and 'favicon' not in r.url and errs.append(f'HTTP {r.status} {r.url}'))
+    p.goto('http://localhost:8787/games/3d/redline.html?test&auto', wait_until='load'); p.wait_for_function('window.__R && window.__R.me', timeout=30000); p.wait_for_timeout(800)
+    res = p.evaluate(r"""(() => { const G = window.__R, K3 = window.__K3; K3.paused = true; const me = G.me, out = {};
+      const park = () => G.cars.filter((c) => c !== me).forEach((c, i) => c.place({ x: 600 + i * 20, y: 0, z: 600 }, 0));
+      // launch control: manual box, revs climb while held -> release in the green = perfect launch
+      me.auto = false; me.input = { throttle: 0, brake: 0, steer: 0, handbrake: false, nitro: false, up: false, down: false };
+      let peak = 0; for (let i = 0; i < 90; i++) { me.input.throttle = 1; me.step(1 / 60, { countdown: true }); peak = Math.max(peak, me.rpm); }
+      out.revUp = Math.round(peak);
+      me.rpm = me.spec.redline * 0.72; me.events = []; me.launch(); out.perfectLaunch = me.events.includes('launch');
+      me.rpm = me.spec.redline * 0.97; me.events = []; me.launch(); out.wheelspin = me.events.includes('spin');
+      // straight-line run on the main straight: speed, turbo spool, gears, a perfect manual shift
+      park(); me.place({ x: 0, y: 0, z: -95 }, 0); G.phase = 'live'; G.race.countdown = false; me.launchT = 0; me.auto = true;
+      let maxV = 0, boostLow = 1, boostHigh = 0; me.events = [];
+      let maxGear = 1;   // (the straight bends gently toward turn 1 after ~300 m - this run never steers, so stop before it)
+      for (let i = 0; i < 320; i++) { me.input.throttle = 1; me.input.steer = 0; me.step(1 / 60, { countdown: false }); K3.world.step(); maxV = Math.max(maxV, me.speed); maxGear = Math.max(maxGear, me.gear); if (me.rpm < 3500) boostLow = Math.min(boostLow, me.boost); if (me.rpm > 6000) boostHigh = Math.max(boostHigh, me.boost); }
+      out.kmh = Math.round(maxV * 3.6); out.gear = maxGear; out.boostLow = +boostLow.toFixed(2); out.boostHigh = +boostHigh.toFixed(2); out.onRoad = Math.abs(me.pos().x) < 7 && me.pos().y > -0.5;
+      // manual box: accelerate in 1st until the needle is in the green zone, then shift up
+      me.place({ x: 0, y: 0, z: -95 }, 0); me.auto = false; me.events = []; let k = 0;
+      while ((k < 30 || me.rpm < me.spec.redline * 0.9) && k++ < 600) { me.input.throttle = 1; me.step(1 / 60, { countdown: false }); K3.world.step(); }
+      me.input.up = true; me.step(1 / 60, { countdown: false }); me.input.up = false; out.perfectShift = me.events.includes('perfect'); out.shiftRpm = Math.round(me.rpm);
+      // drifting fills nitro
+      me.auto = true; me.place({ x: 0, y: 0, z: -95 }, 0); me.nitro = 0.2; for (let i = 0; i < 150; i++) { me.input.throttle = 1; me.step(1 / 60, { countdown: false }); K3.world.step(); }
+      const n0 = me.nitro; for (let i = 0; i < 80; i++) { me.input.throttle = 1; me.input.steer = 1; me.input.handbrake = true; me.step(1 / 60, { countdown: false }); K3.world.step(); }
+      me.input.handbrake = false; me.input.steer = 0; out.nitroGain = +(me.nitro - n0).toFixed(2);
+      return out; })()""")
+    check('redline: launch control (revs climb on the grid, green = perfect launch, too high = wheelspin)', res['revUp'] > 7000 and res['perfectLaunch'] and res['wheelspin'], res)
+    check('redline: 0 -> 150+ km/h on the straight, gears shift, stays on the road', res['kmh'] > 150 and res['gear'] >= 3 and res['onRoad'], res)
+    check('redline: turbo spools above 4000 rpm, empty below', res['boostHigh'] > 0.8 and res['boostLow'] < 0.2, res)
+    check('redline: shifting at the redline = PERFECT SHIFT (manual)', res['perfectShift'], res)
+    check('redline: drifting fills the nitro', res['nitroGain'] > 0.05, res)
+    p.evaluate("location.reload()"); p.wait_for_function('window.__R && window.__R.me', timeout=30000); p.wait_for_timeout(500)
+    res = p.evaluate(r"""(() => { const G = window.__R, K3 = window.__K3; K3.paused = true; G.me.ai = true; G.me.skill = 0.92; let n = 0;
+      while (G.phase !== 'over' && n < 60 * 330) { G.simulate(60); n += 60; }
+      return { phase: G.phase, t: Math.round(G.time), finished: G.finish.length, laps: G.cars.map((c) => c.track.laps.length) }; })()""")
+    check('redline: a full 6-car, 3-lap race finishes (AI drives every car)', res['phase'] == 'over' and res['finished'] >= 4, res)
+    check('redline: no JS errors', not errs, errs[:5])
+    b.close()
+    b = pw.chromium.launch(channel='msedge'); ctx = b.new_context(viewport={'width': 900, 'height': 420}, has_touch=True, is_mobile=True); p = ctx.new_page(); errs = []
+    p.on('pageerror', lambda e: errs.append('PAGE ' + str(e)[:300]))
+    p.goto('http://localhost:8787/games/3d/redline.html?test&touch&auto', wait_until='load'); p.wait_for_function('window.__R && window.__R.me', timeout=30000); p.wait_for_timeout(4800)
+    btn = p.evaluate("(() => { const b = window.__K3.touchButtons.find((x) => x.a === 'gas'); const r = b.el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2, window.__K3.touchButtons.length]; })()")
+    cdp = p.context.new_cdp_session(p)
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': btn[0], 'y': btn[1], 'id': 1}]})
+    p.wait_for_timeout(2500)
+    v = p.evaluate("Math.round(window.__R.me.speed * 3.6)")
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': btn[0], 'y': btn[1], 'id': 1}, {'x': 150, 'y': 250, 'id': 2}]})
+    for i in range(1, 8): cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': btn[0], 'y': btn[1], 'id': 1}, {'x': 150 + i * 8, 'y': 250, 'id': 2}]}); p.wait_for_timeout(40)
+    st = p.evaluate("window.__R.me.input.steer")
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    p.screenshot(path=os.path.join(OUT, '3d_redline_phone.png'))
+    check('redline phone: GAS button drives, stick steers', v > 40 and st > 0.5 and btn[2] == 4, [v, st, btn[2]])
+    check('redline phone: no JS errors', not errs, errs[:5])
+    b.close()
+
 fails = [r for r in results if not r[1]]
 print(f'\n{len(results) - len(fails)}/{len(results)} passed')
 sys.exit(1 if fails else 0)

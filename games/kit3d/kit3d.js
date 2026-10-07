@@ -275,6 +275,8 @@ export async function boot(opts = {}) {
       g.gain.value = vol; g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur); o.connect(g).connect(master); o.start(); o.stop(a.currentTime + dur + 0.02);
     },
     unlock: () => audio(),
+    // raw Web Audio access for synthesized sounds (engines etc.): { ac, out }
+    raw: () => { const a = audio(); return a ? { ac: a, out: master } : null; },
   };
 
   // ---------- assets ----------
