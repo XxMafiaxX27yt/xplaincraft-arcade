@@ -262,7 +262,8 @@ with sync_playwright() as pw:
     res = p.evaluate(r"""(() => { const G = window.__R, K3 = window.__K3; K3.paused = true; G.me.ai = true; G.me.skill = 0.92; let n = 0;
       while (G.phase !== 'over' && n < 60 * 330) { G.simulate(60); n += 60; }
       return { phase: G.phase, t: Math.round(G.time), finished: G.finish.length, laps: G.cars.map((c) => c.track.laps.length) }; })()""")
-    check('redline: a full 6-car, 3-lap race finishes (AI drives every car)', res['phase'] == 'over' and res['finished'] >= 4, res)
+    # the results come 3.5 s after the player's car finishes; every other car must be on its last lap by then (nobody stuck)
+    check('redline: a full 6-car, 3-lap race finishes, nobody stuck a lap behind (AI drives every car)', res['phase'] == 'over' and res['finished'] >= 1 and min(res['laps']) >= 2, res)
     check('redline: no JS errors', not errs, errs[:5])
     b.close()
     b = pw.chromium.launch(channel='msedge'); ctx = b.new_context(viewport={'width': 900, 'height': 420}, has_touch=True, is_mobile=True); p = ctx.new_page(); errs = []

@@ -61,7 +61,8 @@ export function buildTrack(K3, T, props) {
     vd.applyToMesh(m); m.material = mat; m.isPickable = false; m.receiveShadows = true; m.freezeWorldMatrix();
     return m;
   };
-  const tri = (r) => K3.world.createCollider(K3.R.ColliderDesc.trimesh(new Float32Array(r.pos), new Uint32Array(r.idx)).setFriction(1.0).setCollisionGroups(K3.phys.groups(K3.phys.G_WORLD, 0xffff)));
+  // FIX_INTERNAL_EDGES: anything sliding over the road never catches on the edges between its triangles
+  const tri = (r) => K3.world.createCollider(K3.R.ColliderDesc.trimesh(new Float32Array(r.pos), new Uint32Array(r.idx), K3.R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(1.0).setCollisionGroups(K3.phys.groups(K3.phys.G_WORLD, 0xffff)));
   const asphalt = new V.StandardMaterial('asphalt', S);
   asphalt.diffuseTexture = canvasTexture(S, 256, 512, (c, w, h) => {
     c.fillStyle = '#34343c'; c.fillRect(0, 0, w, h);

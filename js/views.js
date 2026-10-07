@@ -397,8 +397,9 @@ export async function viewSettings(el) {
       <label class="tgl"><input type="checkbox" data-set="scanlines" ${s.scanlines ? 'checked' : ''}><span></span>CRT scanlines</label>
       <label class="tgl"><input type="checkbox" data-set="reducedMotion" ${s.reducedMotion ? 'checked' : ''}><span></span>Reduce motion</label>
       <div class="panel-h">INTRO</div>
-      <div class="seg">${['full', 'short'].map((k) => `<button class="${s.intro === k ? 'on' : ''}" data-intro="${k}">${k === 'full' ? 'FULL INTRO' : 'SHORT INTRO'}</button>`).join('')}</div>
-      <p class="dim small">Short skips the boot animation when you come back.</p>
+      <div class="seg">${[['always', 'FULL EVERY TIME'], ['full', 'FULL FIRST TIME'], ['short', 'SHORT']].map(([k, l]) => `<button class="${(s.intro || 'full') === k ? 'on' : ''}" data-intro="${k}">${l}</button>`).join('')}</div>
+      <p class="dim small">FULL EVERY TIME plays the whole cinematic each time you open the arcade. FULL FIRST TIME plays it once, then a short WELCOME BACK. SHORT always skips to the welcome.</p>
+      <button class="btn sm" data-watch-intro>▶ WATCH THE INTRO NOW</button>
     </div>
     </div>
   </section>`;
@@ -440,6 +441,14 @@ export async function viewSettings(el) {
   const vol = el.querySelector('input[data-set=volume]');
   vol.oninput = () => (el.querySelector('[data-vol]').textContent = Math.round(vol.value * 100) + '%');
   vol.onchange = () => save({ volume: Number(vol.value) });
+  el.querySelector('[data-watch-intro]').onclick = async () => {
+    const { cinematic } = await import('./intro.js');
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:519;background:#000';   // under the intro's own SKIP button (530)
+    document.body.appendChild(box);
+    await cinematic(box);
+    box.remove();
+  };
   el.querySelectorAll('[data-intro]').forEach((b) => (b.onclick = async () => {
     await save({ intro: b.dataset.intro });
     el.querySelectorAll('[data-intro]').forEach((x) => x.classList.toggle('on', x === b));

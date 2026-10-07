@@ -39,7 +39,11 @@ export class Car {
       .setAdditionalMassProperties(m, { x: 0, y: c.y - 0.25, z: c.z * 0.5 }, { x: (m / 12) * (4 * half.y * half.y + 4 * half.z * half.z), y: (m / 12) * (4 * half.x * half.x + 4 * half.z * half.z) * 1.1, z: (m / 12) * (4 * half.x * half.x + 4 * half.y * half.y) }, { w: 1, x: 0, y: 0, z: 0 });
     const q = V.Quaternion.FromEulerAngles(0, spawn.yaw, 0); bd.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
     this.body = K3.world.createRigidBody(bd);
-    this.col = K3.world.createCollider(R.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(c.x, c.y, c.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(K3.phys.groups(K3.phys.G_CHAR, 0xffff)), this.body);
+    // the body collider starts just under the wheel centres, so only the wheels (suspension rays) ever touch the road.
+    // (it used to hang 4 cm over the road, scrape it and snag on the seams between road triangles: invisible walls)
+    const wheelY = Math.min(...wpos.map((w) => w.y)), bot = Math.max(mn.y + 0.15, wheelY - 0.05), top = Math.max(c.y + half.y, bot + 0.34);
+    const hy = (top - bot) / 2, rr = 0.12;   // rounded edges: slides along walls and other cars instead of catching
+    this.col = K3.world.createCollider(R.ColliderDesc.roundCuboid(half.x - rr, hy - rr, half.z - rr, rr).setTranslation(c.x, bot + hy, c.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(K3.phys.groups(K3.phys.G_CHAR, 0xffff)), this.body);
     const vc = K3.world.createVehicleController(this.body);
     vc.indexUpAxis = 1; vc.setIndexForwardAxis = 2;
     this.rest = 0.38;

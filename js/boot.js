@@ -211,13 +211,15 @@ export async function runBoot() {
   try { seen = !!localStorage.getItem('nvx_intro_seen'); } catch (e) {}
   const short = current?.settings?.intro === 'short';
   const testing = new URLSearchParams(location.search).has('nointro');
+  // INTRO setting: 'always' = the full cinematic on every visit, 'full' = full the first time then the sting, 'short' = sting
+  const always = !testing && (current?.settings?.intro === 'always' || new URLSearchParams(location.search).has('intro'));
 
-  if (current && (seen || short || testing)) {
+  if (current && (seen || short || testing) && !always) {
     // returning player: the short sting
     if (!testing) await sting(root, current.username);
   } else {
     await pressStart(root);
-    if (!seen && !testing) {
+    if ((!seen || always) && !testing) {
       root.innerHTML = '';
       await cinematic(root);
       try { localStorage.setItem('nvx_intro_seen', '1'); } catch (e) {}

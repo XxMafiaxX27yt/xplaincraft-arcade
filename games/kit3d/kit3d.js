@@ -311,8 +311,9 @@ export async function boot(opts = {}) {
   K3.shell = {
     screen,
     loading(f) { let el = root.querySelector('.k3-load'); if (!el) { el = document.createElement('div'); el.className = 'k3-load'; el.innerHTML = '<i></i>'; root.appendChild(el); } el.firstChild.style.width = Math.round(f * 100) + '%'; if (f >= 1) setTimeout(() => el.remove(), 250); },
-    pause() {
-      if (!K3.playing || K3.paused) return;
+    // again = back from SETTINGS: show the pause screen again (the game is already paused)
+    pause(again = false) {
+      if (!K3.playing || (K3.paused && !again)) return;
       K3.paused = true; keys.clear();
       const el = screen(`<div class="k3-title" style="font-size:40px">PAUSED</div>
         <div class="k3-row"><button class="k3-btn primary" data-r>RESUME</button><button class="k3-btn" data-s>SETTINGS</button><button class="k3-btn" data-q>QUIT</button></div>
