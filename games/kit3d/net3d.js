@@ -131,8 +131,14 @@ export async function net3d(xn, { forceRelay = new URLSearchParams(location.sear
     else xn.send({ __r: d, rto: ids }, ids.length === 1 ? ids[0] : undefined);
   };
   function recv(d, from, direct) {
+    peer(from).heardT = now();
     if (d.__p != null) { N.send({ __q: d.__p }, { to: from, fast: true }); return; }
-    if (d.__q != null) { const P = peer(from), r = now() - d.__q; P.rtt = P.rtt == null ? r : P.rtt * 0.8 + r * 0.2; return; }
+    if (d.__q != null) {
+      // (a ping that waited behind a busy moment - loading a level - is not the network: skip the first slow ones, cap spikes)
+      const P = peer(from), r = now() - d.__q;
+      if (P.rtt == null) { if (r < 0.8 || (P.slow = (P.slow || 0) + 1) > 4) P.rtt = r; } else P.rtt = P.rtt * 0.8 + Math.min(r, P.rtt * 3 + 0.2) * 0.2;
+      return;
+    }
     if (early) early.push([d, from]); else deliver(d, from);
   }
   xn.on((d, from) => {
@@ -140,7 +146,18 @@ export async function net3d(xn, { forceRelay = new URLSearchParams(location.sear
     if (d.__rtc) return onSignal(d, from);
     if (d.__r) { if (!d.rto || d.rto.includes(me)) recv(d.__r, from, false); return; }
   });
-  xn.onLeave((id) => {
+  // the party says someone left - but party presence can blink (a slow tab, a reconnect). Only believe it once their
+  // game has really gone quiet (nothing from them for 3 s), or two copies of the match would split apart
+  const pendingLeave = new Map();
+  xn.onLeave((id) => { if (N.players.some((p) => p.id === id) && !pendingLeave.has(id)) pendingLeave.set(id, now()); });
+  setInterval(() => {
+    for (const [id, t0] of pendingLeave) {
+      const heard = peers.get(id)?.heardT ?? 0;
+      if (now() - heard > 3) { pendingLeave.delete(id); leave(id); }
+      else if (now() - t0 > 10) pendingLeave.delete(id);   // still talking to us 10 s later: it was a blink
+    }
+  }, 500);
+  function leave(id) {
     const P = peers.get(id); if (P) closePc(P); peers.delete(id);
     if (!N.players.some((p) => p.id === id)) return;
     N.players = N.players.filter((p) => p.id !== id);
@@ -150,7 +167,7 @@ export async function net3d(xn, { forceRelay = new URLSearchParams(location.sear
       N.hostId = order.find((x) => N.players.some((p) => p.id === x)) || me;
       hostCbs.forEach((f) => { try { f(N.hostId); } catch (e) { console.error(e); } });
     }
-  });
+  }
 
   // ---------- link upkeep: say hi (one broadcast) until linked, retry offers, give up to the relay ----------
   let hiT = -9;
@@ -202,10 +219,12 @@ export class Interp {
     this.lastRecv = t;
   }
   get latest() { return this.buf.length ? this.buf[this.buf.length - 1].s : null; }
+  // how far in the past sample() draws (seconds): fast movers (cars) add velocity x (lag + half the ping) to be where they are NOW
+  lag() { return Math.max(this.delay, this.gap * 1.6 + 0.02); }
   // { a, b, k }: the two states either side of "now - delay" and how far between them (k > 1 = a little ahead)
   sample() {
     const B = this.buf; if (!B.length) return null;
-    const t = now() - Math.max(this.delay, this.gap * 1.6 + 0.02);
+    const t = now() - this.lag();
     if (t <= B[0].t) return { a: B[0].s, b: B[0].s, k: 0 };
     for (let i = B.length - 1; i >= 0; i--) {
       if (B[i].t <= t) {

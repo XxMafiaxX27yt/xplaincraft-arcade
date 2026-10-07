@@ -4,6 +4,8 @@
 import { boot, V } from '../../kit3d/kit3d.js';
 import { avatars } from '../../kit3d/avatar.js';
 import { tpcam } from '../../kit3d/tpcam.js';
+import { net3d, Interp, lerp, lerpAngle } from '../../kit3d/net3d.js';
+import { onlineLobby, netBadge } from '../../kit3d/online.js';
 
 const LAYERS = 5, GAP = 7, RING = 8, HEX = 1.0, TILE_H = 0.5, WARN_T = 1.0, SURGE_EVERY = 14, FIRST_SURGE = 25;
 const LAYER_COL = ['#22e6ff', '#ff2bd6', '#ffd93a', '#3dffa0', '#8b5cf6'];
@@ -13,6 +15,10 @@ const RUN = 7, JUMP_V = 7.6, GRAV = 22;
 
 const K3 = await boot({ title: 'FLOORFALL', gravity: 22, actions: { jump: ['Space'] } });
 const S = K3.scene;
+// online (from a party): everyone runs their own character and tells the others which tiles they cracked; the host runs bots + SURGE + the result
+const N = await net3d(window.XC?.net);
+K3.online = !!N;
+const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const G = { phase: 'menu', players: [], tiles: [], byHandle: new Map(), t: 0, surgeT: SURGE_EVERY, place: [], cfg: Object.assign({ bots: 7, diff: 'normal' }, JSON.parse(localStorage.getItem('ff_cfg') || '{}')) };
 window.__F = G;
 
@@ -40,7 +46,7 @@ const hexSrc = LAYER_COL.map((col, l) => {
 });
 const baseCol = (l) => { const c = V.Color3.FromHexString(LAYER_COL[l]); return new V.Color4(c.r * 0.55 + 0.1, c.g * 0.55 + 0.1, c.b * 0.55 + 0.1, 1); };
 const hexPts = (() => { const p = []; for (const y of [-TILE_H / 2, TILE_H / 2]) for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; p.push(Math.cos(a) * HEX * 0.96, y, Math.sin(a) * HEX * 0.96); } return new Float32Array(p); })();
-function buildTiles() {
+function buildTiles(rnd = Math.random) {
   G.tiles.forEach((t) => { t.m.dispose(); if (t.c) K3.phys.remove(t.c); }); G.tiles = []; G.byHandle.clear();
   for (let l = 0; l < LAYERS; l++) {
     const y = -l * GAP;
@@ -54,10 +60,10 @@ function buildTiles() {
       if (l === 3 && ring === 0) continue;
       if (l === 4 && ring === 2 && q % 2 === 0) continue;
       const m = hexSrc[l].createInstance('t'); m.position.set(x, y - TILE_H / 2, z); m.isPickable = false;
-      const bounce = l > 0 && Math.random() < 0.035;
+      const bounce = l > 0 && rnd() < 0.035;
       m.instancedBuffers.color = bounce ? new V.Color4(1.2, 0.95, 0.2, 1) : baseCol(l);
       const c = K3.world.createCollider(K3.R.ColliderDesc.convexHull(hexPts).setTranslation(x, y - TILE_H / 2, z).setCollisionGroups(K3.phys.groups(K3.phys.G_WORLD, 0xffff)));
-      const t = { l, x, z, y, q, r, ring, m, c, state: 'solid', t: 0, bounce };
+      const t = { i: G.tiles.length, l, x, z, y, q, r, ring, m, c, state: 'solid', t: 0, bounce };
       G.tiles.push(t); G.byHandle.set(c.handle, t);
     }
   }
@@ -83,11 +89,11 @@ const tileUnder = (p) => { const h = K3.phys.ray({ x: p.x, y: p.y + 0.3, z: p.z 
 
 // ---------- players ----------
 let makeAvatar = null;
-function makePlayer(i, bot) {
-  const a = 2 * Math.PI * (i / Math.max(1, G.cfg.bots + 1)), rr = i % 2 ? 9 : 6, sp = { x: Math.cos(a) * rr, z: Math.sin(a) * rr };
+function makePlayer(i, bot, o = {}) {
+  const a = 2 * Math.PI * (i / Math.max(1, G.total || G.cfg.bots + 1)), rr = i % 2 ? 9 : 6, sp = { x: Math.cos(a) * rr, z: Math.sin(a) * rr };
   const ch = K3.phys.character({ x: sp.x, y: 0.1, z: sp.z, radius: 0.35, height: 1.5 });
   const av = makeAvatar(PLAYER_COL[i % 8]);
-  const P = { i, bot, name: bot ? NAMES[i % 8] : (K3.xc?.player?.callsign || 'YOU'), ch, av, vel: { x: 0, y: 0, z: 0 }, yaw: a + Math.PI, alive: true, grounded: true, input: { x: 0, y: 0, jump: false }, prev: ch.pos(), place: 0, landT: 0, think: 0, goal: null };
+  const P = { i, bot, nid: o.nid ?? i, owner: o.owner, remote: !!o.remote, name: o.name || (bot ? NAMES[i % 8] : (K3.xc?.player?.callsign || 'YOU')), ch, av, vel: { x: 0, y: 0, z: 0 }, yaw: a + Math.PI, alive: true, grounded: true, input: { x: 0, y: 0, jump: false }, prev: ch.pos(), place: 0, landT: 0, think: 0, goal: null };
   if (bot) P.skill = { easy: 0.6, normal: 0.8, hard: 0.95 }[G.cfg.diff] * (0.85 + Math.random() * 0.3);
   return P;
 }
@@ -110,15 +116,16 @@ function stepPlayer(P, dt) {
   if (P.grounded && !was) { P.landT = 0.18; }
   if (Math.hypot(P.vel.x, P.vel.z) > 0.5) P.yaw = Math.atan2(P.vel.x, P.vel.z);
   // standing on a tile cracks it; a gold tile bounces you up
-  if (P.grounded && live) { const t = tileUnder(P.ch.pos()); if (t) { if (t.bounce && t.state === 'solid') { P.vel.y = 17; P.grounded = false; t.bounce = false; sfx('bounce', P); crack(t, 0.15); } else crack(t); } }
+  if (P.grounded && live) { const t = tileUnder(P.ch.pos()); if (t && t.state === 'solid') { if (t.bounce) { P.vel.y = 17; P.grounded = false; t.bounce = false; sfx('bounce', P); crack(t, 0.15); netCrack(t, 0.15, 1); } else { crack(t); netCrack(t, WARN_T, 0); } } }
   // out of the bottom
   if (P.ch.pos().y < -GAP * (LAYERS - 1) - 8) eliminate(P);
 }
-function eliminate(P) {
+function eliminate(P, net = false) {
   if (!P.alive) return;
+  if (N && !net && !P.remote) N.send({ k: 'out', n: P.nid });
   P.alive = false; P.ch.collider.setEnabled(false); P.av.root.setEnabled(false);
   G.place.unshift(P); P.place = G.players.filter((x) => x.alive).length + 1;
-  hudMsg(P.bot ? `${P.name} is out · ${G.players.filter((x) => x.alive).length} left` : 'YOU FELL!', 1.6, P.bot ? '#c8c0e8' : '#ff3355');
+  hudMsg(P !== G.me ? `${P.name} is out · ${G.players.filter((x) => x.alive).length} left` : 'YOU FELL!', 1.6, P !== G.me ? '#c8c0e8' : '#ff3355');
   sfx('out', P);
 }
 
@@ -205,6 +212,7 @@ const hudMsg = (t, s = 1.4, c = '#fff') => { const e = hud.querySelector('[data-
 // ---------- flow ----------
 function menu() {
   G.phase = 'menu'; K3.playing = false; K3.setTouchButtons([]); hud.style.display = 'none'; document.exitPointerLock?.();
+  if (N) return lobby.show();
   const b = (k, opts) => opts.map(([v, l]) => `<button class="k3-btn ${G.cfg[k] == v ? 'sel' : ''}" data-k="${k}" data-v="${v}">${l}</button>`).join('');
   const el = K3.shell.screen(`<div class="k3-title">FLOORFALL</div>
     <div class="k3-sub">Five floors of glowing hex tiles. Every tile you stand on cracks and drops. Keep moving, jump the holes, land on the floor below - fall out of the bottom and you are out. Gold tiles bounce you up a floor. Every 14 s a SURGE rips a line through every floor. Last one standing wins.</div>
@@ -216,58 +224,87 @@ function menu() {
   el.querySelector('[data-set]').onclick = () => K3.shell.settings(menu);
   el.querySelector('[data-play]').onclick = () => { K3.audio.unlock(); start(); };
 }
-function start() {
-  G.players.forEach((P) => { P.ch.destroy(); P.av.dispose(); }); G.players = []; G.place = [];
-  buildTiles();
-  for (let i = 0; i <= G.cfg.bots; i++) G.players.push(makePlayer(i, i > 0));
-  G.me = G.players[0];
-  const arrow = V.CreateCylinder('me', { diameterTop: 0, diameterBottom: 0.36, height: 0.32, tessellation: 3 }, S); arrow.rotation.x = Math.PI; arrow.parent = G.me.av.root; arrow.position.y = 2.05; arrow.isPickable = false;
-  arrow.material = (() => { const m = new V.StandardMaterial('arr', S); m.emissiveColor = V.Color3.FromHexString('#ffd93a'); m.disableLighting = true; return m; })();
+function clearPlayers() { G.players.forEach((P) => { P.ch.destroy(); P.av.dispose(); }); G.players = []; G.place = []; G.me = null; }
+function start(go = null) {
+  clearPlayers();
+  if (go) {
+    // online: the party first (in party order), then bots up to the chosen size; the same tiles for everyone
+    const rnd = mulberry(go.seed);
+    buildTiles(rnd);
+    G.spectator = !go.ids.includes(N.me) || !!go.late;
+    G.total = Math.max(go.ids.length, go.cfg.size); G.cfg.diff = go.cfg.diff;
+    go.ids.forEach((id, i) => G.players.push(makePlayer(i, false, { nid: id, owner: id, remote: id !== N.me || G.spectator, name: N.name(id) })));
+    for (let i = go.ids.length, b = 0; i < G.total; i++, b++) { const P = makePlayer(i, true, { nid: 'b' + b, owner: N.hostId, remote: !N.isHost, name: NAMES[1 + (b % 7)] }); P.skill = { easy: 0.6, normal: 0.8, hard: 0.95 }[go.cfg.diff] * (0.85 + rnd() * 0.3); G.players.push(P); }
+    G.players.forEach((P) => { if (P.remote) P.interp = new Interp(0.1); });
+    G.me = G.players.find((P) => P.nid === N.me && !G.spectator) || null;
+  } else {
+    G.total = G.cfg.bots + 1;
+    buildTiles();
+    for (let i = 0; i <= G.cfg.bots; i++) G.players.push(makePlayer(i, i > 0));
+    G.me = G.players[0];
+  }
+  if (!G.me) {
+    // watching (arrived late): follow the others
+    G.me = { ghost: true, alive: false, ch: { pos: () => ({ x: 0, y: 0, z: 0 }) }, input: { x: 0, y: 0 }, yaw: 0, place: 0, bot: false, name: 'YOU' };
+  } else {
+    const arrow = V.CreateCylinder('me', { diameterTop: 0, diameterBottom: 0.36, height: 0.32, tessellation: 3 }, S); arrow.rotation.x = Math.PI; arrow.parent = G.me.av.root; arrow.position.y = 2.05; arrow.isPickable = false;
+    arrow.material = (() => { const m = new V.StandardMaterial('arr', S); m.emissiveColor = V.Color3.FromHexString('#ffd93a'); m.disableLighting = true; return m; })();
+  }
   cam.yaw = G.me.yaw; cam.ready = false;
   G.phase = 'count'; G.phaseT = 3; G.t = 0; G.surgeT = FIRST_SURGE;
   K3.shell.screen(''); hud.style.display = '';
   K3.setTouchButtons([{ a: 'jump', label: 'JUMP', right: 30, bottom: 40, size: 90, big: true }]);
-  K3.playing = true; K3.paused = false; if (!K3.isTouch && !K3.test) K3.canvas.requestPointerLock?.(); K3.canvas.focus();
-  window.XC?.start();
-  hudMsg('3', 0.9);
+  K3.playing = true; K3.paused = false; K3.menuOpen = false; if (!K3.isTouch && !K3.test) K3.canvas.requestPointerLock?.(); K3.canvas.focus();
+  if (!G.me.ghost) window.XC?.start();
+  hudMsg(G.me.ghost ? 'WATCHING' : '3', 0.9);
 }
-function finish() {
-  G.phase = 'over'; K3.playing = false; document.exitPointerLock?.(); K3.setTouchButtons([]);
-  const alive = G.players.filter((P) => P.alive); alive.forEach((P) => { P.place = 1; G.place.unshift(P); });
+function finish(places = null) {
+  if (G.phase === 'over') return;
+  // online: the host's places (it saw every fall) win over my own guess
+  if (N && N.isHost && !places) places = G.players.map((P) => [P.nid, P.alive ? 1 : P.place]);
+  if (N && N.isHost) N.send({ k: 'fin', places, t: G.t });
+  G.phase = 'over'; K3.playing = false; K3.menuOpen = false; document.exitPointerLock?.(); K3.setTouchButtons([]);
+  if (places) for (const [nid, pl] of places) { const P = G.players.find((x) => x.nid === nid); if (P) P.place = pl; }
+  else { const alive = G.players.filter((P) => P.alive); alive.forEach((P) => { P.place = 1; G.place.unshift(P); }); }
   const won = G.me.place === 1, n = G.players.length;
   if (won) sfx('win');
   const score = (n - G.me.place) * 100 + (won ? 500 : 0) + Math.round(G.t) * 2;
-  window.XC?.end({ score, won, stats: { won: won ? 1 : 0 } });
+  if (!G.me.ghost) window.XC?.end({ score, won, stats: { won: won ? 1 : 0 } });
   const order = G.players.slice().sort((a, b) => a.place - b.place);
-  const el = K3.shell.screen(`<div class="k3-title" style="font-size:48px">${won ? 'LAST ONE STANDING!' : `#${G.me.place} OF ${n}`}</div>
-    <div class="k3-sub">${order.map((P) => `<span style="color:${PLAYER_COL[P.i % 8]}">#${P.place} ${P.bot ? P.name : 'YOU'}</span>`).join(' · ')}</div>
-    <div class="k3-sub">${score} points · survived ${Math.round(G.t)} s</div>
-    <div class="k3-row"><button class="k3-btn primary" data-a>PLAY AGAIN</button><button class="k3-btn" data-m>MENU</button></div>`);
-  el.querySelector('[data-a]').onclick = () => start();
-  el.querySelector('[data-m]').onclick = () => menu();
+  const el = K3.shell.screen(`<div class="k3-title" style="font-size:48px">${G.me.ghost ? 'GAME OVER' : won ? 'LAST ONE STANDING!' : `#${G.me.place} OF ${n}`}</div>
+    <div class="k3-sub">${order.map((P) => `<span style="color:${PLAYER_COL[P.i % 8]}">#${P.place} ${P === G.me ? 'YOU' : P.name}</span>`).join(' · ')}</div>
+    <div class="k3-sub">${G.me.ghost ? '' : `${score} points · `}survived ${Math.round(G.t)} s</div>
+    <div class="k3-row">${!N ? '<button class="k3-btn primary" data-a>PLAY AGAIN</button><button class="k3-btn" data-m>MENU</button>' : N.isHost ? '<button class="k3-btn primary" data-lobby>BACK TO LOBBY</button><button class="k3-btn" data-leave>LEAVE</button>' : `<div class="k3-sub">waiting for <b>${N.name(N.hostId)}</b>...</div><button class="k3-btn" data-leave>LEAVE</button>`}</div>`);
+  el.querySelector('[data-a]')?.addEventListener('click', () => start());
+  el.querySelector('[data-m]')?.addEventListener('click', () => menu());
+  el.querySelector('[data-lobby]')?.addEventListener('click', () => lobby.backToLobby());
+  el.querySelector('[data-leave]')?.addEventListener('click', () => (window.XC ? XC.exit() : history.back()));
 }
 
+// SURGE: a straight line of tiles through every floor starts cracking (the host picks the line, everyone cracks the same tiles)
+function surge(a, off, seed) {
+  if (N && N.isHost) N.send({ k: 'sg', a, off, seed });
+  G.surgeT = SURGE_EVERY; const nx = Math.cos(a), nz = Math.sin(a), rnd = mulberry(seed);
+  for (const t of G.tiles) if (t.state === 'solid' && t.l < LAYERS - 1 && Math.abs(t.x * nz - t.z * nx - off) < 1.2) crack(t, 0.9 + rnd() * 0.3);   // never the last floor
+  hudMsg('SURGE!', 1.1, '#ff2bd6'); sfx('surge'); cam.shake = 0.4;
+}
 function update(dt) {
-  if (G.phase === 'menu' || G.phase === 'over') return;
+  if (G.phase === 'menu' || G.phase === 'over' || !G.me) return;
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) hud.querySelector('[data-msg]').style.opacity = 0; }
   if (G.phase === 'count') { const before = Math.ceil(G.phaseT); G.phaseT -= dt; const now = Math.ceil(G.phaseT); if (now !== before && now > 0) { hudMsg(String(now), 0.9); K3.audio.tone(440, 0.1, 'square', 0.04); } if (G.phaseT <= 0) { G.phase = 'live'; hudMsg('GO!', 0.7, '#3dffa0'); K3.audio.tone(880, 0.15, 'square', 0.05); } }
   // my input, relative to the camera
   const mv = K3.input.move, s = Math.sin(cam.yaw), c = Math.cos(cam.yaw);
   if (G.me.alive) { G.me.input.x = mv.x * c + mv.y * s; G.me.input.y = -mv.x * s + mv.y * c; G.me.input.jump = K3.input.tap('jump'); }
-  for (const P of G.players) if (P.bot) botThink(P, dt);
-  for (const P of G.players) stepPlayer(P, dt);
+  for (const P of G.players) if (P.bot && !P.remote) botThink(P, dt);
+  for (const P of G.players) { if (P.remote) followNet(P, dt); else stepPlayer(P, dt); }
+  if (N) netTick(dt);
   if (G.phase === 'live') {
     G.t += dt;
     stepTiles(dt);
     G.surgeT -= dt;
-    if (G.surgeT <= 0) {
-      // SURGE: a straight line of tiles through every floor starts cracking
-      G.surgeT = SURGE_EVERY; const a = Math.random() * Math.PI, nx = Math.cos(a), nz = Math.sin(a), off = (Math.random() - 0.5) * 6;
-      for (const t of G.tiles) if (t.state === 'solid' && t.l < LAYERS - 1 && Math.abs(t.x * nz - t.z * nx - off) < 1.2) crack(t, 0.9 + Math.random() * 0.3);   // never the last floor
-      hudMsg('SURGE!', 1.1, '#ff2bd6'); sfx('surge'); cam.shake = 0.4;
-    }
+    if (G.surgeT <= 0 && (!N || N.isHost)) surge(Math.random() * Math.PI, (Math.random() - 0.5) * 6, Math.floor(Math.random() * 1e9));
     const alive = G.players.filter((P) => P.alive);
-    if (alive.length <= 1 || (!G.me.alive && G.cfg.endOnOut)) finish();
+    if ((!N || N.isHost) && (alive.length <= 1 || (!G.me.alive && G.cfg.endOnOut && !N))) finish();
   }
 }
 let specI = 0;
@@ -285,16 +322,78 @@ function render(alpha, dt) {
     else P.av.play('Idle');
   }
   if (G.debugCam) { cam.cam.position.set(...G.debugCam.pos); cam.cam.setTarget(new V.Vector3(...G.debugCam.at)); return; }
-  if (G.phase === 'menu') { const t = performance.now() / 8000; cam.yaw = t; cam.update({ x: 0, y: -4, z: 0 }, dt, false); cam.cam.position.set(Math.sin(t) * 22, 8, Math.cos(t) * 22); cam.cam.setTarget(new V.Vector3(0, -8, 0)); return; }
+  if (G.phase === 'menu' || !G.me) { const t = performance.now() / 8000; cam.yaw = t; cam.update({ x: 0, y: -4, z: 0 }, dt, false); cam.cam.position.set(Math.sin(t) * 22, 8, Math.cos(t) * 22); cam.cam.setTarget(new V.Vector3(0, -8, 0)); return; }
   // follow me, or a survivor once I am out
   let who = G.me;
   if (!G.me.alive) { const alive = G.players.filter((P) => P.alive); if (alive.length) { if (K3.input.tap('jump')) specI++; who = alive[specI % alive.length]; } }
+  if (who.ghost) return;
   cam.update(who.ch.pos(), dt);
   // floors above the one you are on fade out so they never block the view
   const myL = Math.round(-who.ch.pos().y / GAP);
   hexSrc.forEach((h, l) => { const want = l < myL ? 0.12 : 1; h.material.alpha += (want - h.material.alpha) * Math.min(1, dt * 6); h.material.needDepthPrePass = h.material.alpha < 1; });
-  hud.querySelector('[data-left]').textContent = G.phase === 'live' || G.phase === 'count' ? `${G.players.filter((P) => P.alive).length} LEFT${G.me.alive ? '' : ` · watching ${who.bot ? who.name : 'you'}`}` : '';
-  hud.querySelector('[data-surge]').textContent = G.phase === 'live' ? `SURGE IN ${Math.ceil(G.surgeT)}` : '';
+  hud.querySelector('[data-left]').textContent = G.phase === 'live' || G.phase === 'count' ? `${G.players.filter((P) => P.alive).length} LEFT${G.me.alive ? '' : ` · watching ${who === G.me ? 'you' : who.name}`}` : '';
+  hud.querySelector('[data-surge]').textContent = G.phase === 'live' ? `SURGE IN ${Math.max(0, Math.ceil(G.surgeT))}` : '';
+}
+
+
+// ================= ONLINE =================
+const lobby = N && onlineLobby(K3, N, {
+  title: 'FLOORFALL',
+  sub: 'ONLINE · last one standing · bots fill the floor up to the size you pick',
+  hostOpts: [
+    { key: 'size', label: 'PLAYERS ON THE FLOOR', opts: [[4, '4'], [6, '6'], [8, '8']], ok: (v, n) => v >= n },
+    { key: 'diff', label: 'BOTS', opts: [['easy', 'EASY'], ['normal', 'NORMAL'], ['hard', 'HARD']] },
+  ],
+  myOpts: [],
+  cfg: { size: 8, diff: G.cfg.diff },
+  mine: {},
+  onStart: (go) => start(go),
+  onShow: () => { clearPlayers(); G.phase = 'menu'; hud.style.display = 'none'; },
+});
+if (N) netBadge(K3, N, { left: 12, top: 12 });
+const r2 = (v) => Math.round(v * 100) / 100;
+let sendAcc = 0, crackQ = [];
+// the tiles I (or my bots) cracked go out in small batches
+function netCrack(t, d, b) { if (N) crackQ.push([t.i, d, b]); }
+function netTick(dt) {
+  sendAcc += dt;
+  if (crackQ.length && (sendAcc >= 1 / 30 || crackQ.length > 8)) { N.send({ k: 'c', l: crackQ }); crackQ = []; }
+  if (sendAcc < 1 / 30) return;
+  sendAcc = 0;
+  const mine = G.players.filter((P) => !P.remote && P.alive);
+  if (mine.length) N.send({ k: 's', t: N.now(), p: mine.map((P) => { const q = P.ch.pos(); return [P.nid, r2(q.x), r2(q.y), r2(q.z), r2(P.vel.x), r2(P.vel.y), r2(P.vel.z), r2(P.yaw), P.grounded ? 1 : 0]; }) }, { fast: true });
+}
+function followNet(P, dt) {
+  P.prev = P.ch.pos();
+  const s = P.alive && P.interp && P.interp.sample(); if (!s) return;
+  const { a, b, k } = s, kk = Math.min(1.25, k);
+  const x = lerp(a[1], b[1], kk), y = lerp(a[2], b[2], kk), z = lerp(a[3], b[3], kk), h = P.ch.height / 2;
+  P.ch.body.setTranslation({ x, y: y + h, z }, true); P.ch.body.setNextKinematicTranslation({ x, y: y + h, z });
+  P.vel = { x: b[4], y: b[5], z: b[6] }; P.yaw = lerpAngle(a[7], b[7], kk);
+  const was = P.grounded; P.grounded = !!b[8]; if (P.grounded && !was) P.landT = 0.18;
+}
+// a player left / the host changed: their character is now a bot run by the host
+function reassign() {
+  for (const P of G.players) {
+    if (N.players.some((p) => p.id === P.owner)) continue;
+    P.owner = N.hostId;
+    if (!P.bot && !N.players.some((p) => p.id === P.nid)) { P.bot = true; P.name += ' (BOT)'; P.skill = 0.8; }
+    if (P.owner === N.me && P.remote) { P.remote = false; P.interp = null; P.route = null; if (P.alive) P.ch.collider.setEnabled(true); }
+  }
+}
+if (N) {
+  N.on((d, from) => {
+    if (!d || !d.k || d.k[0] === 'L' || !G.players.length) return;
+    const P = (nid) => G.players.find((x) => x.nid === nid);
+    if (d.k === 's') { for (const st of d.p) { const Q = P(st[0]); if (Q && Q.remote && Q.owner === from) Q.interp.push(st, d.t); } return; }
+    if (d.k === 'c') { for (const [i, dl, b] of d.l) { const t = G.tiles[i]; if (!t || t.state !== 'solid') continue; if (b) t.bounce = false; crack(t, dl); } return; }
+    if (d.k === 'out') { const Q = P(d.n); if (Q && Q.owner === from) eliminate(Q, true); return; }
+    if (from !== N.hostId || N.isHost) return;
+    if (d.k === 'sg') surge(d.a, d.off, d.seed);
+    if (d.k === 'fin') { G.t = d.t; finish(d.places); }
+  });
+  N.onLeave(() => { if (G.players.length) { reassign(); hudMsg('a player left · a bot takes over', 1.6, '#c8c0e8'); } });
+  N.onHost((id) => { if (G.players.length) reassign(); });
 }
 
 K3.shell.loading(0.3);

@@ -2,9 +2,14 @@
 import { boot, V, canvasTexture } from '../../kit3d/kit3d.js';
 import { sampleTrack, buildTrack, locate, ROAD_W } from './track.js';
 import { Car, CARS, EngineSound, rotate } from './car.js';
+import { net3d, Interp, lerp } from '../../kit3d/net3d.js';
+import { onlineLobby, netBadge } from '../../kit3d/online.js';
 
 const K3 = await boot({ title: 'REDLINE', gravity: 13, actions: { up: ['KeyE', 'ShiftRight'], down: ['KeyQ', 'ControlRight'], hand: ['Space'], nitro: ['ShiftLeft', 'KeyN'], cam: ['KeyC'], reset: ['KeyR'], gas: [], brake: [], left: [], right: [] } });
 const S = K3.scene;
+// online (from a party): everyone drives their own car, the host drives the AI cars and keeps the finishing order
+const N = await net3d(window.XC?.net);
+K3.online = !!N;
 const G = { phase: 'menu', cars: [], cfg: Object.assign({ car: 'apex', mode: 'race', diff: 'normal', auto: true, laps: 3 }, JSON.parse(localStorage.getItem('rl_cfg') || '{}')), best: JSON.parse(localStorage.getItem('rl_best') || '{}'), camMode: 0, pops: [] };
 window.__R = G;
 
@@ -91,6 +96,7 @@ const fmt = (t) => (t == null ? '--:--.---' : `${Math.floor(t / 60)}:${String(Ma
 // ---------- menu ----------
 function menu() {
   G.phase = 'menu'; K3.playing = false; hud.style.display = 'none'; K3.setTouchButtons([]); document.exitPointerLock?.();
+  if (N) return lobby.show();
   const b = (k, opts) => opts.map(([v, l]) => `<button class="k3-btn ${G.cfg[k] === v ? 'sel' : ''}" data-k="${k}" data-v="${v}">${l}</button>`).join('');
   const carCards = Object.entries(CARS).map(([id, c]) => `<button class="k3-btn ${G.cfg.car === id ? 'sel' : ''}" data-k="car" data-v="${id}" style="min-width:160px;text-align:left"><span style="color:${c.col}">${c.name}</span><br><small style="font-family:Rajdhani;font-weight:600;letter-spacing:0;color:#c8c0e8">${c.blurb}<br>${c.torque} Nm · ${c.gears.length} gears · ${c.drive.toUpperCase()} · turbo ${Math.round(c.turbo * 100)}%</small></button>`).join('');
   const el = K3.shell.screen(`<div class="k3-title">REDLINE</div>
@@ -108,31 +114,48 @@ function menu() {
 // ---------- race ----------
 const AI_NAMES = ['VORTEX', 'BLAZE', 'KITE', 'DRIFTER', 'NEON'];
 function gridSpot(k) { const n = T.length, i = (n - 6 - Math.floor(k / 2) * 5) % n, p = T[i], side = (k % 2 ? 1 : -1) * 3.2; return { x: p.x + p.nx * side, y: p.y, z: p.z + p.nz * side, yaw: Math.atan2(p.dx, p.dz), i }; }
-function start() {
-  G.cars.forEach((c) => c.dispose()); G.cars = [];
-  const field = G.cfg.mode === 'race' ? 6 : 1, others = Object.keys(CARS).filter((k) => k !== G.cfg.car);
-  for (let k = 0; k < field; k++) {
-    const me = k === field - 1;   // you start at the back of the grid in a race
-    const id = me ? G.cfg.car : others[k % others.length], spec = CARS[id];
-    const car = new Car(K3, carSrc[spec.model], spec, gridSpot(k), { ai: !me, color: !me && k >= others.length ? ['#ff8a3a', '#c45cff'][k % 2] : null });
-    car.name = me ? (K3.xc?.player?.callsign || 'YOU') : AI_NAMES[k % 5];
-    car.auto = me ? G.cfg.auto : true;
+function clearCars() { G.cars.forEach((c) => c.dispose()); G.cars = []; G.me = null; }
+function start(go = null) {
+  clearCars();
+  // the grid: AI cars at the front, players at the back (online: in party order)
+  let slots;
+  if (go) {
+    G.spectator = !go.ids.includes(N.me) || !!go.late; G.laps = go.cfg.laps; G.mode = 'race';
+    const nAi = Math.max(0, go.cfg.size - go.ids.length), rnd = ((a) => () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; })(go.seed);
+    slots = [];
+    for (let k = 0; k < nAi; k++) slots.push({ nid: 'ai' + k, ai: true, owner: N.hostId, car: Object.keys(CARS)[k % 4], skill: { easy: 0.8, normal: 0.9, hard: 0.99 }[go.cfg.diff] * (0.94 + rnd() * 0.06), off: (rnd() - 0.5) * 4 });
+    go.ids.forEach((id) => slots.push({ nid: id, owner: id, car: (go.picks[id] || {}).car || 'apex', auto: (go.picks[id] || {}).auto ?? true, name: N.name(id) }));
+  } else {
+    G.laps = G.cfg.laps; G.mode = G.cfg.mode; G.spectator = false;
+    const field = G.cfg.mode === 'race' ? 6 : 1, others = Object.keys(CARS).filter((k) => k !== G.cfg.car);
+    slots = Array.from({ length: field }, (_, k) => (k === field - 1 ? { me: true, car: G.cfg.car, auto: G.cfg.auto } : { ai: true, car: others[k % others.length], paint: k >= others.length ? ['#ff8a3a', '#c45cff'][k % 2] : null, skill: { easy: 0.8, normal: 0.9, hard: 0.99 }[G.cfg.diff] * (0.94 + Math.random() * 0.06), off: (Math.random() - 0.5) * 4 }));
+  }
+  for (let k = 0; k < slots.length; k++) {
+    const sl = slots[k], me = sl.me || (N && sl.nid === N.me && !G.spectator), remote = N && sl.owner !== N.me;
+    const spec = CARS[sl.car];
+    const car = new Car(K3, carSrc[spec.model], spec, gridSpot(k), { ai: !!sl.ai, color: sl.paint || (N && sl.ai && k >= 4 ? ['#ff8a3a', '#c45cff'][k % 2] : null) });
+    car.name = sl.name || (me ? (K3.xc?.player?.callsign || 'YOU') : AI_NAMES[k % 5]);
+    car.auto = sl.ai ? true : sl.auto;
+    Object.assign(car, { nid: sl.nid ?? k, owner: sl.owner, human: !sl.ai });
+    if (remote) { car.setRemote(true); car.interp = new Interp(0.1); }
     car.track = { idx: gridSpot(k).i, lap: 0, half: true, lapStart: null, laps: [], done: false, prog: 0 };   // behind the line: crossing it starts lap 1
-    car.skill = { easy: 0.8, normal: 0.9, hard: 0.99 }[G.cfg.diff] * (0.94 + Math.random() * 0.06);
-    car.lineOff = (Math.random() - 0.5) * 4;
+    car.skill = sl.skill ?? 0.9; car.lineOff = sl.off ?? 0;
     const blob = V.CreateGround('blob', { width: 2.6, height: 5.2 }, S); blob.material = blobMat; blob.parent = car.node; blob.position.y = 0.05 - 0.6; blob.isPickable = false;
     const fl = [-0.35, 0.35].map((x) => { const f = V.CreateCylinder('fl', { diameterTop: 0.05, diameterBottom: 0.28, height: 1.2, tessellation: 8 }, S); f.rotation.x = -Math.PI / 2; f.position.set(x, 0.2, -2.6); f.parent = car.node; f.material = flameMat; f.isPickable = false; f.setEnabled(false); glow.addIncludedOnlyMesh?.(f); return f; });
     car.flames = fl;
     G.cars.push(car);
     if (me) G.me = car;
   }
+  G.firstHumanT = null; G.endT = null;
+  // watching (arrived late): the camera rides with the leader
+  if (!G.me) { G.me = G.cars[G.cars.length - 1]; G.watch = true; } else G.watch = false;
   const raw = K3.audio.raw();
   if (raw) { G.me.sound = new EngineSound(raw, { main: true }); G.cars.filter((c) => c !== G.me).slice(0, 3).forEach((c) => (c.sound = new EngineSound(raw, { main: false }))); }
   G.phase = 'count'; G.countT = 4.2; G.time = 0; G.race = { countdown: true, done: false }; G.finish = [];
   K3.shell.screen(''); hud.style.display = '';
   K3.setTouchButtons([{ a: 'gas', label: 'GAS', right: 24, bottom: 30, size: 96, big: true }, { a: 'brake', label: 'BRAKE', right: 136, bottom: 22, size: 72 }, { a: 'nitro', label: 'NITRO', right: 30, bottom: 140, size: 70 }, { a: 'hand', label: 'DRIFT', right: 116, bottom: 112, size: 64 }]);
-  K3.playing = true; K3.paused = false; K3.canvas.focus();
-  window.XC?.start();
+  K3.playing = true; K3.paused = false; K3.menuOpen = false; K3.canvas.focus();
+  if (!G.watch) window.XC?.start();
   H('.rh-lights').style.display = 'flex';
 }
 // AI: aim at a point ahead on the racing line, brake for the curvature coming up, nitro on straights
@@ -179,33 +202,44 @@ function progress(car) {
     tr.half = false;
     if (tr.lapStart != null) { const lt = G.time - tr.lapStart; tr.laps.push(lt); if (car === G.me) { const best = G.best[G.cfg.car]; if (best == null || lt < best) { G.best[G.cfg.car] = lt; localStorage.setItem('rl_best', JSON.stringify(G.best)); pop('NEW BEST LAP ' + fmt(lt), '#ffd93a', 2); } else pop('LAP ' + fmt(lt), '#fff', 1.6); } }
     tr.lap++; tr.lapStart = G.time;
-    if (tr.lap > G.cfg.laps && !tr.done) { tr.done = true; G.finish.push(car); if (car === G.me) finishRace(); }
+    if (tr.lap > G.laps && !tr.done) {
+      tr.done = true; tr.total = tr.laps.reduce((a, b) => a + b, 0);
+      if (!N) { G.finish.push(car); if (car === G.me) finishRace(); }
+      else { if (N.isHost) hostFinished(car); else N.send({ k: 'fin', n: car.nid, tt: tr.total }, { to: N.hostId }); if (car === G.me) finishRace(); }
+    }
   }
   tr.prog = tr.lap * n + (tr.lap === 0 && tr.idx < n / 2 ? tr.idx + n : tr.idx) - (tr.lap === 0 ? n : 0);
 }
 function finishRace() {
   G.race.done = true; G.phase = 'done'; G.doneT = 3.5;
-  const place = G.finish.indexOf(G.me) + 1;
-  pop(G.cfg.mode === 'race' ? (place === 1 ? 'YOU WIN!' : `FINISHED P${place}`) : 'FINISHED', place === 1 ? '#3dffa0' : '#fff', 3);
+  // online: my place is the host's call; until it answers, count the cars already home
+  const place = N ? (G.finish.includes(G.me) ? G.finish.indexOf(G.me) : G.finish.length) + 1 : G.finish.indexOf(G.me) + 1;
+  pop(G.mode === 'race' ? (place === 1 ? 'YOU WIN!' : `FINISHED P${place}`) : 'FINISHED', place === 1 ? '#3dffa0' : '#fff', 3);
+  if (N) H('.rh-hint').textContent = 'waiting for the others to finish...';
 }
-function results() {
-  G.phase = 'over'; K3.playing = false; hud.style.display = 'none'; K3.setTouchButtons([]); G.cars.forEach((c) => c.sound?.stop());
-  const order = G.cars.slice().sort((a, b) => b.track.prog - a.track.prog), place = (G.finish.indexOf(G.me) + 1) || order.indexOf(G.me) + 1;
+function results(netOrder = null) {
+  if (G.phase === 'over') return;
+  G.phase = 'over'; K3.playing = false; K3.menuOpen = false; hud.style.display = 'none'; K3.setTouchButtons([]); G.cars.forEach((c) => c.sound?.stop());
+  const byProg = G.cars.slice().sort((a, b) => b.track.prog - a.track.prog);
+  const final = netOrder ? netOrder.map((nid) => G.cars.find((c) => c.nid === nid)).filter(Boolean) : G.finish.concat(byProg.filter((c) => !G.finish.includes(c)));
+  const place = final.indexOf(G.me) + 1;
   const total = G.me.track.laps.reduce((a, b) => a + b, 0), best = Math.min(...G.me.track.laps);
-  const won = G.cfg.mode === 'race' ? place === 1 : true;
-  const score = G.cfg.mode === 'race' ? (7 - place) * 150 + (won ? 500 : 0) : Math.max(0, Math.round(3000 - best * 20));
-  window.XC?.end({ score, won: G.cfg.mode === 'race' ? won : null, stats: { won: won && G.cfg.mode === 'race' ? 1 : 0 } });
-  const el = K3.shell.screen(`<div class="k3-title" style="font-size:46px">${G.cfg.mode === 'race' ? (won ? 'VICTORY' : 'P' + place) : 'TIME TRIAL'}</div>
-    ${G.cfg.mode === 'race' ? `<div class="k3-sub">${(G.finish.concat(order.filter((c) => !G.finish.includes(c)))).map((c, i) => `<span style="color:${c === G.me ? '#ffd93a' : '#c8c0e8'}">P${i + 1} ${c.name}</span>`).join(' · ')}</div>` : ''}
-    <div class="k3-sub">total ${fmt(total)} · best lap ${fmt(best)} · all-time best ${fmt(G.best[G.cfg.car])} · ${score} points</div>
-    <div class="k3-row"><button class="k3-btn primary" data-a>RACE AGAIN</button><button class="k3-btn" data-m>GARAGE</button></div>`);
-  el.querySelector('[data-a]').onclick = () => start();
-  el.querySelector('[data-m]').onclick = () => menu();
+  const race = G.mode === 'race', won = race ? place === 1 : true;
+  const score = race ? (7 - place) * 150 + (won ? 500 : 0) : Math.max(0, Math.round(3000 - best * 20));
+  if (!G.watch) window.XC?.end({ score, won: race ? won : null, stats: { won: won && race ? 1 : 0 } });
+  const el = K3.shell.screen(`<div class="k3-title" style="font-size:46px">${G.watch ? 'RACE OVER' : race ? (won ? 'VICTORY' : 'P' + place) : 'TIME TRIAL'}</div>
+    ${race ? `<div class="k3-sub">${final.map((c, i) => `<span style="color:${c === G.me && !G.watch ? '#ffd93a' : '#c8c0e8'}">P${i + 1} ${c.name}</span>`).join(' · ')}</div>` : ''}
+    ${G.watch ? '' : `<div class="k3-sub">total ${fmt(total)} · best lap ${fmt(best)} · all-time best ${fmt(G.best[G.cfg.car])} · ${score} points</div>`}
+    <div class="k3-row">${!N ? '<button class="k3-btn primary" data-a>RACE AGAIN</button><button class="k3-btn" data-m>GARAGE</button>' : N.isHost ? '<button class="k3-btn primary" data-lobby>BACK TO LOBBY</button><button class="k3-btn" data-leave>LEAVE</button>' : `<div class="k3-sub">waiting for <b>${N.name(N.hostId)}</b>...</div><button class="k3-btn" data-leave>LEAVE</button>`}</div>`);
+  el.querySelector('[data-a]')?.addEventListener('click', () => start());
+  el.querySelector('[data-m]')?.addEventListener('click', () => menu());
+  el.querySelector('[data-lobby]')?.addEventListener('click', () => lobby.backToLobby());
+  el.querySelector('[data-leave]')?.addEventListener('click', () => (window.XC ? XC.exit() : history.back()));
 }
 
 function update(dt) {
   if (G.phase === 'menu' || G.phase === 'over' || !G.me) return;
-  myInput();
+  if (!G.watch) myInput();
   if (G.phase === 'count') {
     const before = Math.ceil(G.countT); G.countT -= dt; const now = Math.ceil(G.countT);
     const lights = H('.rh-lights').children, lit = Math.min(5, Math.max(0, 5 - Math.ceil((G.countT - 0.6) / 0.72)));
@@ -219,7 +253,9 @@ function update(dt) {
     }
   }
   if (G.phase === 'live' || G.phase === 'done') G.time += dt;
+  if (N) { netTick(dt); softBumps(); }
   for (const c of G.cars) {
+    if (c.remote) { followNet(c, dt); continue; }
     if (c.ai) { if (G.phase !== 'count') aiDrive(c, dt); else { c.input.throttle = 0.7 + Math.random() * 0.2; c.input.brake = 0; c.input.steer = 0; } }
     c.step(dt, { countdown: G.phase === 'count', done: c.track.done && c !== G.me ? false : c.track.done && c === G.me });
     if (G.phase !== 'count') progress(c);
@@ -240,7 +276,9 @@ function update(dt) {
       if (e === 'reset') resetCar(c);
     }
   }
-  if (G.phase === 'done') { G.doneT -= dt; if (G.doneT <= 0) results(); }
+  if (G.watch && G.phase !== 'count') { const lead = G.cars.slice().sort((a, b) => b.track.prog - a.track.prog)[0]; if (lead && lead !== G.me) { G.me.sound?.stop(); G.me.sound = null; G.me = lead; } }
+  if (G.phase === 'done' && !N) { G.doneT -= dt; if (G.doneT <= 0) results(); }
+  if (N && N.isHost && (G.phase === 'live' || G.phase === 'done')) hostCheckEnd(dt);
   if (popT > 0) { popT -= dt; if (popT <= 0) H('.rh-pop').style.opacity = 0; }
 }
 
@@ -268,8 +306,112 @@ function render(alpha, dt) {
   drawGauge(car); drawMap();
   const order = G.cars.slice().sort((a, b) => (G.finish.includes(b) ? 1e9 - G.finish.indexOf(b) : b.track.prog) - (G.finish.includes(a) ? 1e9 - G.finish.indexOf(a) : a.track.prog));
   const tr = car.track, lapT = tr.done ? null : tr.lapStart != null ? G.time - tr.lapStart : G.time;
-  H('.rh-top').innerHTML = `LAP ${Math.min(G.cfg.laps, Math.max(1, tr.lap))}/${G.cfg.laps}<small>TIME ${fmt(lapT)}</small><small>BEST ${fmt(Math.min(...tr.laps, G.best[G.cfg.car] ?? Infinity) === Infinity ? null : Math.min(...tr.laps, G.best[G.cfg.car] ?? Infinity))}</small>`;
-  H('.rh-pos').innerHTML = G.cfg.mode === 'race' ? `P${order.indexOf(car) + 1}<small>/${G.cars.length}</small>` : '';
+  H('.rh-top').innerHTML = `${G.watch ? `<small>WATCHING ${car.name}</small>` : ''}LAP ${Math.min(G.laps, Math.max(1, tr.lap))}/${G.laps}<small>TIME ${fmt(lapT)}</small><small>BEST ${fmt(Math.min(...tr.laps, G.best[G.cfg.car] ?? Infinity) === Infinity ? null : Math.min(...tr.laps, G.best[G.cfg.car] ?? Infinity))}</small>`;
+  H('.rh-pos').innerHTML = G.mode === 'race' ? `P${order.indexOf(car) + 1}<small>/${G.cars.length}</small>` : '';
+}
+
+
+// ================= ONLINE =================
+const lobby = N && onlineLobby(K3, N, {
+  title: 'REDLINE',
+  sub: 'ONLINE RACE · AI rivals fill the grid up to the size you pick',
+  hostOpts: [
+    { key: 'size', label: 'CARS ON THE GRID', opts: [[2, '2'], [4, '4'], [6, '6']], ok: (v, n) => v >= n },
+    { key: 'laps', label: 'LAPS', opts: [[2, '2'], [3, '3'], [5, '5']] },
+    { key: 'diff', label: 'AI RIVALS', opts: [['easy', 'EASY'], ['normal', 'NORMAL'], ['hard', 'HARD']] },
+  ],
+  myOpts: [
+    { key: 'car', label: 'YOUR CAR', opts: Object.entries(CARS).map(([id, c]) => [id, c.name]) },
+    { key: 'auto', label: 'YOUR GEARBOX', opts: [[true, 'AUTO'], [false, 'MANUAL']] },
+  ],
+  cfg: { size: 6, laps: 3, diff: G.cfg.diff },
+  mine: { car: G.cfg.car, auto: G.cfg.auto },
+  onMine: (m) => { Object.assign(G.cfg, m); localStorage.setItem('rl_cfg', JSON.stringify(G.cfg)); },
+  onStart: (go) => start(go),
+  onShow: () => { clearCars(); G.phase = 'menu'; hud.style.display = 'none'; },
+});
+if (N) netBadge(K3, N, { left: 14, top: 120 });
+const r2 = (v) => Math.round(v * 100) / 100, r4 = (v) => Math.round(v * 10000) / 10000;
+let sendAcc = 0;
+// my car (+ the host's AI cars) -> everyone, 30 times a second
+function netTick(dt) {
+  sendAcc += dt; if (sendAcc < 1 / 30) return; sendAcc = 0;
+  const mine = G.cars.filter((c) => !c.remote && !(G.watch && c === G.me && c.owner !== N.me));
+  if (!mine.length) return;
+  N.send({ k: 's', t: N.now(), c: mine.map((c) => { const p = c.pos(), q = c.rot(), v = c.body.linvel(), tr = c.track; return [c.nid, r2(p.x), r2(p.y), r2(p.z), r4(q.x), r4(q.y), r4(q.z), r4(q.w), r2(v.x), r2(v.y), r2(v.z), r2(c.speed), r2(c.steerA), Math.round(c.rpm), c.gear, c.nitroOn ? 1 : 0, r2(c.input.throttle), tr.lap, tr.prog, tr.done ? 1 : 0, r2(c.boost)]; }) }, { fast: true });
+}
+function followNet(c, dt) {
+  const s = c.interp.sample(); if (!s) { c.prev = { p: c.pos(), q: c.rot() }; return; }
+  const { a, b, k } = s, kk = Math.min(1.3, k);
+  // dead reckoning: a car is drawn (and is solid) where it is NOW, not where it was ~0.1 s ago - or you would rear-end its ghost
+  // (k > 1: the sample is already a guess past the last update - lean on it less)
+  const ahead = Math.min(0.35, c.interp.lag() + (N.rtt(c.owner) ?? 0.1) / 2) * (kk <= 1 ? 1 : Math.max(0, (1.3 - kk) / 0.3));
+  const p = { x: lerp(a[1], b[1], kk) + b[8] * ahead, y: lerp(a[2], b[2], kk) + b[9] * ahead * 0.5, z: lerp(a[3], b[3], kk) + b[10] * ahead };
+  const q = V.Quaternion.Slerp(new V.Quaternion(a[4], a[5], a[6], a[7]), new V.Quaternion(b[4], b[5], b[6], b[7]), Math.min(1, kk));
+  c.speed = b[11]; c.steerA = b[12]; c.rpm = b[13]; c.gear = b[14]; c.nitroOn = !!b[15]; c.input.throttle = b[16]; c.boost = b[20] || 0;
+  c.follow(p, { x: q.x, y: q.y, z: q.z, w: q.w }, dt);
+  const tr = c.track; tr.lap = b[17]; tr.prog = b[18]; tr.done = !!b[19];
+}
+// online car-to-car contact: my cars (and the host's AI) get pushed off cars that follow the network - a firm nudge, never a wall.
+// The other driver's screen does the same for their car, so both cars bounce apart.
+function softBumps() {
+  const local = G.cars.filter((c) => !c.remote), remote = G.cars.filter((c) => c.remote);
+  if (!local.length || !remote.length) return;
+  for (const a of local) {
+    const ca = a.bumpCircles(), va = a.body.linvel();
+    for (const b of remote) {
+      const pb = b.pos(), pa = a.pos(); if (Math.abs(pa.y - pb.y) > 2.5 || (pa.x - pb.x) ** 2 + (pa.z - pb.z) ** 2 > 64) continue;
+      const cb = b.bumpCircles(), st = b.interp?.latest, vb = st ? { x: st[8], z: st[10] } : { x: 0, z: 0 };
+      for (const p of ca) for (const q of cb) {
+        const dx = p.x - q.x, dz = p.z - q.z, d = Math.hypot(dx, dz), min = p.r + q.r;
+        if (d >= min || d < 1e-4) continue;
+        const nx = dx / d, nz = dz / d, closing = (va.x - vb.x) * nx + (va.z - vb.z) * nz;   // < 0 = driving into it
+        const dv = Math.max(0, -closing) * 0.6 + (min - d) * 6;   // take away most of the closing speed + push out of the overlap
+        const m = a.body.mass();
+        a.body.applyImpulse({ x: nx * dv * m, y: 0, z: nz * dv * m }, true);
+      }
+    }
+  }
+}
+// host: the finishing order, and when the race is over (every player home, or 30 s after the first player)
+function hostFinished(car) {
+  if (G.finish.includes(car)) return;
+  G.finish.push(car);
+  N.send({ k: 'fo', o: G.finish.map((c) => c.nid) });
+}
+function hostCheckEnd(dt) {
+  const humans = G.cars.filter((c) => c.human && N.players.some((p) => p.id === c.nid));
+  if (G.firstHumanT == null && humans.some((c) => c.track.done)) G.firstHumanT = G.time;
+  // every player home (or every car): results 3.5 s later; or 30 s after the first player finished
+  if (humans.every((c) => c.track.done) || G.cars.every((c) => c.track.done)) G.endT = (G.endT ?? 3.5) - dt;
+  if ((G.endT != null && G.endT <= 0) || (G.firstHumanT != null && G.time - G.firstHumanT > 30)) {
+    const rest = G.cars.filter((c) => !G.finish.includes(c)).sort((a, b) => b.track.prog - a.track.prog);
+    const order = G.finish.concat(rest).map((c) => c.nid);
+    N.send({ k: 'res', o: order });
+    results(order);
+  }
+}
+// a player left / the host changed: their car is now driven by the AI on the host
+function reassign() {
+  for (const c of G.cars) {
+    if (N.players.some((p) => p.id === c.owner)) continue;
+    c.owner = N.hostId;
+    if (c.human && !N.players.some((p) => p.id === c.nid)) { c.human = false; c.ai = true; c.auto = true; c.name += ' (AI)'; }
+    if (c.owner === N.me && c.remote) { const st = c.interp.latest; c.interp = null; c.setRemote(false, st ? { x: st[8], y: st[9], z: st[10] } : null); c.ai = c !== G.me; c.bestProg = c.track.prog; }
+  }
+}
+if (N) {
+  N.on((d, from) => {
+    if (!d || !d.k || d.k[0] === 'L' || !G.cars.length) return;
+    const C = (nid) => G.cars.find((c) => c.nid === nid);
+    if (d.k === 's') { for (const st of d.c) { const c = C(st[0]); if (c && c.remote && c.owner === from) c.interp.push(st, d.t); } return; }
+    if (d.k === 'fin') { const c = C(d.n); if (N.isHost && c && c.owner === from) { c.track.done = true; hostFinished(c); } return; }
+    if (from !== N.hostId || N.isHost) return;
+    if (d.k === 'fo') G.finish = d.o.map((nid) => C(nid)).filter(Boolean);
+    if (d.k === 'res') results(d.o);
+  });
+  N.onLeave(() => { if (G.cars.length) { reassign(); pop('a player left', '#c8c0e8', 1.2); } });
+  N.onHost(() => { if (G.cars.length) reassign(); });
 }
 
 K3.shell.loading(1);

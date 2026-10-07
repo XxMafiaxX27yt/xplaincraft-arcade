@@ -43,6 +43,7 @@ export class Car {
     // (it used to hang 4 cm over the road, scrape it and snag on the seams between road triangles: invisible walls)
     const wheelY = Math.min(...wpos.map((w) => w.y)), bot = Math.max(mn.y + 0.15, wheelY - 0.05), top = Math.max(c.y + half.y, bot + 0.34);
     const hy = (top - bot) / 2, rr = 0.12;   // rounded edges: slides along walls and other cars instead of catching
+    this.footprint = { x: c.x, z: c.z, hx: half.x, hz: half.z };   // for the soft online bumps
     this.col = K3.world.createCollider(R.ColliderDesc.roundCuboid(half.x - rr, hy - rr, half.z - rr, rr).setTranslation(c.x, bot + hy, c.z).setDensity(0).setFriction(0.3).setRestitution(0.1).setCollisionGroups(K3.phys.groups(K3.phys.G_CHAR, 0xffff)), this.body);
     const vc = K3.world.createVehicleController(this.body);
     vc.indexUpAxis = 1; vc.setIndexForwardAxis = 2;
@@ -167,6 +168,27 @@ export class Car {
     // wheel spin for the visuals
     for (let i = 0; i < 4; i++) this.spin[i] += (v / this.wheelR) * dt * (driven.includes(i) && this.nitroOn ? 1.1 : 1);
   }
+  // online: someone else drives this car - it follows the network (kinematic: solid, but not simulated here)
+  setRemote(on, vel = null) {
+    const R = this.K3.R;
+    this.remote = on;
+    this.body.setBodyType(on ? R.RigidBodyType.KinematicPositionBased : R.RigidBodyType.Dynamic, true);
+    // a car following the network can't be pushed (infinite mass): touching it would stop you like a wall.
+    // So it is not solid here - the game gives soft bumps instead (bumpCircles)
+    this.col.setSensor(on);
+    if (!on && vel) this.body.setLinvel(vel, true);
+  }
+  follow(p, q, dt) {
+    this.prev = { p: this.pos(), q: this.rot() };
+    this.body.setNextKinematicTranslation(p); this.body.setNextKinematicRotation(q);
+    for (let i = 0; i < 4; i++) this.spin[i] += (this.speed / this.wheelR) * dt;
+  }
+  // two circles (front + back) covering the car on the ground, in world space: cheap, soft car-to-car bumps
+  bumpCircles() {
+    const F = this.footprint, p = this.pos(), q = this.rot(), r = F.hx * 0.95, d = Math.max(0, F.hz - r);
+    const c = rotate(q, { x: F.x, y: 0, z: F.z }), f = rotate(q, { x: 0, y: 0, z: 1 }), l = Math.hypot(f.x, f.z) || 1;
+    return [-1, 1].map((k) => ({ x: p.x + c.x + (f.x / l) * d * k, z: p.z + c.z + (f.z / l) * d * k, r, y: p.y }));
+  }
   // launch: called at GREEN - revs in the green band = perfect launch, too many = wheelspin
   launch() {
     const r = this.rpm / this.spec.redline;
@@ -180,7 +202,7 @@ export class Car {
     this.node.rotationQuaternion = V.Quaternion.Slerp(new V.Quaternion(q0.x, q0.y, q0.z, q0.w), new V.Quaternion(q1.x, q1.y, q1.z, q1.w), alpha);
     this.wheels.forEach((w, i) => {
       if (!w) return;
-      const susp = this.vc.wheelSuspensionLength(i) ?? this.rest;
+      const susp = this.remote ? this.rest - 0.05 : this.vc.wheelSuspensionLength(i) ?? this.rest;
       w.position.y = (this.wpos[i].y + this.rest - susp) / SCALE;
       w.rotationQuaternion = null;
       w.rotation.set(this.spin[i], i < 2 ? this.steerA : 0, 0);

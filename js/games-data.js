@@ -2076,11 +2076,12 @@ export const GAME_LIST = [
 "genre": "fun",
 "dim": "3d",
 "modes": [
-"sp"
+"sp",
+"online"
 ],
 "minPlayers": 1,
 "maxPlayers": 8,
-"desc": "Five floors of glowing hex tiles hang over the void. Every tile anyone stands on cracks and drops a moment later. Keep moving, jump the holes, land on the floor below - fall out of the bottom and you are out. Gold tiles bounce you back up a floor, and every 14 seconds a SURGE rips a line of tiles out of the upper floors. Last one standing out of up to 8 wins.",
+"desc": "Five floors of glowing hex tiles hang over the void. Solo against bots or ONLINE with your party (up to 8, bots fill the floor). Every tile anyone stands on cracks and drops a moment later. Keep moving, jump the holes, land on the floor below - fall out of the bottom and you are out. Gold tiles bounce you back up a floor, and every 14 seconds a SURGE rips a line of tiles out of the upper floors. Last one standing out of up to 8 wins.",
 "controls": "WASD / arrows run · mouse turns the camera · SPACE jump. Phones: left side runs, right side turns the camera, JUMP button.",
 "scoreLabel": "POINTS",
 "tasks": [
@@ -2100,11 +2101,12 @@ export const GAME_LIST = [
 "genre": "fun",
 "dim": "3d",
 "modes": [
-"sp"
+"sp",
+"online"
 ],
 "minPlayers": 1,
 "maxPlayers": 6,
-"desc": "3D circuit racing with a real engine under the hood. Four cars - rear-drive racer, big-turbo hypercar, all-wheel-drive sedan, light hatch - each with its own torque, gears and turbo. Launch on the green with the revs in the green zone, shift at the redline for a PERFECT SHIFT, feel the turbo spool above 4000 rpm and hear it blow off when you lift. Drift, catch air and slipstream to fill your nitro. Race five rivals over three laps or chase your best lap in time trial.",
+"desc": "3D circuit racing with a real engine under the hood. Race AI rivals solo, or ONLINE against your party (up to 6 cars, AI fills the grid). Four cars - rear-drive racer, big-turbo hypercar, all-wheel-drive sedan, light hatch - each with its own torque, gears and turbo. Launch on the green with the revs in the green zone, shift at the redline for a PERFECT SHIFT, feel the turbo spool above 4000 rpm and hear it blow off when you lift. Drift, catch air and slipstream to fill your nitro. Race five rivals over three laps or chase your best lap in time trial.",
 "controls": "W / ↑ gas · S / ↓ brake (and reverse) · A D / ← → steer · SPACE handbrake drift · SHIFT nitro · E / Q gear up / down (manual) · C camera · R back on track. Phones: stick steers, GAS / BRAKE / NITRO / DRIFT buttons.",
 "scoreLabel": "POINTS",
 "tasks": [
