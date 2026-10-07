@@ -1,4 +1,4 @@
-/* NOVEX Arcade SDK — include in every game:
+/* NOVEXYT Arcade SDK — include in every game:
  *   <script src="../../sdk/arcade-sdk.js"></script>
  *
  *   const ctx = await XC.ready();   // { player:{callsign,equipped}, best, volume }

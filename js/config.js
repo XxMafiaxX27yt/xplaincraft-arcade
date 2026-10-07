@@ -2,10 +2,10 @@
 
 export const CONFIG = {
   brand: {
-    top: 'GAMING ARCADE',
-    name: 'NOVEX',
-    short: 'NOVEX ARCADE',
-    version: '3.0.0',
+    top: 'ARCADE',
+    name: 'NOVEXYT',
+    short: 'NOVEXYT ARCADE',
+    version: '4.0.0',
   },
   supabase: {
     url: 'https://ptfaeeskjeohklyiupil.supabase.co',

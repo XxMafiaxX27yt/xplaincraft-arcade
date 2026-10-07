@@ -1,4 +1,4 @@
-/* NOVEX Arcade — neon cyberpunk, clean */
+/* NOVEXYT Arcade — neon cyberpunk, clean */
 :root {
   --bg: #06050d;
   --bg2: #0c0a1b;
@@ -522,3 +522,10 @@ body.playing .scanlines { display: none; }
   .sp-cursor, .shop-preview > .small { display: none; }
   .sp-banner { height: 80px; }
 }
+
+/* ---------- NOVEXYT brand ---------- */
+.logo-mark { display: block; width: clamp(110px, 22vw, 190px); margin: 0 auto 6px; filter: drop-shadow(0 0 22px rgba(140, 90, 255, .7)); animation: markPulse 3s ease-in-out infinite; }
+.logo-small .logo-mark { width: clamp(70px, 14vw, 110px); }
+@keyframes markPulse { 50% { filter: drop-shadow(0 0 34px rgba(255, 43, 214, .75)); } }
+.logo-top { letter-spacing: .9em; }
+.tb-mark-img { width: 42px; height: 36px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(140, 90, 255, .6)); flex: none; }

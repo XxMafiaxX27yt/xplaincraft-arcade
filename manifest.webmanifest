@@ -1,7 +1,7 @@
 {
-  "name": "NOVEX Gaming Arcade",
-  "short_name": "NOVEX",
-  "description": "NOVEX GAMING ARCADE - hundreds of 2D games, solo and with friends.",
+  "name": "NOVEXYT Arcade",
+  "short_name": "NOVEXYT",
+  "description": "NOVEXYT ARCADE - 200+ 2D and 3D games, solo and with friends.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",

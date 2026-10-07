@@ -14,7 +14,7 @@ import * as VS from './views-shop.js';
 import * as VP from './views-pass.js';
 import * as VO from './views-op.js';
 import { toast } from './ui.js';
-import { initParty, mpButtons, wireMpButtons } from './views-party.js';
+import { initParty, mpButtons, wireMpButtons, openPartyMenu } from './views-party.js';
 import { leaveParty, stopSocial, startSocial } from './party.js';
 
 // ---------- router ----------
@@ -83,6 +83,24 @@ function markNav(path) {
     const on = href === '/' ? /^\/((sp|mp)(\/.*)?)?$/.test(path) : re.test(path);
     a.classList.toggle('on', on);
   });
+  bottomNav(path);
+}
+
+// phones: a fixed bottom bar - HOME · GAMES · PARTY · PASS · PROFILE
+function bottomNav(path) {
+  let bar = $('#botnav');
+  if (!bar) {
+    bar = document.createElement('nav'); bar.id = 'botnav';
+    bar.innerHTML = [['/', '⌂', 'HOME'], ['/sp/2d', '▦', 'GAMES'], ['party', '👥', 'PARTY'], ['/pass', '★', 'PASS'], ['/profile', '◉', 'PROFILE']]
+      .map(([h, i, l]) => (h === 'party' ? `<button data-bn="party"><span>${i}</span>${l}</button>` : `<a href="#${h}" data-bn="${h}"><span>${i}</span>${l}</a>`)).join('');
+    document.body.appendChild(bar);
+    bar.querySelector('[data-bn="party"]').onclick = () => (sfx.click(), openPartyMenu());
+  }
+  bar.querySelectorAll('a').forEach((a) => {
+    const h = a.dataset.bn;
+    const on = h === '/' ? path === '/' : h === '/sp/2d' ? /^\/(sp|mp)/.test(path) : path.startsWith(h);
+    a.classList.toggle('on', on);
+  });
 }
 
 async function renderTopbar() {
@@ -97,7 +115,7 @@ async function renderTopbar() {
   const incoming = await api.incomingCount();
   $('#topbar').innerHTML = `
     <a class="tb-logo" href="#/" aria-label="Home">
-      <span class="tb-mark">NX</span>
+      <img class="tb-mark-img" src="assets/brand/novexyt-mark.png" alt="">
       <span class="tb-name"><b>${esc(CONFIG.brand.top)}</b><i>${esc(CONFIG.brand.name)}</i></span>
     </a>
     <nav class="nav">
@@ -164,7 +182,7 @@ export function openDaily() {
     };
 }
 
-// ---------- HOME: choose mode ----------
+// ---------- HOME: PLAY -> DISCOVER -> SOCIAL ----------
 async function viewHome(el) {
   const me = store.me;
   const sp = gamesFor({ mode: 'sp' }).length;
@@ -174,13 +192,20 @@ async function viewHome(el) {
   const recent = (me.recent || []).filter((r) => GAME[r.game]);
   const fr = await api.friendsData();
   const evs = api.liveEventsNow();
+  const all = GAMES.slice();
+  const three = all.filter((g) => g.dim === '3d').sort((a, b) => (b.n || 0) - (a.n || 0));
+  const fresh = all.filter((g) => g.dim === '2d' && !(g.modes || []).includes('online')).sort((a, b) => (b.n || 0) - (a.n || 0)).slice(0, 14);
+  const party = all.filter((g) => (g.modes || []).includes('online')).sort((a, b) => (b.n || 0) - (a.n || 0)).slice(0, 14);
+  const card = (g) => `<button class="row-card" data-play="${esc(g.id)}" title="${esc(g.title)}">${thumbHTML(g)}${g.cover ? '' : `<b>${esc(g.title)}</b>`}</button>`;
+  const row = (title, list, more = '') => list.length ? `<div class="row-h"><h2>${title}</h2>${more}</div><div class="row-scroll">${list.map(card).join('')}</div>` : '';
   el.innerHTML = `
   <section class="home">
     ${evs.map((ev) => `<a class="ev-strip" href="#/events/${ev.id}" style="--ev:${ev.color}"><span class="ev-decor">${(ev.decor || []).join(' ')}</span><b>${esc(ev.name)}</b><span>${esc(ev.tagline || '')}</span><span class="ev-go">LIVE NOW ▸</span></a>`).join('')}
     <div class="home-head">
       <div class="eyebrow">WELCOME, ${esc(me.username)}</div>
-      <h1 class="h1">CHOOSE YOUR MODE</h1>
+      <h1 class="h1">PLAY</h1>
     </div>
+    ${three.length ? `<div class="feat3d">${three.slice(0, 3).map((g) => `<button class="feat-card" data-play="${esc(g.id)}">${g.cover ? `<img class="feat-img" src="${esc(g.cover)}" alt="">` : ''}<span class="feat-dim">3D</span><span class="feat-t">${esc(g.title)}</span><span class="feat-go">PLAY ▶</span></button>`).join('')}</div>` : ''}
     <div class="modes">
       <a class="mode-card m-sp" href="#/sp">
         <span class="mode-art"><span class="mode-orb"></span></span>
@@ -197,7 +222,26 @@ async function viewHome(el) {
         <span class="mode-c">${mp} GAME${mp === 1 ? '' : 'S'} ▸</span>
       </a>
     </div>
+
+    <div class="home-sec"><span>DISCOVER</span></div>
+    ${recent.length ? row('JUMP BACK IN', recent.slice(0, 10).map((r) => GAME[r.game])) : ''}
+    ${row('NEW SOLO GAMES', fresh, '<a href="#/sp/2d">ALL ▸</a>')}
+    ${row('PARTY GAMES · PLAY WITH FRIENDS', party, '<a href="#/mp/2d">ALL ▸</a>')}
+    <div class="genre-chips">${GENRES.map((g) => `<a class="g-chip" href="#/sp/2d" data-genre="${g.id}" style="--g:${g.color}">${g.icon} ${g.name}</a>`).join('')}</div>
+
+    <div class="home-sec"><span>SOCIAL</span></div>
     <div class="home-panels">
+      <div class="panel">
+        <div class="panel-h">PARTY</div>
+        <div class="dim small" style="margin-bottom:10px">Make a party, share the code, pick a game, play together - chat works inside every game.</div>
+        <button class="btn primary" data-party-home>👥 PARTY UP</button>
+      </div>
+      <div class="panel">
+        <div class="panel-h">FRIENDS <a href="#/friends">OPEN ▸</a></div>
+        ${fr.incoming.length ? `<a class="req-pill" href="#/friends/requests">${fr.incoming.length} friend request${fr.incoming.length > 1 ? 's' : ''} ▸</a>` : ''}
+        ${fr.friends.length ? fr.friends.slice(0, 4).map((f) => `<a class="mini-friend" href="#/profile/${esc(f.username)}">${avatarHTML(f.equipped, 28)}${callsignHTML(f.username, f.equipped, 'sm')}<small>LV ${levelInfo(f.xp).level}</small></a>`).join('')
+          : `<div class="empty-sm">No friends yet. <a href="#/friends/find">Find players ▸</a></div>`}
+      </div>
       <div class="panel">
         <div class="panel-h">DAILY REWARD <a href="#/tasks">VIEW ▸</a></div>
         <div class="dr-mini">
@@ -213,23 +257,12 @@ async function viewHome(el) {
             <span class="mt-bar"><i style="width:${(Math.min(1, t.progress / t.target) * 100).toFixed(0)}%"></i></span>
           </div>`).join('')}
       </div>
-      <div class="panel">
-        <div class="panel-h">JUMP BACK IN</div>
-        ${recent.length ? recent.slice(0, 3).map((r) => `<button class="mini-game" data-play="${r.game}">
-            <span class="mg-g" style="--a:${GAME[r.game].art[0]}">${GAME[r.game].glyph}</span>
-            <span><b>${esc(GAME[r.game].title)}</b><small>last score ${r.score}</small></span><span class="mg-p">▶</span></button>`).join('')
-          : `<div class="empty-sm">No games played yet. Pick a mode above.</div>`}
-      </div>
-      <div class="panel">
-        <div class="panel-h">FRIENDS <a href="#/friends">OPEN ▸</a></div>
-        ${fr.incoming.length ? `<a class="req-pill" href="#/friends/requests">${fr.incoming.length} friend request${fr.incoming.length > 1 ? 's' : ''} ▸</a>` : ''}
-        ${fr.friends.length ? fr.friends.slice(0, 4).map((f) => `<a class="mini-friend" href="#/profile/${esc(f.username)}">${avatarHTML(f.equipped, 28)}${callsignHTML(f.username, f.equipped, 'sm')}<small>LV ${levelInfo(f.xp).level}</small></a>`).join('')
-          : `<div class="empty-sm">No friends yet. <a href="#/friends/find">Find players ▸</a></div>`}
-      </div>
     </div>
   </section>`;
   el.querySelector('[data-open-daily]').onclick = () => (sfx.click(), openDaily());
   el.querySelectorAll('[data-play]').forEach((b) => (b.onclick = () => openGame(b.dataset.play)));
+  el.querySelectorAll('[data-genre]').forEach((a) => (a.onclick = () => { lobbyState.genre = a.dataset.genre; }));
+  el.querySelector('[data-party-home]').onclick = () => (sfx.click(), openPartyMenu());
 }
 
 // ---------- 2D / 3D portals ----------

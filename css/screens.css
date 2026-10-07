@@ -321,3 +321,43 @@ body.playing #party-dock { display: none; }
   .gc-panel { left: 8px; right: 8px; width: auto; top: auto; height: min(62vh, 420px); bottom: 8px; }
   .gc-bubbles { right: 8px; top: 54px; }
 }
+
+/* ---------- NOVEXYT home: featured 3D, swipe rows, genre chips ---------- */
+.feat3d { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 6px 0 22px; }
+.feat-card { position: relative; min-height: 170px; border-radius: 16px; border: 1px solid var(--line-hi); background: #0c0a1e; overflow: hidden; cursor: pointer; text-align: left; color: #fff; box-shadow: 0 14px 40px rgba(0,0,0,.45); transition: transform .2s, box-shadow .2s; }
+.feat-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(4,3,12,.92)); }
+.feat-card:hover { transform: translateY(-4px); box-shadow: 0 18px 50px rgba(0,0,0,.55), 0 0 30px rgba(34,230,255,.25); }
+.feat-card > span { position: absolute; z-index: 1; }
+.feat-dim { top: 10px; left: 10px; font-family: var(--f-d); font-weight: 900; font-size: 11px; letter-spacing: 2px; padding: 3px 8px; border-radius: 6px; background: linear-gradient(90deg, #22b8ff, #c13bff); }
+.feat-t { left: 14px; bottom: 14px; font-family: var(--f-d); font-weight: 900; font-size: clamp(16px, 2.2vw, 22px); letter-spacing: 2px; }
+.feat-go { right: 14px; bottom: 14px; font-family: var(--f-d); font-size: 12px; letter-spacing: 2px; color: var(--cyan); }
+.home-sec { display: flex; align-items: center; gap: 14px; margin: 30px 0 6px; font-family: var(--f-d); letter-spacing: 6px; font-size: 13px; color: var(--dim); }
+.home-sec::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line-hi), transparent); }
+.row-h { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 8px; }
+.row-h h2 { font-family: var(--f-d); font-size: 14px; letter-spacing: 3px; margin: 0; }
+.row-h a { font-family: var(--f-d); font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-decoration: none; }
+.row-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x mandatory; scrollbar-width: thin; }
+.row-card { flex: none; width: 200px; scroll-snap-align: start; background: none; border: 0; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
+.row-card .thumb { border-radius: 12px; }
+.row-card b { display: block; margin-top: 6px; font-family: var(--f-d); font-size: 12px; letter-spacing: 1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.genre-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+.g-chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--g); color: var(--g); text-decoration: none; font-family: var(--f-d); font-size: 12px; letter-spacing: 2px; background: rgba(255,255,255,.02); }
+.g-chip:hover { box-shadow: 0 0 18px color-mix(in srgb, var(--g) 40%, transparent); }
+
+/* phones: the bottom bar replaces the long top menu */
+#botnav { display: none; }
+@media (max-width: 760px) {
+  #botnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 55; height: calc(62px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); background: rgba(8,6,20,.96); border-top: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  #botnav a, #botnav button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--dim); text-decoration: none; background: none; border: 0; font-family: var(--f-d); font-size: 10px; letter-spacing: 1.5px; cursor: pointer; }
+  #botnav span { font-size: 20px; line-height: 1; }
+  #botnav a.on { color: var(--cyan); text-shadow: 0 0 12px rgba(34,230,255,.6); }
+  body.playing #botnav { display: none; }
+  .topbar .nav { display: none; }
+  .view { padding-bottom: 96px !important; }
+  #party-dock { bottom: calc(74px + env(safe-area-inset-bottom)); }
+  #party-dock.pd-mini:has([data-party]) { display: none; }   /* not in a party: the bottom bar's PARTY does that job */
+  .feat3d { grid-template-columns: 1fr; }
+  .feat-card { min-height: 150px; }
+  .row-card { width: 150px; }
+}
+.feat-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

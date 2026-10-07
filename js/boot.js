@@ -1,10 +1,12 @@
-// The intro: press start -> boot log -> sign up / log in -> "HELLO, NAME" -> loading -> arcade reveal.
+// The intro. First visit: press start -> the 10-panel NOVEXYT cinematic (skippable) -> sign up / log in -> "HELLO, NAME" -> arcade.
+// Every visit after: a 2-3 s sting (logo + WELCOME BACK, NAME). Logged out again: press start -> log in.
 import { $, esc, sleep } from './util.js';
 import { sfx } from './sfx.js';
 import { api, store } from './store.js';
 import { CONFIG } from './config.js';
 import { find } from './cosmetics/catalog.js';
 import { PAL } from './cosmetics/palettes.js';
+import { cinematic, sting } from './intro.js';
 
 // Boot screen colors from the player's INTRO cosmetic.
 function applyIntro(u) {
@@ -24,8 +26,9 @@ function wait(ms) {
 
 function logoHTML(cls = '') {
   return `<div class="logo ${cls}">
-    <div class="logo-top">${esc(B.top)}</div>
+    <img class="logo-mark" src="assets/brand/novexyt-mark.png" alt="">
     <div class="logo-name" data-text="${esc(B.name)}">${esc(B.name)}</div>
+    <div class="logo-top">${esc(B.top)}</div>
     <div class="logo-line"></div>
   </div>`;
 }
@@ -204,34 +207,27 @@ export async function runBoot() {
 
   let current = await api.me();
   applyIntro(current);
+  let seen = false;
+  try { seen = !!localStorage.getItem('nvx_intro_seen'); } catch (e) {}
   const short = current?.settings?.intro === 'short';
+  const testing = new URLSearchParams(location.search).has('nointro');
 
-  if (!short) {
+  if (current && (seen || short || testing)) {
+    // returning player: the short sting
+    if (!testing) await sting(root, current.username);
+  } else {
     await pressStart(root);
-    const skipBtn = document.createElement('button');
-    skipBtn.className = 'boot-skip';
-    skipBtn.textContent = 'SKIP ▸▸';
-    skipBtn.onclick = () => (skipping = true);
-    document.body.appendChild(skipBtn);
-    await bootLog(root);
+    if (!seen && !testing) {
+      root.innerHTML = '';
+      await cinematic(root);
+      try { localStorage.setItem('nvx_intro_seen', '1'); } catch (e) {}
+    }
     let isNew = false;
     if (!current) {
-      skipBtn.hidden = true;
-      skipping = false;
       ({ u: current, isNew } = await authPanel(root));
       applyIntro(current);
-      skipBtn.hidden = false;
     }
     await hello(root, current.username, isNew);
-    await loading(root, isNew);
-    skipBtn.remove();
-  } else {
-    if (!current) {
-      await pressStart(root);
-      ({ u: current } = await authPanel(root));
-    }
-    root.innerHTML = `<div class="boot-stage"><div class="hello"><span class="hello-w">WELCOME BACK,</span><span class="hello-n">${esc(current.username)}</span></div></div>`;
-    await sleep(700);
   }
 
   store.set(current);
