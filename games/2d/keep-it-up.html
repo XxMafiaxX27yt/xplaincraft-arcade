@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Keep It Up</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"keep-it-up","n":212,"title":"KEEP IT UP","genre":"fun","modes":["sp","online"],"minPlayers":1,"maxPlayers":8,"desc":"Balloons drift down - tap them to bop them back up and never let one touch the floor. Every few seconds another balloon floats in, the wind changes, and gold balloons are worth extra. Three pops and you are out. Online, everyone gets exactly the same balloons at the same moment: the last one still bopping wins.","controls":"Click / tap a balloon to bop it up (hit it on one side to send it the other way) · SPACE bops the lowest balloon","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Keep It Up"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const FLOOR = 500, R = 34, MAXB = 6, COLS = ['#ff3355', '#22e6ff', '#3dffa0', '#ff2bd6', '#ff8a3a', '#c45cff'];
+K.game({
+  bg: '#0d1030', touch: { stick: false, buttons: [] },
+  init(s) {
+    s.balls = []; s.t = 0; s.lives = 3; s.bops = 0; s.gold = 0; s.next = 0; s.wind = 0; s.windT = 6; s.out = false; s.outT = null; s.pops = [];
+    s.others = {}; s.sendT = 0; s.ended = false; s.seq = 0; s.ready = K.attract ? 0 : 3;
+    window.__kiu = s;   // tests
+    spawn(s); s.next = 9;
+    // title / cover picture: a sky full of balloons
+    if (K.attract) { s.t = 9; for (let i = 0; i < 5; i++) spawn(s); s.balls.forEach((b, i) => { b.x = 110 + i * 150 + K.rand(-30, 30); b.y = 120 + ((i * 97) % 240); b.vy = -60; }); s.balls[2].gold = true; s.balls[2].c = '#ffd93a'; s.t = 0; }
+  },
+  onNet(s, d, from) {
+    if (d.t === 'st') s.others[from] = { lives: d.lives, score: d.score, out: d.out };
+    checkEnd(s);
+  },
+  onLeave(s, id) { s.others[id] = { ...(s.others[id] || { score: 0 }), lives: 0, out: true, left: true }; checkEnd(s); },
+  ai(s, dt) { const low = s.balls.filter((b) => b.vy > 0).sort((a, b) => b.y - a.y)[0]; if (low && low.y > 330) bop(s, low, low.x + K.rand(-10, 10)); },
+  update(s, dt) {
+    if (s.ended) return;
+    if (s.ready > 0) { const was = Math.ceil(s.ready); s.ready -= dt; if (Math.ceil(s.ready) !== was) K.sfx(s.ready > 0 ? 'tick' : 'select'); return; }   // 3-2-1, the same for everyone
+    if (!s.out) {
+      s.t += dt;
+      // more balloons, gustier wind and a little more gravity as time goes on (the same for every player: K.rng)
+      s.next -= dt; if (s.next <= 0) { if (s.balls.length < MAXB) spawn(s); s.next = Math.max(5, 11 - s.t / 15); }
+      s.windT -= dt; if (s.windT <= 0) { s.wind = (K.rng() - 0.5) * Math.min(120, 30 + s.t * 1.5); s.windT = 4 + K.rng() * 4; }
+      // input: tap a balloon, or SPACE for the lowest falling one
+      if (K.mouse.clicked) { const b = s.balls.slice().reverse().find((b) => Math.hypot(K.mouse.x - b.x, K.mouse.y - b.y) < R + 10); if (b) bop(s, b, K.mouse.x); }
+      if (K.tap('Space')) { const b = s.balls.slice().sort((a, b) => b.y - a.y)[0]; if (b) bop(s, b, b.x + K.rand(-8, 8)); }
+      const g = 115 + Math.min(165, s.t * 1.8);
+      for (const b of s.balls) {
+        b.vy += g * dt; b.vy = Math.min(b.vy, 260 + s.t); b.vx += s.wind * dt; b.vx *= 1 - 0.6 * dt; b.cool -= dt;
+        b.x += b.vx * dt; b.y += b.vy * dt; b.wob += dt * 3;
+        if (b.x < R) { b.x = R; b.vx = Math.abs(b.vx) * 0.7; } if (b.x > 960 - R) { b.x = 960 - R; b.vx = -Math.abs(b.vx) * 0.7; }
+        if (b.y < R + 40) { b.y = R + 40; b.vy = Math.abs(b.vy) * 0.3; }
+        if (b.y + R >= FLOOR) { b.dead = true; s.lives--; s.pops.push({ x: b.x, y: FLOOR - 10, t: 0.5, c: b.c }); K.burst(b.x, FLOOR - 10, b.c, 24, 260); K.sfx('pop'); K.shake(8); }
+      }
+      s.balls = s.balls.filter((b) => !b.dead);
+      if (!s.balls.length && s.lives > 0) spawn(s);   // never an empty sky
+      if (s.lives <= 0) { s.out = true; s.outT = s.t; K.sfx('lose'); send(s); }
+      s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 1; send(s); }
+    }
+    for (const p of s.pops) p.t -= dt; s.pops = s.pops.filter((p) => p.t > 0);
+    checkEnd(s);
+  },
+  draw(s) {
+    // sky + floor of spikes
+    K.rect(0, FLOOR, 960, 40, '#1a1440');
+    for (let x = 0; x < 960; x += 24) { K.line(x, FLOOR, x + 12, FLOOR - 14, '#ff3355', 3); K.line(x + 12, FLOOR - 14, x + 24, FLOOR, '#ff3355', 3); }
+    // wind
+    if (Math.abs(s.wind) > 8) for (let i = 0; i < 6; i++) { const y = 90 + i * 60, x = ((K.time() * s.wind * 2 + i * 170) % 1000 + 1000) % 1000 - 20; K.line(x, y, x + Math.sign(s.wind) * 40, y, 'rgba(255,255,255,.12)', 2); }
+    for (const b of s.balls) {
+      const x = b.x + Math.sin(b.wob) * 2;
+      K.line(x, b.y + R, x + Math.sin(b.wob * 0.7) * 6, b.y + R + 34, 'rgba(255,255,255,.45)', 1.5);
+      K.circle(x, b.y, R, b.c); K.circle(x - 11, b.y - 12, 9, 'rgba(255,255,255,.35)');
+      if (b.gold) K.text('★', x, b.y + 2, 26, '#fff7b0', 'center', 'u');
+    }
+    // HUD
+    K.text(`${Math.floor(s.t)}s`, 20, 26, 22, '#fff', 'left', 'd');
+    K.text(`BOPS ${s.bops}`, 20, 52, 14, '#8e88b8', 'left', 'd');
+    for (let i = 0; i < 3; i++) K.circle(940 - i * 30, 26, 10, i < s.lives ? '#ff3355' : '#2a2448');
+    if (Math.abs(s.wind) > 8) K.text(`WIND ${s.wind > 0 ? '→' : '←'}`, 480, 24, 14, '#c8c0e8', 'center', 'd');
+    if (K.net) {
+      const list = K.net.players.filter((p) => p.id !== K.net.me);
+      list.forEach((p, i) => { const o = s.others[p.id] || { lives: 3, score: 0 }; K.text(`${p.username} ${o.out ? 'OUT' : '♥'.repeat(Math.max(0, o.lives))} ${o.score}`, 940, 56 + i * 20, 13, o.out ? '#5d5a80' : '#c8c0e8', 'right', 'u'); });
+    }
+    if (s.ready > 0) { K.text(String(Math.ceil(s.ready)), 480, 260, 90, '#fff', 'center', 'd', 20); K.text('GET READY · tap the balloons, never let one touch the spikes', 480, 330, 18, '#c8c0e8', 'center', 'u'); }
+    if (s.out && !s.ended) { K.rect(0, 200, 960, 110, 'rgba(5,4,12,.75)'); K.text('POPPED OUT!', 480, 240, 40, '#ff3355', 'center', 'd', 14); K.text(K.net ? 'watching the others…' : '', 480, 284, 16, '#c8c0e8', 'center', 'u'); }
+  },
+});
+function spawn(s) {
+  const gold = s.t > 8 && K.rng() < 0.2;
+  s.balls.push({ x: 120 + K.rng() * 720, y: 80, vx: (K.rng() - 0.5) * 80, vy: 20, c: gold ? '#ffd93a' : COLS[s.seq++ % COLS.length], gold, wob: K.rng() * 6, cool: 0 });
+  return true;
+}
+function bop(s, b, mx) {
+  if (b.cool > 0) return;
+  b.cool = 0.12; b.vy = -380; b.vx += (b.x - mx) * 5 + (K.rand(-20, 20));
+  s.bops++; if (b.gold) s.gold++;
+  K.sfx('blip'); K.burst(b.x, b.y + R * 0.6, '#ffffff', 6, 120, 0.3, 2);
+}
+const score = (s) => Math.floor((s.outT ?? s.t) * 10) + s.bops + s.gold * 25;
+function send(s) { if (K.net) K.net.send({ t: 'st', lives: s.lives, score: score(s), out: s.out }); }
+function checkEnd(s) {
+  if (s.ended || !s.out) return;
+  if (K.net) {
+    const others = K.net.players.filter((p) => p.id !== K.net.me);
+    if (others.some((p) => !(s.others[p.id] || {}).out)) return;   // someone is still bopping
+  }
+  s.ended = true;
+  const mine = score(s);
+  s.result = { score: mine };   // tests
+  if (!K.net) return K.end(s, { score: mine, won: null, title: 'POPPED!', text: `${Math.floor(s.outT)} seconds · ${s.bops} bops · ${s.gold} gold` });
+  const all = [{ name: 'YOU', score: mine }, ...K.net.players.filter((p) => p.id !== K.net.me).map((p) => ({ name: p.username, score: (s.others[p.id] || {}).score || 0 }))].sort((a, b) => b.score - a.score);
+  const won = all[0].name === 'YOU' && (all.length < 2 || all[1].score < mine);
+  K.end(s, { score: mine, won, stats: { won: won ? 1 : 0 }, title: won ? 'LAST ONE BOPPING!' : `#${all.findIndex((x) => x.name === 'YOU') + 1} OF ${all.length}`, text: all.map((x) => `${x.name} ${x.score}`).join(' · ') });
+}
+</script></body></html>

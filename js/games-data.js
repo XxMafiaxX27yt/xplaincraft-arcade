@@ -2145,6 +2145,31 @@ export const GAME_LIST = [
 "cover": "games/covers/bomb-squad.png"
 },
 {
+"id": "keep-it-up",
+"n": 212,
+"title": "KEEP IT UP",
+"genre": "fun",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "Balloons drift down - tap them to bop them back up and never let one touch the floor. Every few seconds another balloon floats in, the wind changes, and gold balloons are worth extra. Three pops and you are out. Online, everyone gets exactly the same balloons at the same moment: the last one still bopping wins.",
+"controls": "Click / tap a balloon to bop it up (hit it on one side to send it the other way) · SPACE bops the lowest balloon",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Keep It Up"
+}
+],
+"file": "games/2d/keep-it-up.html",
+"dim": "2d",
+"cover": "games/covers/keep-it-up.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
