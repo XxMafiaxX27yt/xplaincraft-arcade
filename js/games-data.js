@@ -2195,6 +2195,31 @@ export const GAME_LIST = [
 "cover": "games/covers/obby-race.png"
 },
 {
+"id": "chained",
+"n": 217,
+"title": "CHAINED",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 4,
+"desc": "You are chained to your friends. Climb the spiral tower over the void together - jump platform to platform, and if someone slips the chain holds them, dangling, and drags the others toward the edge. Hold JUMP while hanging to climb back up the chain. Team checkpoints on the way, a beacon at the top. Solo with a bot partner who follows your path, or ONLINE with 2-4 friends in one chain.",
+"controls": "WASD / arrows run · mouse turns the camera · SPACE jump (hold while hanging to climb the chain). Phones: left side runs, right side turns the camera, JUMP button.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Reach the top of the CHAINED tower"
+}
+],
+"file": "games/3d/chained.html",
+"cover": "games/covers/chained.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
