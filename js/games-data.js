@@ -4905,5 +4905,30 @@ export const GAME_LIST = [
 "file": "games/2d/wild-cards.html",
 "dim": "2d",
 "cover": "games/covers/wild-cards.png"
+},
+{
+"id": "impostor-ship",
+"n": 214,
+"title": "IMPOSTOR SHIP",
+"genre": "mystery",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "A spaceship, a crew - and an IMPOSTOR. Crewmates walk the dark ship doing tasks (fix the wires, fill the fuel, scan in medbay, calibrate the guns); finish them all and the crew wins. The impostor fakes tasks and takes crewmates out one by one when nobody is looking. Find a body? REPORT it. Everyone meets, talks it over and votes someone off the ship. Vote out the impostor to win - but if the impostors match the crew, they take the ship. Bots fill the crew up to 6, online with your party or solo.",
+"controls": "WASD / arrows / stick move · E or USE: do a task / press the emergency button · R or REPORT: report a body · Q or KILL (impostor) · meetings: click a player to vote, or SKIP. Talk in the party CHAT.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Impostor Ship"
+}
+],
+"file": "games/2d/impostor-ship.html",
+"dim": "2d",
+"cover": "games/covers/impostor-ship.png"
 }
 ];

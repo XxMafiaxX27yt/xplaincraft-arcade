@@ -1,0 +1,382 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Impostor Ship</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"impostor-ship","n":214,"title":"IMPOSTOR SHIP","genre":"mystery","modes":["sp","online"],"minPlayers":1,"maxPlayers":8,"desc":"A spaceship, a crew - and an IMPOSTOR. Crewmates walk the dark ship doing tasks (fix the wires, fill the fuel, scan in medbay, calibrate the guns); finish them all and the crew wins. The impostor fakes tasks and takes crewmates out one by one when nobody is looking. Find a body? REPORT it. Everyone meets, talks it over and votes someone off the ship. Vote out the impostor to win - but if the impostors match the crew, they take the ship. Bots fill the crew up to 6, online with your party or solo.","controls":"WASD / arrows / stick move · E or USE: do a task / press the emergency button · R or REPORT: report a body · Q or KILL (impostor) · meetings: click a player to vote, or SKIP. Talk in the party CHAT.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Impostor Ship"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+const RAD = 16, SPEED = 175, VIS = 270, VIS_IMP = 390, KILL_R = 80, KILL_CD = 22, REPORT_R = 110, USE_R = 60, NTASK = 4, MEET_T = 50, EJECT_T = 7, ROLE_T = 6;
+const COLS = ['#ff3355', '#3b7bff', '#3dffa0', '#ffd93a', '#ff8a3a', '#c45cff', '#22e6ff', '#ff9bc8', '#f2f0ff', '#8b5a2b'];
+const BOTN = ['BOLT', 'NOVA', 'PIXEL', 'ECHO', 'RUSTY', 'ZIP', 'MOCHI', 'TANGO'];
+const ROOMS = [
+  { n: 'CAFETERIA', x: 800, y: 80, w: 400, h: 300 }, { n: 'MEDBAY', x: 380, y: 80, w: 300, h: 220 }, { n: 'WEAPONS', x: 1320, y: 80, w: 300, h: 220 },
+  { n: 'ENGINE', x: 100, y: 460, w: 360, h: 300 }, { n: 'NAVIGATION', x: 1540, y: 460, w: 360, h: 300 }, { n: 'STORAGE', x: 800, y: 760, w: 400, h: 300 },
+  { n: 'ELECTRICAL', x: 380, y: 840, w: 300, h: 240 }, { n: 'SHIELDS', x: 1320, y: 840, w: 300, h: 240 },
+];
+// corridors overlap each room by 40 px (so a player fits through the joint); pa / pb = the doorway points inside each room
+const CORR = [
+  [0, 1, { x: 640, y: 160, w: 200, h: 80 }, [860, 200], [620, 200]], [0, 2, { x: 1160, y: 160, w: 200, h: 80 }, [1140, 200], [1380, 200]],
+  [0, 5, { x: 960, y: 340, w: 80, h: 460 }, [1000, 330], [1000, 810]], [1, 3, { x: 390, y: 260, w: 60, h: 240 }, [420, 250], [420, 510]],
+  [2, 4, { x: 1550, y: 260, w: 60, h: 240 }, [1580, 250], [1580, 510]], [3, 6, { x: 390, y: 720, w: 60, h: 160 }, [420, 730], [420, 890]],
+  [4, 7, { x: 1550, y: 720, w: 60, h: 160 }, [1580, 730], [1580, 890]], [6, 5, { x: 640, y: 900, w: 200, h: 80 }, [620, 940], [860, 940]],
+  [5, 7, { x: 1160, y: 900, w: 200, h: 80 }, [1140, 940], [1380, 940]],
+];
+const WALK = ROOMS.concat(CORR.map((c) => c[2]));
+// one task console per room
+const STATIONS = [
+  { r: 0, x: 900, y: 320, k: 'wires', n: 'Fix wiring' }, { r: 1, x: 520, y: 150, k: 'hold', n: 'Submit scan' }, { r: 2, x: 1500, y: 150, k: 'timing', n: 'Calibrate guns' },
+  { r: 3, x: 200, y: 620, k: 'hold', n: 'Fuel engines' }, { r: 4, x: 1800, y: 600, k: 'timing', n: 'Chart course' }, { r: 5, x: 1100, y: 990, k: 'hold', n: 'Fill canisters' },
+  { r: 6, x: 500, y: 1010, k: 'wires', n: 'Fix wiring' }, { r: 7, x: 1500, y: 1010, k: 'wires', n: 'Prime shields' },
+];
+const BUTTON = { x: 1000, y: 210 };
+const walkable = (x, y) => WALK.some((r) => x > r.x + RAD && x < r.x + r.w - RAD && y > r.y + RAD && y < r.y + r.h - RAD);
+const roomAt = (x, y) => ROOMS.findIndex((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+const spot = (i, n) => { const a = (i / n) * Math.PI * 2; return { x: 1000 + Math.cos(a) * 110, y: 240 + Math.sin(a) * 80 }; };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// room-to-room route over the corridors: a list of points
+function route(from, to) {
+  if (from === to || from < 0) return [];
+  const prev = { [from]: null }, q = [from];
+  while (q.length) { const r = q.shift(); if (r === to) break; for (const c of CORR) for (const [a, b, pa, pb] of [[c[0], c[1], c[3], c[4]], [c[1], c[0], c[4], c[3]]]) if (a === r && !(b in prev)) { prev[b] = { r, pa, pb }; q.push(b); } }
+  const pts = []; for (let r = to; prev[r]; r = prev[r].r) pts.unshift({ x: prev[r].pa[0], y: prev[r].pa[1] }, { x: prev[r].pb[0], y: prev[r].pb[1] });
+  return pts;
+}
+function move(e, dx, dy) { const nx = e.x + dx, ny = e.y + dy; if (walkable(nx, e.y)) e.x = nx; if (walkable(e.x, ny)) e.y = ny; }
+
+K.game({
+  bg: '#05040c', touch: { stick: true, buttons: [['KeyE', 'USE'], ['KeyR', 'REPORT'], ['KeyQ', 'KILL']] }, noTitleSim: true,
+  init(s) {
+    if (!K.net) PK.setFake([{ id: 'me', name: 'YOU' }]);
+    s.ents = {}; s.bodies = []; s.tdone = 0; s.tneed = 1; s.used = {}; s.killCd = 0; s.task = null; s.sendT = 0; s.syncT = 0; s.votes = {}; s.voted = null; s.over = false; s.msg = null; s.kills = 0;
+    s.onPhase = onPhase;
+    s.ph = 'start'; s.t = 1;
+    window.__is = s;   // tests
+  },
+  onNet(s, d, from) {
+    if (PK.follow(s, d)) return;
+    if (d.t === 'p') { for (const [id, x, y, mv] of d.e) { const e = s.ents[id]; if (e && id !== PK.me()) { e.tx = x; e.ty = y; e.mv = mv; if (Math.hypot(e.x - x, e.y - y) > 300) { e.x = x; e.y = y; } } } return; }
+    if (d.t === 'dead') return died(s, d.v, d.x, d.y);
+    if (d.t === 'hs' && !PK.host()) { s.tdone = d.td; s.tneed = d.tn; s.used = d.u; for (const id of d.dead) if (s.ents[id] && s.ents[id].alive) died(s, id, null, null, true); s.bodies = d.b.map(([id, x, y]) => ({ id, x, y })); return; }
+    if (d.t === 'vc') { s.votes = d.v; return; }
+    if (!PK.host()) return;
+    const e = s.ents[from];
+    if (d.t === 'kill' && s.ph === 'play') tryKill(s, s.ents[from], s.ents[d.v]);
+    if (d.t === 'task' && e) { const E = s.ents[d.id]; if (E && E.owner === from && !E.done.includes(d.st)) { E.done.push(d.st); countTasks(s); } }
+    if ((d.t === 'report' || d.t === 'emer') && s.ph === 'play' && e && e.alive) meeting(s, from, d.t === 'report' ? d.b : null);
+    if (d.t === 'vote' && s.ph === 'meet' && e && e.alive && !s.votes[from]) { s.votes[from] = d.to; PK.send({ t: 'vc', v: s.votes }); }
+  },
+  onLeave(s, id) {
+    if (!PK.host() || !s.ents[id]) return;
+    s.ents[id].alive = false; s.ents[id].left = true; s.ents[id].name += ' (left)';
+    checkWin(s);
+  },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt;
+    const host = PK.host(), me = s.ents[PK.me()];
+    if (s.msg) { s.msg.t -= dt; if (s.msg.t <= 0) s.msg = null; }
+    if (s.ph === 'play' && me) {
+      s.killCd = Math.max(0, s.killCd - dt);
+      if (s.task) taskUpdate(s, dt, me);
+      else {
+        const d = K.dir(); let mx = d.x, my = d.y; const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
+        move(me, mx * SPEED * dt, my * SPEED * dt); me.mv = l > 0; if (mx) me.dir = mx > 0 ? 1 : -1;
+        actions(s, me);
+      }
+      // other players glide to where they are
+      for (const e of Object.values(s.ents)) if (e.tx != null && e !== me && !(host && e.bot)) { e.x += (e.tx - e.x) * Math.min(1, dt * 9); e.y += (e.ty - e.y) * Math.min(1, dt * 9); if (e.tx !== e.x) e.dir = e.tx > e.x ? 1 : -1; }
+      if (host) bots(s, dt);
+      s.sendT -= dt;
+      if (s.sendT <= 0 && K.net) { s.sendT = 1 / 6; const mine = Object.values(s.ents).filter((e) => e.owner === PK.me() && !e.left); PK.send({ t: 'p', e: mine.map((e) => [e.id, Math.round(e.x), Math.round(e.y), e.mv ? 1 : 0]) }); }
+      if (host) { s.syncT -= dt; if (s.syncT <= 0) { s.syncT = 0.5; sync(s); } checkWin(s); }
+    }
+    if (s.ph === 'meet' && me) {
+      if (me.alive && !s.voted && K.mouse.clicked) {
+        tiles(s).forEach((t) => { if (K.inRect(K.mouse.x, K.mouse.y, t) && s.ents[t.id].alive) vote(s, t.id); });
+        if (K.inRect(K.mouse.x, K.mouse.y, SKIP)) vote(s, 'skip');
+      }
+      if (host) { botVotes(s, dt); const alive = Object.values(s.ents).filter((e) => e.alive); if (s.t <= 0 || alive.every((e) => s.votes[e.id])) tally(s); }
+    }
+    if (!host) return;
+    if (s.ph === 'start' && s.t <= 0) setup(s);
+    else if (s.ph === 'role' && s.t <= 0) PK.go(s, 'play', 9999, { first: true });
+    else if (s.ph === 'eject' && s.t <= 0) { if (!checkWin(s)) PK.go(s, 'play', 9999, {}); }
+  },
+  draw(s, c) {
+    const me = s.ents[PK.me()];
+    if (s.ph === 'start' || !me) { K.text('IMPOSTOR SHIP', 480, 250, 52, '#fff', 'center', 'd', 18); return; }
+    if (s.ph === 'role') return drawRole(s, me);
+    if (s.ph === 'meet' || s.ph === 'eject') return drawMeeting(s, me);
+    drawWorld(s, c, me);
+    drawHud(s, me);
+    if (s.task) drawTask(s);
+    if (s.msg) { K.rect(0, 220, 960, 90, 'rgba(5,4,12,.8)'); K.text(s.msg.a, 480, 255, 34, s.msg.c || '#ff3355', 'center', 'd', 14); if (s.msg.b) K.text(s.msg.b, 480, 290, 16, '#c8c0e8', 'center', 'u'); }
+  },
+});
+
+// ---------------- game flow (host) ----------------
+function setup(s) {
+  const humans = PK.players(), n = Math.max(6, humans.length), list = humans.map((p) => ({ id: p.id, name: p.name, bot: false }));
+  for (let i = 0; list.length < n; i++) list.push({ id: 'bot' + i, name: BOTN[i % BOTN.length], bot: true });
+  const imps = K.shuffle(list.map((e) => e.id)).slice(0, n >= 7 ? 2 : 1);
+  const ents = list.map((e, i) => ({ ...e, col: COLS[i % COLS.length], imp: imps.includes(e.id), tasks: K.shuffle([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, NTASK) }));
+  PK.go(s, 'role', ROLE_T, { ents, host: PK.me() });
+}
+function onPhase(s) {
+  const d = s.pd || {};
+  if (s.ph === 'role') {
+    s.ents = {}; s.bodies = []; s.used = {}; s.tdone = 0;
+    d.ents.forEach((e, i) => { const p = spot(i, d.ents.length); s.ents[e.id] = { ...e, x: p.x, y: p.y, tx: null, ty: null, dir: 1, mv: false, alive: true, done: [], owner: e.bot ? d.host : e.id, room: 0 }; });
+    s.tneed = Object.values(s.ents).filter((e) => !e.imp).length * NTASK;
+  }
+  if (s.ph === 'play') {
+    // everyone back round the cafeteria table, bodies cleared, kill timer reset
+    Object.values(s.ents).forEach((e, i) => { const p = spot(i, Object.keys(s.ents).length); e.x = p.x; e.y = p.y; e.tx = null; e.ty = null; e.plan = null; e.room = 0; e.hunt = null; e.cd = KILL_CD * 0.7; });
+    s.bodies = []; s.task = null; s.killCd = KILL_CD * (d.first ? 0.5 : 0.7);
+  }
+  if (s.ph === 'meet') { s.votes = {}; s.voted = null; s.task = null; s.botVoteT = {}; K.sfx('scare'); }
+  if (s.ph === 'eject') { if (d.out && s.ents[d.out]) { s.ents[d.out].alive = false; s.ents[d.out].ejected = true; } K.sfx(d.out ? 'whoosh' : 'blip'); }
+  if (s.ph === 'end') finish(s);
+}
+function meeting(s, caller, body) {
+  if (s.ph !== 'play') return;
+  const E = Object.values(s.ents), dead = body ? s.bodies.find((b) => b.id === body) : null;
+  if (!body) s.used[caller] = true;
+  // the bots' side of the talk (and who they suspect: whoever was standing nearest the body)
+  let sus = null;
+  if (dead) { let bd = 260; for (const e of E) if (e.alive && e.id !== caller && dist(e, dead) < bd) { bd = dist(e, dead); sus = e.id; } }
+  const lines = [];
+  for (const e of E) if (e.bot && e.alive) {
+    const room = ROOMS[roomAt(e.x, e.y)]?.n || 'the halls';
+    if (!e.imp && sus && sus !== e.id && K.rand() < 0.5 && dist(s.ents[sus], e) < 400) lines.push([e.id, `${s.ents[sus].name} was right by the body!`]);
+    else if (e.imp && K.rand() < 0.4) { const c = K.pick(E.filter((x) => x.alive && !x.imp && x.id !== e.id)); if (c) lines.push([e.id, `${c.name} is acting sus.`]); else lines.push([e.id, `I was in ${room}.`]); }
+    else { const pal = K.pick(E.filter((x) => x.alive && x.id !== e.id)); lines.push([e.id, K.pick([`I was in ${room}.`, `doing my tasks in ${room}`, `didn't see anything`, `skip if nobody is sure`, pal ? `I was near ${pal.name}` : `I was alone`, dead ? `who was near ${dead.id === PK.me() ? 'there' : 'the body'}?` : `why the meeting?`])]); }
+  }
+  s.sus = sus;
+  PK.go(s, 'meet', MEET_T, { caller, body: dead ? dead.id : null, where: dead ? ROOMS[roomAt(dead.x, dead.y)]?.n || 'a corridor' : null, lines: lines.slice(0, 5) });
+}
+function vote(s, to) { s.voted = to; K.sfx('click'); if (PK.host()) { s.votes[PK.me()] = to; PK.send({ t: 'vc', v: s.votes }); } else { s.votes[PK.me()] = to; PK.send({ t: 'vote', to }); } }
+function botVotes(s, dt) {
+  for (const e of Object.values(s.ents)) {
+    if (!e.bot || !e.alive || s.votes[e.id]) continue;
+    s.botVoteT[e.id] = (s.botVoteT[e.id] ?? K.rand(6, Math.min(MEET_T - 5, 30))) - dt;
+    if (s.botVoteT[e.id] > 0) continue;
+    const alive = Object.values(s.ents).filter((x) => x.alive && x.id !== e.id);
+    let to = 'skip';
+    if (e.imp) { const c = alive.filter((x) => !x.imp); if (c.length && K.rand() < 0.65) to = (s.sus && !s.ents[s.sus].imp && K.rand() < 0.5 ? s.ents[s.sus] : K.pick(c)).id; }
+    else if (s.sus && s.sus !== e.id && s.ents[s.sus].alive && K.rand() < 0.7) to = s.sus;
+    else { const lead = Object.entries(count(s.votes)).sort((a, b) => b[1] - a[1])[0]; if (lead && lead[0] !== 'skip' && lead[0] !== e.id && K.rand() < 0.5) to = lead[0]; }
+    s.votes[e.id] = to; PK.send({ t: 'vc', v: s.votes });
+  }
+}
+const count = (v) => { const c = {}; Object.values(v).forEach((x) => (c[x] = (c[x] || 0) + 1)); return c; };
+function tally(s) {
+  const c = count(s.votes), top = Math.max(0, ...Object.values(c)), most = Object.keys(c).filter((k) => c[k] === top);
+  const out = top > 0 && most.length === 1 && most[0] !== 'skip' ? most[0] : null;
+  PK.go(s, 'eject', EJECT_T, { out, imp: out ? s.ents[out].imp : false, tie: most.length > 1, votes: { ...s.votes }, left: Object.values(s.ents).filter((e) => e.imp && e.alive && e.id !== out).length });
+}
+function tryKill(s, k, v) {
+  if (!k || !v || !k.imp || !k.alive || !v.alive || v.imp || s.ph !== 'play') return;
+  if (dist(k, v) > KILL_R * 2.2) return;   // (other screens see each other a little in the past)
+  PK.send({ t: 'dead', v: v.id, x: Math.round(v.x), y: Math.round(v.y) });
+  died(s, v.id, v.x, v.y);
+  k.cd = KILL_CD;
+  checkWin(s);
+}
+function died(s, id, x, y, quiet = false) {
+  const e = s.ents[id]; if (!e || !e.alive) return;
+  e.alive = false;
+  if (x != null && !s.bodies.some((b) => b.id === id)) s.bodies.push({ id, x, y });
+  if (id === PK.me() && !quiet) { s.task = null; s.msg = { a: 'YOU WERE KILLED', b: 'you are a ghost now - you can still finish your tasks', t: 3 }; K.sfx('scare'); K.flash('#ff3355', 0.3); K.shake(12); }
+}
+function countTasks(s) { s.tdone = Object.values(s.ents).filter((e) => !e.imp).reduce((a, e) => a + e.done.length, 0); }
+function sync(s) { PK.send({ t: 'hs', td: s.tdone, tn: s.tneed, u: s.used, dead: Object.values(s.ents).filter((e) => !e.alive).map((e) => e.id), b: s.bodies.map((b) => [b.id, Math.round(b.x), Math.round(b.y)]) }); }
+function checkWin(s) {
+  if (s.over || s.ph === 'end' || s.ph === 'role' || s.ph === 'start') return false;
+  const E = Object.values(s.ents), imps = E.filter((e) => e.imp && e.alive).length, crew = E.filter((e) => !e.imp && e.alive).length;
+  let win = null, why = '';
+  if (!imps) { win = 'crew'; why = 'every impostor was voted out'; }
+  else if (imps >= crew) { win = 'imp'; why = 'the impostors took over the ship'; }
+  else if (s.tdone >= s.tneed) { win = 'crew'; why = 'all tasks done'; }
+  if (!win) return false;
+  PK.go(s, 'end', 99, { win, why, imps: E.filter((e) => e.imp).map((e) => e.id) });
+  return true;
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const d = s.pd, me = s.ents[PK.me()], won = !!me && (d.win === 'imp') === !!me.imp;
+  const score = won ? 300 + (me.imp ? 0 : me.done.length * 25) : me ? me.done.length * 15 : 0;
+  K.end(s, { score, won, stats: { won: won ? 1 : 0 }, title: d.win === 'imp' ? 'IMPOSTORS WIN' : 'CREW WINS', text: `${d.why} · the impostor${d.imps.length > 1 ? 's were' : ' was'} ${d.imps.map((id) => (id === PK.me() ? 'YOU' : s.ents[id]?.name || '?')).join(' + ')}` });
+}
+
+// ---------------- my actions ----------------
+function actions(s, me) {
+  const near = (p, r) => dist(me, p) < r;
+  if (K.tap('KeyE')) {
+    const st = STATIONS.findIndex((p) => near(p, USE_R));
+    if (me.alive && near(BUTTON, 70) && !s.used[me.id]) { if (PK.host()) meeting(s, me.id, null); else PK.send({ t: 'emer' }); }
+    else if (st >= 0 && me.tasks.includes(st) && !me.done.includes(st)) {
+      if (me.imp) { s.msg = { a: 'FAKE IT', b: 'impostors have no real tasks - just look busy', t: 1.5, c: '#ff8a3a' }; }
+      else openTask(s, st);
+    }
+  }
+  if (K.tap('KeyR') && me.alive) { const b = s.bodies.find((b) => near(b, REPORT_R)); if (b) { if (PK.host()) meeting(s, me.id, b.id); else PK.send({ t: 'report', b: b.id }); } }
+  if (K.tap('KeyQ') && me.imp && me.alive && s.killCd <= 0) {
+    const v = Object.values(s.ents).filter((e) => e.alive && !e.imp && near(e, KILL_R)).sort((a, b) => dist(me, a) - dist(me, b))[0];
+    if (v) { s.killCd = KILL_CD; s.kills++; K.sfx('hit'); if (PK.host()) tryKill(s, me, v); else PK.send({ t: 'kill', v: v.id }); }
+  }
+}
+function openTask(s, st) {
+  const k = STATIONS[st].k, cols = K.shuffle(['#ff3355', '#3b7bff', '#ffd93a', '#c45cff']);
+  s.task = { st, k, p: 0, hits: 0, zone: K.rand(0.15, 0.7), sel: null, L: cols, Rr: K.shuffle(cols.slice()), joined: [], ph: 0, x0: s.ents[PK.me()].x, y0: s.ents[PK.me()].y };
+  K.sfx('select');
+}
+const TP = { x: 230, y: 110, w: 500, h: 320 };
+function taskUpdate(s, dt, me) {
+  const T = s.task, mx = K.mouse.x, my = K.mouse.y;
+  if (K.tap('Escape') || (K.mouse.clicked && !K.inRect(mx, my, TP)) || Math.hypot(K.dir().x, K.dir().y) > 0) { s.task = null; return; }
+  if (T.k === 'hold') { const on = K.down('KeyE', 'Space') || (K.mouse.down && Math.hypot(mx - 480, my - 290) < 70); if (on) { T.p += dt / 3.2; if (Math.random() < 0.15) K.tone(300 + T.p * 600, 0.03, 'sine', 0.02); } if (T.p >= 1) taskDone(s, me); }
+  if (T.k === 'timing') { T.ph += dt * (1.1 + T.hits * 0.35); const x = (Math.sin(T.ph * 2) + 1) / 2; if (K.tap('KeyE', 'Space') || (K.mouse.clicked && K.inRect(mx, my, TP))) { if (x > T.zone && x < T.zone + 0.16) { T.hits++; T.zone = K.rand(0.1, 0.74); K.sfx('coin'); if (T.hits >= 3) taskDone(s, me); } else { K.sfx('wrong'); T.hits = Math.max(0, T.hits - 1); } } }
+  if (T.k === 'wires' && K.mouse.clicked) {
+    for (let i = 0; i < 4; i++) {
+      if (Math.hypot(mx - 300, my - (180 + i * 60)) < 22 && !T.joined.includes(T.L[i])) { T.sel = i; K.sfx('click'); }
+      if (Math.hypot(mx - 660, my - (180 + i * 60)) < 22 && T.sel != null) { if (T.Rr[i] === T.L[T.sel]) { T.joined.push(T.L[T.sel]); K.sfx('coin'); if (T.joined.length === 4) taskDone(s, me); } else K.sfx('wrong'); T.sel = null; }
+    }
+  }
+}
+function taskDone(s, me) {
+  const st = s.task.st; s.task = null;
+  if (me.done.includes(st)) return;
+  me.done.push(st); K.sfx('win');
+  if (PK.host()) countTasks(s); else { s.tdone++; PK.send({ t: 'task', id: me.id, st }); }
+}
+
+// ---------------- bots (the host runs them) ----------------
+function bots(s, dt) {
+  const E = Object.values(s.ents);
+  for (const b of E) {
+    if (!b.bot || b.left) continue;
+    if (!b.alive && b.imp) continue;
+    b.cd = Math.max(0, (b.cd || 0) - dt); b.mv = false;
+    // crew: report a body they walk past
+    if (b.alive && !b.imp) { const body = s.bodies.find((x) => dist(x, b) < REPORT_R * 1.5); if (body) { meeting(s, b.id, body.id); return; } }
+    // impostor: an isolated crewmate nearby + kill ready -> go for it
+    if (b.imp && b.alive && b.cd <= 0) {
+      if (!b.hunt) { const v = E.filter((e) => e.alive && !e.imp && dist(e, b) < 260 && !E.some((o) => o !== e && o !== b && o.alive && !o.imp && dist(o, e) < 300)).sort((x, y) => dist(x, b) - dist(y, b))[0]; if (v) { b.hunt = v.id; b.huntT = 4; } }
+      if (b.hunt) {
+        const v = s.ents[b.hunt]; b.huntT -= dt;
+        if (!v.alive || b.huntT <= 0) b.hunt = null;
+        else { const dx = v.x - b.x, dy = v.y - b.y, l = Math.hypot(dx, dy); if (l < KILL_R * 0.8) { tryKill(s, b, v); b.hunt = null; b.plan = null; } else { move(b, (dx / l) * SPEED * dt, (dy / l) * SPEED * dt); b.mv = true; b.dir = dx > 0 ? 1 : -1; } continue; }
+      }
+    }
+    // walk the plan (a route to a task console, or a wander), then work at it
+    if (b.work > 0) { b.work -= dt; if (b.work <= 0 && b.target != null && !b.imp && !b.done.includes(b.target)) { b.done.push(b.target); countTasks(s); } continue; }
+    if (!b.plan || !b.plan.length) {
+      const todo = b.tasks.filter((t) => !b.done.includes(t));
+      const goal = !b.imp && todo.length ? K.pick(todo) : Math.floor(K.rand(8));
+      const here = roomAt(b.x, b.y), from = here >= 0 ? here : b.room ?? 0;
+      b.target = goal; b.plan = route(from, STATIONS[goal].r).concat([{ x: STATIONS[goal].x + K.rand(-20, 20), y: STATIONS[goal].y + K.rand(-10, 10) }]); b.room = STATIONS[goal].r;
+    }
+    const p = b.plan[0], dx = p.x - b.x, dy = p.y - b.y, l = Math.hypot(dx, dy);
+    if (l < 6) { b.plan.shift(); if (!b.plan.length) b.work = K.rand(2.5, 5); }
+    else { const st = Math.min(l, SPEED * 0.92 * dt); const ox = b.x, oy = b.y; move(b, (dx / l) * st, (dy / l) * st); if (ox === b.x && oy === b.y) { b.x += (dx / l) * st; b.y += (dy / l) * st; } b.mv = true; b.dir = dx > 0 ? 1 : -1; }
+  }
+}
+
+// ---------------- drawing ----------------
+function crewmate(x, y, col, dir = 1, opts = {}) {
+  const a = opts.alpha ?? 1, bob = opts.mv ? Math.sin(K.time() * 14) * 2 : 0;
+  const g = (c) => (a < 1 ? c + Math.round(a * 255).toString(16).padStart(2, '0') : c);
+  K.rect(x - 8 * dir - 6, y - 10 + bob, 8, 18, g(shade(col)), 3);           // backpack
+  K.rect(x - 12, y - 20 + bob, 24, 32, g(col), 11);                          // body
+  K.rect(x - 12, y + 6, 9, 10, g(col), 3); K.rect(x + 3, y + 6, 9, 10, g(col), 3);   // legs
+  K.rect(x - 2 + dir * 4, y - 13 + bob, 14, 9, g('#bfe8ff'), 4);              // visor
+  if (opts.name) K.text(opts.name, x, y - 32, 11, opts.nameCol || '#fff', 'center', 'd');
+}
+const shade = (hex) => { const n = parseInt(hex.slice(1), 16); return '#' + [16, 8, 0].map((sh) => Math.floor(((n >> sh) & 255) * 0.6).toString(16).padStart(2, '0')).join(''); };
+function drawWorld(s, c, me) {
+  const cx = Math.max(0, Math.min(2000 - 960, me.x - 480)), cy = Math.max(0, Math.min(1160 - 540, me.y - 300));
+  s.cam = { x: cx, y: cy };
+  const X = (x) => x - cx, Y = (y) => y - cy;
+  for (const k of CORR) { const r = k[2]; K.rect(X(r.x), Y(r.y), r.w, r.h, '#1c2238'); }
+  for (const r of ROOMS) { K.rect(X(r.x), Y(r.y), r.w, r.h, '#262c48', 6); K.stroke(X(r.x), Y(r.y), r.w, r.h, '#4a5280', 3, 6); K.text(r.n, X(r.x + r.w / 2), Y(r.y + 22), 14, '#6a74a8', 'center', 'd'); }
+  for (let i = 0; i < 9; i++) K.circle(X(1000), Y(240), 60 - i, i ? '#30385a' : '#3a4470');   // the cafeteria table
+  K.circle(X(BUTTON.x), Y(BUTTON.y), 16, s.used[me.id] ? '#552030' : '#ff3355'); K.circle(X(BUTTON.x), Y(BUTTON.y), 7, '#ffd0d8');
+  STATIONS.forEach((p, i) => { const mine = me.tasks.includes(i) && !me.done.includes(i); K.rect(X(p.x) - 18, Y(p.y) - 14, 36, 28, mine ? '#ffd93a' : '#4a5280', 5); K.rect(X(p.x) - 12, Y(p.y) - 9, 24, 14, '#10142a', 3); if (mine && Math.sin(K.time() * 5) > 0) K.stroke(X(p.x) - 22, Y(p.y) - 18, 44, 36, '#ffd93a', 2, 7); });
+  const vis = me.imp ? VIS_IMP : VIS, ghostView = !me.alive;
+  for (const b of s.bodies) if (ghostView || dist(b, me) < vis) { const e = s.ents[b.id]; K.rect(X(b.x) - 14, Y(b.y) - 4, 28, 14, e.col, 6); K.circle(X(b.x) + 12, Y(b.y) - 6, 5, '#f2f0ff'); K.text('✕', X(b.x) - 2, Y(b.y) + 2, 12, '#300', 'center', 'd'); }
+  for (const e of Object.values(s.ents)) {
+    if (e === me || e.ejected) continue;
+    const seen = e.alive ? ghostView || dist(e, me) < vis : ghostView;
+    if (!seen || (!e.alive && s.bodies.some((b) => b.id === e.id) && !ghostView)) continue;
+    crewmate(X(e.x), Y(e.y), e.col, e.dir, { mv: e.mv, alpha: e.alive ? 1 : 0.4, name: e.name, nameCol: me.imp && e.imp ? '#ff3355' : '#fff' });
+  }
+  crewmate(X(me.x), Y(me.y), me.col, me.dir, { mv: me.mv, alpha: me.alive ? 1 : 0.45, name: me.alive ? 'YOU' : 'YOU (ghost)', nameCol: me.imp ? '#ff3355' : '#ffd93a' });
+  // the dark: you see a circle around you (ghosts see everything)
+  if (!ghostView) { const g = c.createRadialGradient(X(me.x), Y(me.y), vis * 0.55, X(me.x), Y(me.y), vis); g.addColorStop(0, 'rgba(3,2,10,0)'); g.addColorStop(1, 'rgba(3,2,10,.94)'); c.fillStyle = g; c.fillRect(0, 0, 960, 540); }
+  // arrow to the nearest task still to do
+  const todo = me.imp ? [] : me.tasks.filter((t) => !me.done.includes(t)).map((t) => STATIONS[t]).sort((a, b) => dist(a, me) - dist(b, me));
+  if (todo[0] && dist(todo[0], me) > 240) { const a = Math.atan2(todo[0].y - me.y, todo[0].x - me.x), ax = 480 + Math.cos(a) * 200, ay = 290 + Math.sin(a) * 200; K.text('➤', X(me.x) + Math.cos(a) * 60, Y(me.y) + Math.sin(a) * 60, 20, '#ffd93a', 'center', 'u'); }
+}
+function drawHud(s, me) {
+  K.rect(12, 10, 300, 16, '#10142a', 5); K.rect(12, 10, 300 * Math.min(1, s.tdone / s.tneed), 16, '#3dffa0', 5); K.text(`TASKS ${s.tdone}/${s.tneed}`, 162, 19, 10, '#05040c', 'center', 'd');
+  K.rect(12, 34, 230, 24 + me.tasks.length * 18, 'rgba(10,12,30,.8)', 8);
+  K.text(me.imp ? 'FAKE TASKS (impostor)' : 'YOUR TASKS', 22, 47, 11, me.imp ? '#ff3355' : '#c8c0e8', 'left', 'd');
+  me.tasks.forEach((t, i) => K.text(`${me.done.includes(t) ? '✓' : '·'} ${ROOMS[STATIONS[t].r].n}: ${STATIONS[t].n}`, 22, 66 + i * 18, 12, me.done.includes(t) ? '#3dffa0' : '#e8e6ff', 'left', 'u'));
+  const near = (p, r) => dist(me, p) < r;
+  const hints = [];
+  if (!s.task) {
+    const st = STATIONS.findIndex((p) => near(p, USE_R)); if (st >= 0 && me.tasks.includes(st) && !me.done.includes(st)) hints.push('E / USE: ' + STATIONS[st].n);
+    if (me.alive && near(BUTTON, 70)) hints.push(s.used[me.id] ? 'emergency button used' : 'E / USE: EMERGENCY MEETING');
+    if (me.alive && s.bodies.some((b) => near(b, REPORT_R))) hints.push('R / REPORT the body!');
+    if (me.imp && me.alive) hints.push(s.killCd > 0 ? `KILL in ${Math.ceil(s.killCd)}` : Object.values(s.ents).some((e) => e.alive && !e.imp && near(e, KILL_R)) ? 'Q / KILL' : 'KILL ready');
+  }
+  hints.forEach((h, i) => K.text(h, 480, 500 - i * 22, 16, h.includes('REPORT') || h.includes('KILL ready') || h === 'Q / KILL' ? '#ff6a7c' : '#ffd93a', 'center', 'd'));
+  const room = ROOMS[roomAt(me.x, me.y)]; K.text(room ? room.n : 'HALLWAY', 948, 20, 13, '#8e88b8', 'right', 'd');
+}
+function drawTask(s) {
+  const T = s.task, P = TP;
+  K.rect(P.x, P.y, P.w, P.h, '#151a30', 14); K.stroke(P.x, P.y, P.w, P.h, '#6a74a8', 3, 14);
+  K.text(STATIONS[T.st].n.toUpperCase(), 480, P.y + 26, 18, '#fff', 'center', 'd'); K.text('move or ESC to close', 480, P.y + P.h - 14, 11, '#6a74a8', 'center', 'u');
+  if (T.k === 'hold') { K.circle(480, 290, 70, '#2a3050'); K.circle(480, 290, 62, K.mouse.down || K.down('KeyE') ? '#3dffa0' : '#3b7bff'); K.text('HOLD', 480, 292, 20, '#05040c', 'center', 'd'); K.rect(280, 180, 400, 14, '#0a0c18', 6); K.rect(280, 180, 400 * T.p, 14, '#3dffa0', 6); }
+  if (T.k === 'timing') { const x = (Math.sin(T.ph * 2) + 1) / 2; K.rect(270, 260, 420, 40, '#0a0c18', 8); K.rect(270 + 420 * T.zone, 260, 420 * 0.16, 40, '#1d5a3a', 4); K.rect(268 + 420 * x, 252, 5, 56, '#ffd93a', 2); K.text(`click / E in the green · ${T.hits}/3`, 480, 340, 15, '#c8c0e8', 'center', 'u'); }
+  if (T.k === 'wires') {
+    for (let i = 0; i < 4; i++) { K.circle(300, 180 + i * 60, 16, T.L[i]); K.circle(660, 180 + i * 60, 16, T.Rr[i]); if (T.sel === i) K.circle(300, 180 + i * 60, 22, 'rgba(255,255,255,.25)'); }
+    T.joined.forEach((col) => K.line(300, 180 + T.L.indexOf(col) * 60, 660, 180 + T.Rr.indexOf(col) * 60, col, 8));
+    if (T.sel != null) K.line(300, 180 + T.sel * 60, K.mouse.x, K.mouse.y, T.L[T.sel], 5);
+    K.text('click a wire on the left, then the same colour on the right', 480, 405, 13, '#c8c0e8', 'center', 'u');
+  }
+}
+function drawRole(s, me) {
+  const imp = me.imp, mates = Object.values(s.ents).filter((e) => e.imp && e !== me);
+  K.text(imp ? 'IMPOSTOR' : 'CREWMATE', 480, 150, 64, imp ? '#ff3355' : '#22e6ff', 'center', 'd', 22);
+  K.wrapText(imp ? `Take out the crew without getting caught. Fake your tasks, use KILL (Q) when nobody is watching, then walk away.${mates.length ? ' Your fellow impostor: ' + mates.map((e) => e.name).join(', ') : ''}`
+    : `There ${Object.values(s.ents).filter((e) => e.imp).length > 1 ? 'are 2 impostors' : 'is 1 impostor'} among us. Do your tasks (yellow consoles), report bodies (R), and vote the impostor off the ship.`, 480, 220, 620, 18, '#e8e6ff', 1.35);
+  Object.values(s.ents).forEach((e, i, a) => crewmate(480 - ((a.length - 1) * 70) / 2 + i * 70, 400, e.col, 1, { name: e.id === me.id ? 'YOU' : e.name, nameCol: imp && e.imp ? '#ff3355' : '#fff' }));
+}
+const SKIP = { x: 400, y: 470, w: 160, h: 40 };
+function tiles(s) { const E = Object.values(s.ents); return E.map((e, i) => ({ id: e.id, x: 60 + (i % 4) * 215, y: 130 + Math.floor(i / 4) * 92, w: 200, h: 80 })); }
+function drawMeeting(s, me) {
+  const d = s.pd, ej = s.ph === 'eject';
+  K.rect(20, 20, 920, 500, '#121a30', 16); K.stroke(20, 20, 920, 500, '#4a5280', 3, 16);
+  if (ej) {
+    const out = d.out && s.ents[d.out];
+    K.text(out ? `${out.id === me.id ? 'YOU WERE' : out.name + ' WAS'} EJECTED` : d.tie ? 'A TIE - NOBODY WAS EJECTED' : 'NOBODY WAS EJECTED (SKIPPED)', 480, 200, 34, '#fff', 'center', 'd', 12);
+    if (out) { crewmate(480 + Math.sin(K.time() * 2) * 200, 300, out.col, 1); K.text(`${out.name} was ${d.imp ? '' : 'NOT '}an impostor.`, 480, 380, 22, d.imp ? '#ff3355' : '#c8c0e8', 'center', 'd'); }
+    K.text(`${d.left} impostor${d.left === 1 ? '' : 's'} remain${d.left === 1 ? 's' : ''}`, 480, 430, 16, '#8e88b8', 'center', 'u');
+    return;
+  }
+  K.text(d.body ? `${s.ents[d.caller]?.name || '?'} FOUND ${s.ents[d.body]?.name || '?'}'S BODY${d.where ? ' IN ' + d.where : ''}` : `${s.ents[d.caller]?.name || '?'} CALLED AN EMERGENCY MEETING`, 480, 52, 20, '#ff6a7c', 'center', 'd');
+  K.text(`WHO IS THE IMPOSTOR?  vote ends in ${Math.max(0, Math.ceil(s.t))}s${K.net ? ' · talk in the party CHAT' : ''}`, 480, 82, 14, '#c8c0e8', 'center', 'u');
+  const voted = s.votes || {};
+  tiles(s).forEach((t) => {
+    const e = s.ents[t.id], mine = s.voted === t.id;
+    K.rect(t.x, t.y, t.w, t.h, e.alive ? '#1c2440' : '#14141c', 10); K.stroke(t.x, t.y, t.w, t.h, mine ? '#ffd93a' : '#3a4270', mine ? 3 : 2, 10);
+    crewmate(t.x + 32, t.y + 44, e.col, 1, { alpha: e.alive ? 1 : 0.35 });
+    K.text(e.id === me.id ? 'YOU' : e.name, t.x + 62, t.y + 30, 15, e.alive ? (me.imp && e.imp ? '#ff3355' : '#fff') : '#5d5a80', 'left', 'd');
+    K.text(!e.alive ? 'DEAD' : voted[e.id] ? 'VOTED ✓' : '', t.x + 62, t.y + 54, 11, voted[e.id] ? '#3dffa0' : '#ff3355', 'left', 'd');
+  });
+  K.rect(SKIP.x, SKIP.y, SKIP.w, SKIP.h, s.voted === 'skip' ? '#ffd93a' : '#2a3050', 8); K.text('SKIP VOTE', 480, SKIP.y + 21, 15, s.voted === 'skip' ? '#05040c' : '#fff', 'center', 'd');
+  (d.lines || []).forEach(([id, txt], i) => K.text(`${s.ents[id]?.name}: ${txt}`, 60, 330 + i * 24, 14, s.ents[id]?.col || '#fff', 'left', 'u'));
+  K.text(!me.alive ? 'ghosts cannot vote' : s.voted ? 'voted - waiting for the others' : 'click a player to vote them off, or SKIP', 760, 490, 13, '#8e88b8', 'center', 'u');
+}
+</script></body></html>
