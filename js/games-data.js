@@ -3190,6 +3190,31 @@ export const GAME_LIST = [
 "cover": "games/covers/find-the-needle.png"
 },
 {
+"id": "spy-grid",
+"n": 215,
+"title": "SPY GRID",
+"genre": "mind",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "25 code words on the grid. Each team's SPYMASTER can see which words belong to their agents - everyone else only sees words. The spymaster gives ONE word and a number (SEA 3) and their team taps the words they think it means. Hit your own agents and keep going; hit the other team's or a bystander and your turn ends; hit the BLACK HOLE and you lose on the spot. First team to find all their agents wins. Solo: you guess, a bot spymaster gives the clues, a bot team plays against you. 2-3 players: one of you is the spymaster. 4+: team against team.",
+"controls": "Spymaster: type a one-word clue, pick a number, SEND. Agents: click / tap the words, END TURN when you want to stop.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Spy Grid"
+}
+],
+"file": "games/2d/spy-grid.html",
+"dim": "2d",
+"cover": "games/covers/spy-grid.png"
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",

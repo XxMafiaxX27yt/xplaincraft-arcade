@@ -1,0 +1,157 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spy Grid</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"spy-grid","n":215,"title":"SPY GRID","genre":"mind","modes":["sp","online"],"minPlayers":1,"maxPlayers":8,"desc":"25 code words on the grid. Each team's SPYMASTER can see which words belong to their agents - everyone else only sees words. The spymaster gives ONE word and a number (SEA 3) and their team taps the words they think it means. Hit your own agents and keep going; hit the other team's or a bystander and your turn ends; hit the BLACK HOLE and you lose on the spot. First team to find all their agents wins. Solo: you guess, a bot spymaster gives the clues, a bot team plays against you. 2-3 players: one of you is the spymaster. 4+: team against team.","controls":"Spymaster: type a one-word clue, pick a number, SEND. Agents: click / tap the words, END TURN when you want to stop.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Spy Grid"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script><script src="../kit/partykit.js"></script>
+<script>
+// themes: the bots' idea of what goes together (people find the same links); the clue word is never on the board
+const THEMES = [
+  ['SPACE', 'STAR MOON ROCKET COMET PLANET ALIEN ORBIT GALAXY'], ['SEA', 'SHARK WHALE CORAL PIRATE ANCHOR WAVE SHELL SUBMARINE'],
+  ['COOK', 'KNIFE OVEN PAN SPOON FRIDGE TOAST PEPPER SOUP'], ['LESSON', 'TEACHER PENCIL EXAM CLASS BOOK RULER BELL CHALK'],
+  ['RAINFOREST', 'TIGER VINE PARROT MONKEY SNAKE RIVER LEAF JAGUAR'], ['MEDIEVAL', 'KING KNIGHT DRAGON TOWER CROWN SWORD MOAT QUEEN'],
+  ['GAME', 'BALL GOAL COACH TEAM MEDAL RACKET PITCH REFEREE'], ['FORECAST', 'STORM CLOUD THUNDER RAINBOW SNOW WIND FOG ICE'],
+  ['MELODY', 'GUITAR DRUM PIANO SONG CONCERT NOTE BAND MICROPHONE'], ['COMPUTER', 'ROBOT LASER PHONE SCREEN CODE MOUSE BATTERY CHIP'],
+  ['SPOOKY', 'GHOST VAMPIRE ZOMBIE SKULL WITCH COFFIN BAT SPIDER'], ['DOWNTOWN', 'TAXI BRIDGE SUBWAY TRAFFIC MARKET PARK HOTEL BANK'],
+].map(([c, w]) => ({ clue: c, words: w.split(' ') }));
+const COL = { red: '#ff3355', blue: '#3b7bff', n: '#5e584c', x: '#111018' };
+const CLUE_T = 90, GUESS_T = 100, BOT_T = 2.2;
+const other = (t) => (t === 'red' ? 'blue' : 'red');
+const CARD = (i) => ({ x: 39 + (i % 5) * 178, y: 104 + Math.floor(i / 5) * 76, w: 170, h: 70 });
+
+K.game({
+  typing: true, bg: '#0c0b18', touch: { stick: false, buttons: [] }, noTitleSim: true,
+  init(s) {
+    if (!K.net) PK.setFake([{ id: 'me', name: 'YOU' }]);
+    s.key = null; s.clue = ''; s.num = 2; s.over = false; s.botT = 0; s.warn = 0;
+    s.onPhase = (s) => { if (s.ph === 'clue') { s.clue = ''; s.num = 2; } if (s.ph === 'end') finish(s); if (s.ph === 'guess' && s.pd.last) K.sfx(s.pd.lastOk ? 'coin' : s.pd.last === 'x' ? 'boom' : 'wrong'); };
+    s.ph = 'start'; s.t = 1;
+    window.__sg = s;   // tests
+  },
+  onNet(s, d, from) {
+    if (d.t === 'key') { s.key = d.key; return; }
+    if (PK.follow(s, d)) return;
+    if (!PK.host()) return;
+    const r = s.pd && s.pd.roles[from]; if (!r) return;
+    if (d.t === 'clue' && s.ph === 'clue' && r.spy && r.team === s.pd.turn) giveClue(s, d.w, d.n);
+    if (d.t === 'pick' && s.ph === 'guess' && !r.spy && r.team === s.pd.turn) pick(s, d.i);
+    if (d.t === 'end' && s.ph === 'guess' && !r.spy && r.team === s.pd.turn) switchTurn(s);
+  },
+  onLeave(s, id) { if (PK.host() && s.pd && s.pd.roles[id] && s.ph !== 'end') { const r = s.pd.roles[id]; if (r.spy) { s.pd.bot[r.team] = true; } } },
+  update(s, dt) {
+    if (s.over) return;
+    s.t -= dt; s.warn -= dt;
+    const d = s.pd, me = PK.me(), host = PK.host();
+    if (d && d.roles) {
+      const r = d.roles[me] || {};
+      if (s.ph === 'clue' && r.spy && r.team === d.turn && !d.bot[d.turn]) {
+        PK.type(s, 'clue', 14); s.clue = s.clue.replace(/[^a-z]/g, '');   // one word: digits pick the number instead
+        for (let n = 1; n <= 4; n++) if (K.tap('Digit' + n)) s.num = n;
+        const send = K.tap('Enter', 'NumpadEnter') || (K.mouse.clicked && K.inRect(K.mouse.x, K.mouse.y, { x: 740, y: 498, w: 120, h: 36 }));
+        if (K.mouse.clicked) for (let n = 1; n <= 4; n++) if (K.inRect(K.mouse.x, K.mouse.y, { x: 540 + (n - 1) * 46, y: 498, w: 40, h: 36 })) s.num = n;
+        if (send) { const w = s.clue.trim().toUpperCase(); if (!/^[A-Z]{2,14}$/.test(w) || d.words.some((x, i) => !d.rev[i] && x === w)) { s.warn = 2; K.sfx('wrong'); } else { if (host) giveClue(s, w, s.num); else PK.send({ t: 'clue', w, n: s.num }); } }
+      }
+      if (s.ph === 'guess' && !r.spy && r.team === d.turn && K.mouse.clicked) {
+        for (let i = 0; i < 25; i++) if (!d.rev[i] && K.inRect(K.mouse.x, K.mouse.y, CARD(i))) { K.sfx('click'); if (host) pick(s, i); else PK.send({ t: 'pick', i }); }
+        if (K.inRect(K.mouse.x, K.mouse.y, { x: 760, y: 498, w: 160, h: 36 })) { if (host) switchTurn(s); else PK.send({ t: 'end' }); }
+      }
+    }
+    if (!host) return;
+    if (s.ph === 'start' && s.t <= 0) setup(s);
+    else if (s.ph === 'roles' && s.t <= 0) PK.go(s, 'clue', CLUE_T, { ...s.pd });
+    else if (s.ph === 'clue') { if (d.bot[d.turn]) { s.botT += dt; if (s.botT > BOT_T) { s.botT = 0; botClue(s); } } else if (s.t <= 0) switchTurn(s); }
+    else if (s.ph === 'guess') { if (d.botOps[d.turn]) { s.botT += dt; if (s.botT > 1.7) { s.botT = 0; botGuess(s); } } else if (s.t <= 0) switchTurn(s); }
+  },
+  draw(s) {
+    const d = s.pd, me = PK.me();
+    if (!d || !d.roles) { K.text('SPY GRID', 480, 250, 56, '#fff', 'center', 'd', 18); return; }
+    const r = d.roles[me] || { team: 'red' }, key = r.spy ? s.key : null;
+    if (s.ph === 'roles') {
+      K.text(r.spy ? `YOU ARE THE ${r.team.toUpperCase()} SPYMASTER` : `YOU ARE A ${r.team.toUpperCase()} AGENT`, 480, 160, 32, COL[r.team], 'center', 'd', 14);
+      K.wrapText(r.spy ? 'You can see the colours. Give ONE word and a number: how many of your words it links to. Never say a word on the board.' : 'Your spymaster gives a one-word clue and a number. Tap the words you think it means. Avoid the BLACK HOLE!', 480, 220, 620, 18, '#e8e6ff', 1.35);
+      const team = (t) => Object.entries(d.roles).filter(([, x]) => x.team === t).map(([id, x]) => `${id === me ? 'YOU' : d.names[id]}${x.spy ? ' (spymaster)' : ''}`).join(', ');
+      K.text(`RED: ${team('red')}${d.bot.red ? ' + bot spymaster' : ''}`, 480, 340, 16, COL.red, 'center', 'u');
+      K.text(`BLUE: ${team('blue') || 'bot team'}${d.bot.blue && team('blue') ? ' + bot spymaster' : ''}`, 480, 370, 16, COL.blue, 'center', 'u');
+      return;
+    }
+    // top bar
+    K.text(`RED ${d.left.red}`, 30, 30, 24, COL.red, 'left', 'd'); K.text(`BLUE ${d.left.blue}`, 930, 30, 24, COL.blue, 'right', 'd');
+    K.text(d.clue ? `CLUE: ${d.clue.w} · ${d.clue.n}` : `${d.turn.toUpperCase()} SPYMASTER IS THINKING…`, 480, 26, 22, COL[d.turn], 'center', 'd', 8);
+    K.text(`${d.turn.toUpperCase()}'S TURN${d.clue ? ` · ${d.guesses} guess${d.guesses === 1 ? '' : 'es'} left` : ''}${r.spy ? ' · you are a spymaster' : ''}`, 480, 56, 13, '#c8c0e8', 'center', 'u');
+    PK.bar(330, 74, 300, s);
+    // the grid
+    for (let i = 0; i < 25; i++) {
+      const c = CARD(i), rv = d.rev[i], k = key && key[i];
+      K.rect(c.x, c.y, c.w, c.h, rv ? COL[rv] : '#e8e2d0', 10);
+      if (!rv && k) K.stroke(c.x + 3, c.y + 3, c.w - 6, c.h - 6, COL[k], 5, 8);
+      const txt = rv === 'x' ? 'BLACK HOLE' : d.words[i];
+      K.text(txt, c.x + c.w / 2, c.y + c.h / 2 + 1, txt.length > 9 ? 16 : 19, rv ? (rv === 'n' ? '#d8d2c0' : '#fff') : '#1a1410', 'center', 'd');
+      if (!rv && k === 'x') K.text('☠', c.x + 14, c.y + 16, 14, '#111', 'center', 'u');
+    }
+    // bottom: clue entry for the spymaster, END TURN for agents
+    if (s.ph === 'clue' && r.spy && r.team === d.turn && !d.bot[d.turn]) {
+      PK.box(40, 496, 480, 40, s.clue, 'type ONE word…', true, COL[r.team]);
+      for (let n = 1; n <= 4; n++) { const x = 540 + (n - 1) * 46; K.rect(x, 498, 40, 36, s.num === n ? COL[r.team] : '#2a2848', 6); K.text(String(n), x + 20, 517, 18, '#fff', 'center', 'd'); }
+      K.rect(740, 498, 120, 36, '#3dffa0', 8); K.text('SEND', 800, 517, 16, '#05040c', 'center', 'd');
+      if (s.warn > 0) K.text('one word, not on the board', 880, 517, 11, '#ff6a7c', 'left', 'u');
+    } else if (s.ph === 'guess' && !r.spy && r.team === d.turn) {
+      K.text('tap the words that match the clue', 40, 517, 15, '#c8c0e8', 'left', 'u');
+      K.rect(760, 498, 160, 36, '#2a2848', 8); K.stroke(760, 498, 160, 36, COL[r.team], 2, 8); K.text('END TURN', 840, 517, 16, '#fff', 'center', 'd');
+    } else K.text(r.team === d.turn ? (r.spy ? 'your team is guessing…' : 'your spymaster is thinking…') : `the ${d.turn} team is playing…`, 480, 517, 15, '#8e88b8', 'center', 'u');
+  },
+});
+
+// ---------------- host ----------------
+function setup(s) {
+  const pl = PK.players(), n = pl.length, roles = {}, names = {};
+  pl.forEach((p, i) => { names[p.id] = p.name; roles[p.id] = { team: n >= 4 ? (i % 2 ? 'blue' : 'red') : 'red', spy: false }; });
+  const humans = (t) => pl.filter((p) => roles[p.id].team === t);
+  const bot = { red: false, blue: false }, botOps = { red: false, blue: false };
+  for (const t of ['red', 'blue']) { const h = humans(t); if (h.length >= 2) roles[h[0].id].spy = true; else bot[t] = true; if (!h.length) botOps[t] = true; }
+  // the board: clusters from 7 themes, 25 words
+  const th = K.shuffle(THEMES.map((_, i) => i)).slice(0, 7), words = [], tix = [];
+  for (const t of th) for (const w of K.shuffle(THEMES[t].words.slice()).slice(0, 4)) if (words.length < 25) { words.push(w); tix.push(t); }
+  const first = K.rand() < 0.5 ? 'red' : 'blue', key = K.shuffle([...Array(9).fill(first), ...Array(8).fill(other(first)), ...Array(7).fill('n'), 'x']);
+  const order = K.shuffle(words.map((_, i) => i));
+  s.key = order.map((i) => key[i]); s.words = order.map((i) => words[i]); s.tix = order.map((i) => tix[i]);
+  pl.forEach((p) => { if (roles[p.id].spy && p.id !== PK.me()) PK.send({ t: 'key', key: s.key }, p.id); });
+  PK.go(s, 'roles', 6, { words: s.words, rev: Array(25).fill(null), turn: first, clue: null, guesses: 0, left: { red: first === 'red' ? 9 : 8, blue: first === 'blue' ? 9 : 8 }, roles, names, bot, botOps });
+}
+function giveClue(s, w, n) { n = Math.max(1, Math.min(4, n | 0)); PK.go(s, 'guess', GUESS_T, { ...s.pd, clue: { w, n, t: s.botClueTheme ?? null }, guesses: n + 1, last: null }); s.botClueTheme = null; }
+function switchTurn(s) { PK.go(s, 'clue', CLUE_T, { ...s.pd, turn: other(s.pd.turn), clue: null, guesses: 0, last: null }); }
+function pick(s, i) {
+  const d = s.pd; if (d.rev[i]) return;
+  const k = s.key[i], rev = d.rev.slice(); rev[i] = k;
+  const left = { ...d.left }; if (k === 'red' || k === 'blue') left[k]--;
+  const base = { ...d, rev, left, last: k, lastOk: k === d.turn };
+  if (k === 'x') return PK.go(s, 'end', 99, { ...base, win: other(d.turn), why: `${d.turn} found the BLACK HOLE` });
+  if (left[d.turn] === 0) return PK.go(s, 'end', 99, { ...base, win: d.turn, why: `${d.turn} found all their agents` });
+  if (left[other(d.turn)] === 0) return PK.go(s, 'end', 99, { ...base, win: other(d.turn), why: `${other(d.turn)}'s last agent was revealed` });
+  if (k !== d.turn || d.guesses - 1 <= 0) return PK.go(s, 'clue', CLUE_T, { ...base, turn: other(d.turn), clue: null, guesses: 0 });
+  PK.go(s, 'guess', Math.max(20, s.t), { ...base, guesses: d.guesses - 1 });
+}
+// bot spymaster: the theme with the most of its own words left and no black hole in it
+function botClue(s) {
+  const d = s.pd, t = d.turn; let best = null;
+  THEMES.forEach((T, ti) => {
+    const idx = d.words.map((_, i) => i).filter((i) => s.tix[i] === ti && !d.rev[i]);
+    const own = idx.filter((i) => s.key[i] === t).length, bad = idx.filter((i) => s.key[i] === other(t)).length, x = idx.some((i) => s.key[i] === 'x');
+    const sc = own - bad * 0.6 - (x ? 3 : 0) + Math.random() * 0.3;
+    if (own && (!best || sc > best.sc)) best = { ti, sc, own };
+  });
+  if (!best) return switchTurn(s);
+  s.botClueTheme = best.ti;
+  giveClue(s, THEMES[best.ti].clue, Math.min(3, best.own));
+}
+// bot agents (the bot team): the clue's theme words, now and then a wrong idea
+function botGuess(s) {
+  const d = s.pd, ti = d.clue && d.clue.t, left = d.words.map((_, i) => i).filter((i) => !d.rev[i]);
+  const fit = left.filter((i) => s.tix[i] === ti);
+  if (!fit.length || d.guesses <= 1) return switchTurn(s);
+  pick(s, K.rand() < 0.16 ? K.pick(left.filter((i) => s.key[i] !== 'x')) : K.pick(fit));
+}
+function finish(s) {
+  if (s.over) return; s.over = true;
+  const d = s.pd, r = d.roles[PK.me()] || { team: 'red' }, won = r.team === d.win;
+  K.end(s, { score: won ? 400 + (r.team === 'red' ? 9 - d.left.red : 8 - d.left.blue) * 10 : 40, won, stats: { won: won ? 1 : 0 }, title: `${d.win.toUpperCase()} TEAM WINS`, text: d.why });
+}
+</script></body></html>
