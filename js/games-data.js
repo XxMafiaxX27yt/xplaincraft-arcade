@@ -2220,6 +2220,31 @@ export const GAME_LIST = [
 "cover": "games/covers/chained.png"
 },
 {
+"id": "disaster-island",
+"n": 218,
+"title": "DISASTER ISLAND",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "Everyone on one small island - and then the disasters start. FLOOD: the sea rises, climb the towers or the hill before it covers your head. METEORS: run from the glowing rings before the rocks land. TORNADO: it wanders across the island and pulls you in. LIGHTNING: it strikes the HIGH ground first. Six disasters, each one worse; survive them all, or be the last one standing. Solo against bots, or ONLINE with your party (bots fill the island).",
+"controls": "WASD / arrows run · mouse turns the camera · SPACE jump. Phones: left side runs, right side turns the camera, JUMP button.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Survive Disaster Island"
+}
+],
+"file": "games/3d/disaster-island.html",
+"cover": "games/covers/disaster-island.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
