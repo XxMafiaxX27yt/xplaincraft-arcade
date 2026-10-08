@@ -3165,6 +3165,31 @@ export const GAME_LIST = [
 "cover": "games/covers/word-bomb.png"
 },
 {
+"id": "find-the-needle",
+"n": 213,
+"title": "FIND THE NEEDLE",
+"genre": "mind",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "Somewhere in the haystack is one sewing needle - the only thing with an EYE at the end. Nails, pins and a thousand straws are in the way. Click it as fast as you can. Five haystacks, each one busier than the last; a wrong click snags you for a moment. Online, everyone searches the very same haystacks at the same time: the fastest total time wins.",
+"controls": "Click / tap the needle (the thin silver one with a little loop at one end). Wrong clicks snag you for 1.5 s.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win a game of Find the Needle"
+}
+],
+"file": "games/2d/find-the-needle.html",
+"dim": "2d",
+"cover": "games/covers/find-the-needle.png"
+},
+{
 "id": "match-3",
 "n": 1,
 "title": "MATCH-3",

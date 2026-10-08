@@ -1,0 +1,104 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Find the Needle</title>
+<link rel="stylesheet" href="../kit/kit.css">
+<script type="application/json" id="meta">{"id":"find-the-needle","n":213,"title":"FIND THE NEEDLE","genre":"mind","modes":["sp","online"],"minPlayers":1,"maxPlayers":8,"desc":"Somewhere in the haystack is one sewing needle - the only thing with an EYE at the end. Nails, pins and a thousand straws are in the way. Click it as fast as you can. Five haystacks, each one busier than the last; a wrong click snags you for a moment. Online, everyone searches the very same haystacks at the same time: the fastest total time wins.","controls":"Click / tap the needle (the thin silver one with a little loop at one end). Wrong clicks snag you for 1.5 s.","scoreLabel":"POINTS","tasks":[{"stat":"won","target":1,"text":"Win a game of Find the Needle"}]}</script>
+</head><body>
+<script src="../../sdk/arcade-sdk.js"></script><script src="../kit/kit.js"></script>
+<script>
+const ROUNDS = 5, TOP = 60, CAP = 60, SNAG = 1.5;
+K.game({
+  bg: '#2a1c0c', touch: { stick: false, buttons: [] }, noTitleSim: true,
+  init(s) {
+    // every haystack comes from K.rng: the same five for every player in an online game
+    s.stacks = Array.from({ length: ROUNDS }, (_, r) => makeStack(r));
+    s.r = 0; s.t = 0; s.times = []; s.snag = 0; s.found = null; s.done = false; s.ended = false; s.others = {}; s.ready = K.attract ? 0 : 2.5; s.sendT = 0;
+    window.__ftn = s;   // tests
+  },
+  onNet(s, d, from) { if (d.t === 'p') s.others[from] = { r: d.r, total: d.total, done: d.done }; checkEnd(s); },
+  onLeave(s, id) { s.others[id] = { ...(s.others[id] || { r: 0, total: 999 }), done: true, left: true }; checkEnd(s); },
+  update(s, dt) {
+    if (s.ended) return;
+    if (s.ready > 0) { const was = Math.ceil(s.ready); s.ready -= dt; if (Math.ceil(s.ready) !== was) K.sfx(s.ready > 0 ? 'tick' : 'select'); return; }
+    if (!s.done) {
+      if (s.found) { s.found.t -= dt; if (s.found.t <= 0) { s.found = null; s.r++; s.t = 0; if (s.r >= ROUNDS) { s.done = true; K.sfx('win'); send(s); } } }
+      else {
+        s.t += dt; s.snag = Math.max(0, s.snag - dt);
+        const st = s.stacks[s.r];
+        if (K.mouse.clicked && s.snag <= 0 && K.mouse.y > TOP) {
+          if (onNeedle(st, K.mouse.x, K.mouse.y)) foundIt(s);
+          else { s.snag = SNAG; K.sfx('wrong'); K.shake(6); s.miss = { x: K.mouse.x, y: K.mouse.y, t: 0.6 }; }
+        }
+        if (s.t >= CAP) foundIt(s, true);   // a minute is the most a haystack can cost
+      }
+    }
+    if (s.miss) { s.miss.t -= dt; if (s.miss.t <= 0) s.miss = null; }
+    s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 1; send(s); }
+    checkEnd(s);
+  },
+  draw(s, c) {
+    const st = s.stacks[Math.min(s.r, ROUNDS - 1)];
+    if (!st.img) st.img = render(st);
+    c.drawImage(st.img, 0, TOP, 960, 540 - TOP);
+    // hint ring after 20 s (shrinks onto the needle by 50 s)
+    if (!s.found && !s.done && s.t > 20) { const k = Math.min(1, (s.t - 20) / 30), r = 260 - 200 * k; K.stroke(st.hx - r, st.hy - r, r * 2, r * 2, 'rgba(255,255,255,.35)', 2, r); }
+    if (s.found) { K.circle(st.nx, st.ny, 30 + (0.9 - s.found.t) * 40, 'rgba(61,255,160,.25)'); K.text(s.found.late ? 'THERE IT WAS' : `FOUND! ${s.times[s.times.length - 1].toFixed(1)}s`, 480, 300, 40, s.found.late ? '#ffd93a' : '#3dffa0', 'center', 'd', 16); }
+    if (s.miss) K.text('✕', s.miss.x, s.miss.y, 30, '#ff3355', 'center', 'd', 8);
+    // HUD
+    K.rect(0, 0, 960, TOP, '#120c06');
+    K.text(`HAYSTACK ${Math.min(ROUNDS, s.r + 1)} / ${ROUNDS}`, 16, 22, 15, '#ffd98a', 'left', 'd');
+    K.text(`${s.t.toFixed(1)}s · total ${total(s).toFixed(1)}s`, 16, 44, 13, '#c8b490', 'left', 'u');
+    K.text('find the one with an EYE', 480, 30, 16, '#fff', 'center', 'd');
+    if (s.snag > 0) K.text(`SNAGGED ${s.snag.toFixed(1)}`, 480, 50, 12, '#ff6a7c', 'center', 'd');
+    if (K.net) K.net.players.filter((p) => p.id !== K.net.me).slice(0, 4).forEach((p, i) => { const o = s.others[p.id] || { r: 0, total: 0 }; K.text(`${p.username} ${o.done ? 'DONE ' + o.total.toFixed(1) + 's' : (o.r + 1) + '/' + ROUNDS}`, 944, 16 + i * 13, 11, o.done ? '#3dffa0' : '#c8b490', 'right', 'u'); });
+    if (s.ready > 0) { K.rect(0, 200, 960, 140, 'rgba(10,6,2,.8)'); K.text(String(Math.ceil(s.ready)), 480, 250, 70, '#fff', 'center', 'd', 16); K.text('the needle is the only thing with a little loop (an EYE) at one end', 480, 310, 18, '#ffd98a', 'center', 'u'); }
+    if (s.done && !s.ended) { K.rect(0, 220, 960, 90, 'rgba(10,6,2,.8)'); K.text(`ALL FOUND · ${total(s).toFixed(1)}s`, 480, 255, 32, '#3dffa0', 'center', 'd', 12); K.text('waiting for the others…', 480, 290, 15, '#c8b490', 'center', 'u'); }
+  },
+});
+const total = (s) => s.times.reduce((a, b) => a + b, 0) + (s.done || s.found ? 0 : s.t);
+function foundIt(s, late = false) { s.times.push(late ? CAP : s.t); s.found = { t: 0.9, late }; if (!late) { K.sfx('coin'); K.burst(s.stacks[s.r].nx, s.stacks[s.r].ny, '#3dffa0', 24, 200); } else K.sfx('lose'); send(s); }
+function send(s) { if (K.net) K.net.send({ t: 'p', r: s.r, total: +total(s).toFixed(2), done: s.done }); }
+function checkEnd(s) {
+  if (s.ended || !s.done) return;
+  if (K.net && K.net.players.some((p) => p.id !== K.net.me && !(s.others[p.id] || {}).done)) return;
+  s.ended = true;
+  const mine = total(s), score = Math.round(s.times.reduce((a, t) => a + Math.max(0, CAP - t) * 10, 0));
+  s.result = { total: mine };
+  if (!K.net) return K.end(s, { score, won: null, title: `${mine.toFixed(1)} SECONDS`, text: s.times.map((t, i) => `#${i + 1} ${t.toFixed(1)}s`).join(' · ') });
+  const all = [{ name: 'YOU', t: mine }, ...K.net.players.filter((p) => p.id !== K.net.me).map((p) => ({ name: p.username, t: (s.others[p.id] || {}).left ? 9999 : (s.others[p.id] || {}).total ?? 9999 }))].sort((a, b) => a.t - b.t);
+  const won = all[0].name === 'YOU' && (all.length < 2 || all[1].t > mine);
+  K.end(s, { score, won, stats: { won: won ? 1 : 0 }, title: won ? 'SHARPEST EYES!' : `#${all.findIndex((x) => x.name === 'YOU') + 1} OF ${all.length}`, text: all.map((x) => `${x.name} ${x.t >= 9999 ? 'left' : x.t.toFixed(1) + 's'}`).join(' · ') });
+}
+// ---------- haystacks ----------
+function makeStack(r) {
+  const R = () => K.rng(), H = 540 - TOP;
+  const straws = 380 + r * 170, nails = 6 + r * 4, pins = 5 + r * 4;
+  const nx = 70 + R() * 820, ny = TOP + 50 + R() * (H - 100), na = R() * Math.PI;
+  const items = [];
+  for (let i = 0; i < straws; i++) items.push({ k: 's', x: R() * 960, y: TOP + R() * H, a: R() * Math.PI, l: 30 + R() * 60, c: ['#d8b25a', '#c99a3c', '#e8c878', '#b08030', '#f0d890'][Math.floor(R() * 5)], top: R() < 0.25 });
+  for (let i = 0; i < nails; i++) items.push({ k: 'n', x: 40 + R() * 880, y: TOP + 30 + R() * (H - 60), a: R() * Math.PI, l: 34 + R() * 14, top: R() < 0.3 });
+  for (let i = 0; i < pins; i++) items.push({ k: 'p', x: 40 + R() * 880, y: TOP + 30 + R() * (H - 60), a: R() * Math.PI, l: 30 + R() * 10, c: ['#ff3355', '#3b7bff', '#ffd93a', '#3dffa0'][Math.floor(R() * 4)], top: R() < 0.3 });
+  return { items, nx, ny, na, nl: 44, hx: nx + (R() - 0.5) * 80, hy: ny + (R() - 0.5) * 60, img: null };
+}
+function onNeedle(st, x, y) {
+  const dx = Math.cos(st.na) * st.nl / 2, dy = Math.sin(st.na) * st.nl / 2, ax = st.nx - dx, ay = st.ny - dy, bx = st.nx + dx, by = st.ny + dy;
+  const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
+  return Math.hypot(x - (ax + (bx - ax) * t), y - (ay + (by - ay) * t)) < 14;
+}
+function render(st) {
+  const cv = document.createElement('canvas'); cv.width = 1920; cv.height = (540 - TOP) * 2;
+  const c = cv.getContext('2d'); c.scale(2, 2); c.translate(0, -TOP); c.lineCap = 'round';
+  const g = c.createRadialGradient(480, 300, 60, 480, 300, 600); g.addColorStop(0, '#6a4a1c'); g.addColorStop(1, '#2a1c0c'); c.fillStyle = g; c.fillRect(0, TOP, 960, 540);
+  const seg = (x, y, a, l, col, w) => { const dx = Math.cos(a) * l / 2, dy = Math.sin(a) * l / 2; c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x - dx, y - dy); c.lineTo(x + dx, y + dy); c.stroke(); };
+  const draw = (it) => {
+    if (it.k === 's') { seg(it.x, it.y, it.a, it.l, it.c, 2.2); seg(it.x + 0.6, it.y + 0.6, it.a, it.l * 0.9, 'rgba(0,0,0,.18)', 1); }
+    if (it.k === 'n') { seg(it.x, it.y, it.a, it.l, '#9a9aa8', 3); const hx = it.x - Math.cos(it.a) * it.l / 2, hy = it.y - Math.sin(it.a) * it.l / 2; c.fillStyle = '#8a8a96'; c.beginPath(); c.arc(hx, hy, 4.5, 0, 7); c.fill(); }
+    if (it.k === 'p') { seg(it.x, it.y, it.a, it.l, '#c8c8d4', 1.6); const hx = it.x - Math.cos(it.a) * it.l / 2, hy = it.y - Math.sin(it.a) * it.l / 2; c.fillStyle = it.c; c.beginPath(); c.arc(hx, hy, 4, 0, 7); c.fill(); }
+  };
+  st.items.filter((i) => !i.top).forEach(draw);
+  // the needle: thin, silver, pointed - and an EYE at the blunt end
+  const dx = Math.cos(st.na), dy = Math.sin(st.na), L = st.nl / 2;
+  seg(st.nx, st.ny, st.na, st.nl, '#e8ecf4', 2); seg(st.nx + 0.5, st.ny + 0.5, st.na, st.nl, 'rgba(0,0,0,.25)', 0.8);
+  c.strokeStyle = '#e8ecf4'; c.lineWidth = 1.4; c.beginPath(); c.ellipse(st.nx - dx * (L - 3), st.ny - dy * (L - 3), 3.6, 1.8, st.na, 0, 7); c.stroke();
+  st.items.filter((i) => i.top).forEach(draw);
+  return cv;
+}
+</script></body></html>
