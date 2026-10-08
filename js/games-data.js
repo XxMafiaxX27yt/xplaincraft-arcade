@@ -2170,6 +2170,31 @@ export const GAME_LIST = [
 "cover": "games/covers/keep-it-up.png"
 },
 {
+"id": "obby-race",
+"n": 216,
+"title": "OBBY RACE",
+"genre": "fun",
+"dim": "3d",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 8,
+"desc": "A neon obstacle course over the void - first to the top wins. Jump the gaps, ride the sliding platforms, leap the spinning sweeper bars, time the blinking tiles, walk the narrow beam and climb to the finish. Fall and you go back to your last checkpoint. Race bots solo, or ONLINE with your party (up to 8, bots fill the start line).",
+"controls": "WASD / arrows run · mouse turns the camera · SPACE jump. Phones: left side runs, right side turns the camera, JUMP button.",
+"scoreLabel": "POINTS",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Win an Obby Race"
+}
+],
+"file": "games/3d/obby-race.html",
+"cover": "games/covers/obby-race.png"
+},
+{
 "id": "2048",
 "n": 1,
 "title": "2048",
