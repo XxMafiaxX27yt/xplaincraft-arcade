@@ -1042,6 +1042,31 @@ export const GAME_LIST = [
 "cover": "games/covers/ghost-hunt.png"
 },
 {
+"id": "loot-run",
+"n": 219,
+"title": "LOOT RUN",
+"genre": "horror",
+"dim": "3d",
+"modes": [
+"sp",
+"online"
+],
+"minPlayers": 1,
+"maxPlayers": 4,
+"desc": "Your crew lands at an abandoned facility at night. The company wants scrap. Go inside with your flashlight, search the dark maze of rooms for loot - gold bars, old radios, strange idols - and carry it back to the ship. Two hands, two items, and heavy loot slows you down. Something is walking the halls: if it sees you it hunts you, and if it catches you, you drop everything. Meet the quota before the shift ends. Solo, or ONLINE co-op with up to 4.",
+"controls": "WASD / arrows move · mouse turns the camera · SHIFT sprint (stamina) · E pick up · Q drop · loot is banked when you carry it onto the ship. Phones: stick + PICK UP / DROP / RUN buttons.",
+"scoreLabel": "SCRAP",
+"tasks": [
+{
+"stat": "won",
+"target": 1,
+"text": "Meet the quota in Loot Run"
+}
+],
+"file": "games/3d/loot-run.html",
+"cover": "games/covers/loot-run.png"
+},
+{
 "id": "breakout",
 "n": 1,
 "title": "BREAKOUT",
