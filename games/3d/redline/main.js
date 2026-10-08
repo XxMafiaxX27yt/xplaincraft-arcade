@@ -259,6 +259,8 @@ function update(dt) {
     if (c.ai) { if (G.phase !== 'count') aiDrive(c, dt); else { c.input.throttle = 0.7 + Math.random() * 0.2; c.input.brake = 0; c.input.steer = 0; } }
     c.step(dt, { countdown: G.phase === 'count', done: c.track.done && c !== G.me ? false : c.track.done && c === G.me });
     if (G.phase !== 'count') progress(c);
+    // fell off the track anyway (a big jump, a gap): straight back onto the road
+    if (G.phase !== 'count' && c.pos().y < T[c.track.idx].y - 3) { resetCar(c); if (c === G.me) pop('BACK ON TRACK', '#ffd93a', 1); }
     // slipstream: right behind another car on a straight
     if (c === G.me && G.phase === 'live') {
       const f = c.forward(), p = c.pos();

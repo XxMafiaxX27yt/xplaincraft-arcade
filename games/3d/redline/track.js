@@ -88,7 +88,9 @@ export function buildTrack(K3, T, props) {
     const pos = [], uv = [], idx = [];
     for (let i = 0; i <= n; i++) { const p = T[i % n], x = p.x + p.nx * off, z = p.z + p.nz * off, v = i / 2; pos.push(x, p.y - 0.5, z, x, p.y + 1.3, z); uv.push(v, 0, v, 1); if (i < n) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
     const r = { pos, uv, idx }; const m = mesh('wall', r, wallMat); wallMat.backFaceCulling = false; wallMat.twoSidedLighting = true;   // one face set, lit from both sides
-    K3.world.createCollider(K3.R.ColliderDesc.trimesh(new Float32Array(pos), new Uint32Array(idx)).setFriction(0.15).setRestitution(0.2).setCollisionGroups(K3.phys.groups(K3.phys.G_WORLD, 0xffff)));
+    // the collider is taller than the tyre wall you see (4 m): a fast car on the climb or the crest can't ramp over it
+    const cpos = []; for (let i = 0; i <= n; i++) { const p = T[i % n], x = p.x + p.nx * off, z = p.z + p.nz * off; cpos.push(x, p.y - 0.5, z, x, p.y + 4, z); }
+    K3.world.createCollider(K3.R.ColliderDesc.trimesh(new Float32Array(cpos), new Uint32Array(idx)).setFriction(0.15).setRestitution(0.2).setCollisionGroups(K3.phys.groups(K3.phys.G_WORLD, 0xffff)));
   };
   wall(-WALL_OFF); wall(WALL_OFF);
 
